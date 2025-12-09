@@ -1,0 +1,18 @@
+{
+  "name": "mario-game",
+  "version": "1.0.0",
+  "description": "A Mario-like platformer game built with Phaser 3",
+  "main": "game.js",
+  "scripts": {
+    "start": "npx http-server -p 8000"
+  },
+  "keywords": ["game", "platformer", "phaser"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "phaser": "^3.80.1"
+  },
+  "devDependencies": {
+    "http-server": "^14.1.1"
+  }
+}

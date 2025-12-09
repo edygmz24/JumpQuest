@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mario-Like Platformer Game</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #87CEEB;
+            font-family: Arial, sans-serif;
+        }
+        #game-container {
+            box-shadow: 0 0 20px rgba(0,0,0,0.3);
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container"></div>
+    <script src="node_modules/phaser/dist/phaser.min.js"></script>
+    <!-- Load level files first -->
+    <script src="levels/level1.js"></script>
+    <script src="levels/level2.js"></script>
+    <script src="levels/level3.js"></script>
+    <script src="levels/level4.js"></script>
+    <script src="levels/level5.js"></script>
+    <!-- Load main game file last -->
+    <script src="game.js"></script>
+</body>
+</html>
