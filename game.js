@@ -136,7 +136,7 @@ function loadLevel(levelIndex) {
     // Collisions
     this.physics.add.collider(player, platforms);
     this.physics.add.collider(enemies, platforms);
-    this.physics.add.overlap(player, enemies, hitEnemy, null, this);
+    this.physics.add.overlap(player, enemies, handleEnemyCollision, null, this);
     this.physics.add.overlap(player, endFlag, reachEnd, null, this);
     this.physics.add.overlap(player, obstacles, hitEnemy, null, this);
     this.physics.add.overlap(player, coins, collectCoin, null, this);
@@ -258,6 +258,40 @@ function collectCoin(player, coin) {
 
     coin.disableBody(true, true);
     score += 100;
+    const highScore = highScores['level' + currentLevelIndex] || 0;
+    scoreText.setText(`Score: ${score} | Best: ${highScore}`);
+}
+
+function handleEnemyCollision(player, enemy) {
+    if (gameOver) return;
+
+    // Check if player is falling and above the enemy
+    const playerBottom = player.y + player.displayHeight / 2;
+    const enemyTop = enemy.y - enemy.displayHeight / 2;
+    const isFalling = player.body.velocity.y > 0;
+    const isAbove = playerBottom < enemy.y;
+
+    if (isFalling && isAbove) {
+        // Stomp the enemy
+        stompEnemy.call(this, enemy);
+        // Bounce player up
+        player.setVelocityY(-250);
+    } else {
+        // Player dies
+        hitEnemy.call(this);
+    }
+}
+
+function stompEnemy(enemy) {
+    // Find and remove enemy visual
+    const enemyIndex = enemies.children.entries.indexOf(enemy);
+    if (enemyIndex !== -1 && enemyRects[enemyIndex]) {
+        enemyRects[enemyIndex].destroy();
+        enemyRects.splice(enemyIndex, 1);
+    }
+
+    enemy.disableBody(true, true);
+    score += 200;
     const highScore = highScores['level' + currentLevelIndex] || 0;
     scoreText.setText(`Score: ${score} | Best: ${highScore}`);
 }
