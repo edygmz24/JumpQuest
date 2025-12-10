@@ -14,18 +14,20 @@ const level1 = {
 
         // Checkpoint recovery platform 1
         { x: 850, y: 520, width: 100, height: 20 },
+        { x: 850, y: 440, width: 80, height: 20 },  // Stepping stone after checkpoint 1
 
         // Section 2 - Mid level
-        { x: 900, y: 420, width: 150, height: 20 },
+        { x: 950, y: 380, width: 150, height: 20 },
         { x: 1100, y: 360, width: 100, height: 20 },
         { x: 1250, y: 300, width: 120, height: 20 },
         { x: 1450, y: 380, width: 150, height: 20 },
 
         // Checkpoint recovery platform 2
         { x: 1580, y: 520, width: 100, height: 20 },
+        { x: 1580, y: 440, width: 80, height: 20 },  // Stepping stone after checkpoint 2
 
         // Section 3 - Higher platforms
-        { x: 1650, y: 320, width: 100, height: 20 },
+        { x: 1700, y: 360, width: 100, height: 20 },
         { x: 1800, y: 260, width: 120, height: 20 },
         { x: 1980, y: 340, width: 100, height: 20 },
 
@@ -36,6 +38,7 @@ const level1 = {
 
         // Checkpoint recovery platform 3
         { x: 2600, y: 520, width: 100, height: 20 },
+        { x: 2600, y: 440, width: 80, height: 20 },  // Stepping stone after checkpoint 3
 
         // Section 5 - Final stretch
         { x: 2750, y: 360, width: 120, height: 20 },

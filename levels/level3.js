@@ -15,9 +15,10 @@ const level3 = {
 
         // Checkpoint recovery platform 1
         { x: 920, y: 520, width: 100, height: 20 },
+        { x: 920, y: 440, width: 80, height: 20 },  // Stepping stone after checkpoint 1
 
         // Section 2 - Zigzag pattern (reduced vertical changes)
-        { x: 1000, y: 380, width: 100, height: 20 },
+        { x: 1050, y: 380, width: 100, height: 20 },
         { x: 1180, y: 340, width: 90, height: 20 },
         { x: 1330, y: 300, width: 90, height: 20 },
         { x: 1510, y: 340, width: 100, height: 20 },
@@ -31,9 +32,10 @@ const level3 = {
 
         // Checkpoint recovery platform 2
         { x: 2350, y: 520, width: 100, height: 20 },
+        { x: 2350, y: 440, width: 80, height: 20 },  // Stepping stone after checkpoint 2
 
         // Section 4 - Enemy maze
-        { x: 2450, y: 420, width: 120, height: 20 },
+        { x: 2480, y: 400, width: 120, height: 20 },
         { x: 2620, y: 360, width: 100, height: 20 },
         { x: 2780, y: 300, width: 100, height: 20 },
         { x: 2940, y: 360, width: 100, height: 20 },

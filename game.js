@@ -157,7 +157,7 @@ function loadLevel(levelIndex) {
     this.physics.add.overlap(player, endFlag, reachEnd, null, this);
     this.physics.add.overlap(player, obstacles, hitEnemy, null, this);
     this.physics.add.overlap(player, coins, collectCoin, null, this);
-    this.physics.add.overlap(player, checkpoints, activateCheckpoint, null, this);
+    // Note: Checkpoints are activated based on X position in update(), not by overlap
 
     // Controls
     cursors = this.input.keyboard.createCursorKeys();
@@ -263,6 +263,25 @@ function update() {
         }
     });
 
+    // Check checkpoint activation based on player X position
+    checkpointRects.forEach((cpData) => {
+        if (!cpData.activated && player.x >= cpData.body.x) {
+            cpData.activated = true;
+            cpData.rect.setFillStyle(0x00ff00); // Green = activated
+            lastCheckpoint = { x: cpData.body.x, y: cpData.body.y - 30 };
+
+            // Visual feedback - brief scale animation
+            this.tweens.add({
+                targets: cpData.rect,
+                scaleX: 1.3,
+                scaleY: 1.3,
+                duration: 150,
+                yoyo: true,
+                ease: 'Power2'
+            });
+        }
+    });
+
     // Fall off world
     if (player.y > 600) {
         hitEnemy.call(this);
@@ -281,25 +300,6 @@ function collectCoin(player, coin) {
     score += 100;
     const highScore = highScores['level' + currentLevelIndex] || 0;
     scoreText.setText(`Score: ${score} | Best: ${highScore}`);
-}
-
-function activateCheckpoint(player, checkpoint) {
-    const cpData = checkpointRects.find(c => c.body === checkpoint);
-    if (cpData && !cpData.activated) {
-        cpData.activated = true;
-        cpData.rect.setFillStyle(0x00ff00); // Green = activated
-        lastCheckpoint = { x: checkpoint.x, y: checkpoint.y - 30 };
-
-        // Visual feedback - brief scale animation
-        this.tweens.add({
-            targets: cpData.rect,
-            scaleX: 1.3,
-            scaleY: 1.3,
-            duration: 150,
-            yoyo: true,
-            ease: 'Power2'
-        });
-    }
 }
 
 function handleEnemyCollision(player, enemy) {

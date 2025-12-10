@@ -13,9 +13,12 @@ const level5 = {
 
         // Checkpoint recovery platform 1
         { x: 900, y: 520, width: 100, height: 20 },
+        { x: 900, y: 440, width: 80, height: 20 },  // Stepping stone after checkpoint 1
+        { x: 900, y: 360, width: 80, height: 20 },  // Extra step for extreme heights
+        { x: 900, y: 280, width: 80, height: 20 },  // Extra step for extreme heights
 
         // Extreme heights section
-        { x: 1000, y: 200, width: 80, height: 20 },
+        { x: 1020, y: 220, width: 80, height: 20 },
         { x: 1140, y: 260, width: 80, height: 20 },
         { x: 1280, y: 200, width: 80, height: 20 },
         { x: 1420, y: 150, width: 80, height: 20 },
@@ -27,9 +30,11 @@ const level5 = {
 
         // Checkpoint recovery platform 2
         { x: 2100, y: 520, width: 100, height: 20 },
+        { x: 2100, y: 440, width: 80, height: 20 },  // Stepping stone after checkpoint 2
+        { x: 2100, y: 360, width: 80, height: 20 },  // Extra step for precision section
 
         // Precision platforming
-        { x: 2200, y: 280, width: 70, height: 20 },
+        { x: 2230, y: 290, width: 70, height: 20 },
         { x: 2330, y: 220, width: 70, height: 20 },
         { x: 2460, y: 280, width: 70, height: 20 },
         { x: 2590, y: 220, width: 70, height: 20 },
@@ -43,9 +48,10 @@ const level5 = {
 
         // Checkpoint recovery platform 3
         { x: 3500, y: 520, width: 100, height: 20 },
+        { x: 3500, y: 440, width: 80, height: 20 },  // Stepping stone after checkpoint 3
 
         // Final ascent
-        { x: 3600, y: 400, width: 100, height: 20 },
+        { x: 3620, y: 380, width: 100, height: 20 },
         { x: 3750, y: 340, width: 100, height: 20 },
         { x: 3900, y: 280, width: 100, height: 20 },
         { x: 4050, y: 220, width: 100, height: 20 },

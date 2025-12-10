@@ -15,9 +15,11 @@ const level2 = {
 
         // Checkpoint recovery platform 1
         { x: 1000, y: 520, width: 100, height: 20 },
+        { x: 1000, y: 440, width: 80, height: 20 },  // Stepping stone after checkpoint 1
+        { x: 1000, y: 360, width: 80, height: 20 },  // Extra step for high section
 
         // Section 2 - High jumps
-        { x: 1050, y: 270, width: 100, height: 20 },
+        { x: 1100, y: 280, width: 100, height: 20 },
         { x: 1220, y: 340, width: 90, height: 20 },
         { x: 1380, y: 280, width: 100, height: 20 },
         { x: 1550, y: 220, width: 110, height: 20 },
@@ -29,9 +31,10 @@ const level2 = {
 
         // Checkpoint recovery platform 2
         { x: 2200, y: 520, width: 100, height: 20 },
+        { x: 2200, y: 440, width: 80, height: 20 },  // Stepping stone after checkpoint 2
 
         // Section 4 - Mixed heights
-        { x: 2280, y: 400, width: 120, height: 20 },
+        { x: 2320, y: 380, width: 120, height: 20 },
         { x: 2480, y: 320, width: 100, height: 20 },
         { x: 2650, y: 260, width: 90, height: 20 },
         { x: 2820, y: 340, width: 110, height: 20 },
