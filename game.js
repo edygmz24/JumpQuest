@@ -43,6 +43,11 @@ let score = 0;
 let scoreText;
 let highScores = JSON.parse(localStorage.getItem('marioHighScores')) || {};
 
+// Checkpoints
+let checkpoints;
+let checkpointRects = [];
+let lastCheckpoint = null;
+
 // Array of all levels (loaded from separate files)
 const levels = [level1, level2, level3, level4, level5];
 
@@ -56,6 +61,8 @@ function create() {
     levelComplete = false;
     enemyRects = [];
     coinRects = [];
+    checkpointRects = [];
+    lastCheckpoint = null;
     score = 0;
 
     // Load the current level
@@ -106,6 +113,16 @@ function loadLevel(levelIndex) {
         });
     }
 
+    // Checkpoints from level data
+    checkpoints = this.physics.add.staticGroup();
+    if (currentLevel.checkpoints) {
+        currentLevel.checkpoints.forEach(cpData => {
+            const checkpoint = checkpoints.create(cpData.x, cpData.y, null).setDisplaySize(20, 50).refreshBody();
+            const cpRect = this.add.rectangle(cpData.x, cpData.y, 20, 50, 0x888888); // Gray = inactive
+            checkpointRects.push({ rect: cpRect, body: checkpoint, activated: false });
+        });
+    }
+
     // Player
     player = this.physics.add.sprite(currentLevel.playerStart.x, currentLevel.playerStart.y, null).setDisplaySize(32, 32);
     playerRect = this.add.rectangle(currentLevel.playerStart.x, currentLevel.playerStart.y, 32, 32, 0x0000ff);
@@ -140,6 +157,7 @@ function loadLevel(levelIndex) {
     this.physics.add.overlap(player, endFlag, reachEnd, null, this);
     this.physics.add.overlap(player, obstacles, hitEnemy, null, this);
     this.physics.add.overlap(player, coins, collectCoin, null, this);
+    // Note: Checkpoints are activated based on X position in update(), not by overlap
 
     // Controls
     cursors = this.input.keyboard.createCursorKeys();
@@ -245,6 +263,25 @@ function update() {
         }
     });
 
+    // Check checkpoint activation based on player X position
+    checkpointRects.forEach((cpData) => {
+        if (!cpData.activated && player.x >= cpData.body.x) {
+            cpData.activated = true;
+            cpData.rect.setFillStyle(0x00ff00); // Green = activated
+            lastCheckpoint = { x: cpData.body.x, y: cpData.body.y - 30 };
+
+            // Visual feedback - brief scale animation
+            this.tweens.add({
+                targets: cpData.rect,
+                scaleX: 1.3,
+                scaleY: 1.3,
+                duration: 150,
+                yoyo: true,
+                ease: 'Power2'
+            });
+        }
+    });
+
     // Fall off world
     if (player.y > 600) {
         hitEnemy.call(this);
@@ -320,6 +357,23 @@ function stompEnemy(enemy) {
 function hitEnemy() {
     if (gameOver) return;
 
+    // If we have a checkpoint, respawn there instead of game over
+    if (lastCheckpoint) {
+        // Respawn at checkpoint
+        player.setPosition(lastCheckpoint.x, lastCheckpoint.y);
+        playerRect.setPosition(lastCheckpoint.x, lastCheckpoint.y);
+        player.setVelocity(0, 0);
+
+        // Brief invincibility effect
+        player.setAlpha(0.5);
+        this.time.delayedCall(1500, () => {
+            player.setAlpha(1);
+        });
+
+        return;
+    }
+
+    // No checkpoint - game over
     gameOver = true;
     this.physics.pause();
     player.setTint(0xff0000);

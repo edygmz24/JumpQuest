@@ -1089,19 +1089,19 @@ bg.tilePositionX = this.cameras.main.scrollX * 0.5;
 
 ## Implementation Order Summary
 
-| Priority | Feature | Difficulty | Dependencies |
-|----------|---------|------------|--------------|
-| 1 | Collectibles & Scoring | Easy | None |
-| 2 | Stomp Enemies | Easy | None |
-| 3 | Checkpoints | Easy | None |
-| 4 | Timer & Best Times | Easy | Scoring (optional) |
-| 5 | Lives System | Easy | Checkpoints |
-| 6 | Power-ups | Medium | None |
-| 7 | Moving Platforms | Medium | None |
-| 8 | Enemy Variety | Medium | Stomp mechanic |
-| 9 | Sound & Music | Easy | None (assets needed) |
-| 10 | Level Select | Medium | Scoring, Timer |
-| 11 | Visual Polish | Hard | All other features |
+| Priority | Feature | Difficulty | Dependencies | Status |
+|----------|---------|------------|--------------|--------|
+| 1 | Collectibles & Scoring | Easy | None | DONE |
+| 2 | Stomp Enemies | Easy | None | DONE |
+| 3 | Checkpoints | Easy | None | |
+| 4 | Timer & Best Times | Easy | Scoring (optional) | |
+| 5 | Lives System | Easy | Checkpoints | |
+| 6 | Power-ups | Medium | None | |
+| 7 | Moving Platforms | Medium | None | |
+| 8 | Enemy Variety | Medium | Stomp mechanic | |
+| 9 | Sound & Music | Easy | None (assets needed) | |
+| 10 | Level Select | Medium | Scoring, Timer | |
+| 11 | Visual Polish | Hard | All other features | |
 
 ---
 
