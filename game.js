@@ -48,6 +48,11 @@ let checkpoints;
 let checkpointRects = [];
 let lastCheckpoint = null;
 
+// Timer & Best Times
+let levelTimer = 0;
+let timerText;
+let bestTimes = JSON.parse(localStorage.getItem('marioBestTimes')) || {};
+
 // Array of all levels (loaded from separate files)
 const levels = [level1, level2, level3, level4, level5];
 
@@ -64,6 +69,7 @@ function create() {
     checkpointRects = [];
     lastCheckpoint = null;
     score = 0;
+    levelTimer = 0;
 
     // Load the current level
     loadLevel.call(this, currentLevelIndex);
@@ -198,6 +204,17 @@ function loadLevel(levelIndex) {
     });
     scoreText.setScrollFactor(0);
 
+    // Timer display
+    const bestTime = bestTimes['level' + currentLevelIndex];
+    const bestTimeStr = bestTime ? formatTime(bestTime) : '--:--';
+    timerText = this.add.text(16, 152, `Time: 0:00 | Best: ${bestTimeStr}`, {
+        fontSize: '14px',
+        fill: '#00ffff',
+        backgroundColor: '#000',
+        padding: { x: 10, y: 5 }
+    });
+    timerText.setScrollFactor(0);
+
     // Pause button
     pauseButton = this.add.text(750, 16, 'PAUSE', {
         fontSize: '16px',
@@ -229,6 +246,12 @@ function update() {
     if (gameOver || levelComplete || isPaused) {
         return;
     }
+
+    // Update timer
+    levelTimer += this.game.loop.delta;
+    const bestTime = bestTimes['level' + currentLevelIndex];
+    const bestTimeStr = bestTime ? formatTime(bestTime) : '--:--';
+    timerText.setText(`Time: ${formatTime(levelTimer)} | Best: ${bestTimeStr}`);
 
     // Update player rectangle position to follow physics sprite
     playerRect.setPosition(player.x, player.y);
@@ -422,6 +445,13 @@ function reachEnd() {
         scoreText.setText(`Score: ${score} | Best: ${score} (NEW!)`);
     }
 
+    // Save best time
+    if (!bestTimes[levelKey] || levelTimer < bestTimes[levelKey]) {
+        bestTimes[levelKey] = levelTimer;
+        localStorage.setItem('marioBestTimes', JSON.stringify(bestTimes));
+        timerText.setText(`Time: ${formatTime(levelTimer)} | Best: ${formatTime(levelTimer)} (NEW!)`);
+    }
+
     // Check if there are more levels
     const isLastLevel = currentLevelIndex >= levels.length - 1;
 
@@ -536,4 +566,11 @@ function togglePause() {
             pauseOverlay = null;
         }
     }
+}
+
+function formatTime(ms) {
+    const seconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return minutes + ':' + (secs < 10 ? '0' : '') + secs;
 }
