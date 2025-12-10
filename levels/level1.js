@@ -70,6 +70,12 @@ const level1 = {
     playerStart: { x: 100, y: 450 },
     flagPosition: { x: 3100, y: 200 },
 
+    checkpoints: [
+        { x: 850, y: 490 },   // After section 1
+        { x: 1580, y: 490 },  // After section 2
+        { x: 2600, y: 490 }   // After section 4
+    ],
+
     coins: [
         // Starting area
         { x: 150, y: 470 },

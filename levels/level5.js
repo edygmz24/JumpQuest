@@ -85,6 +85,12 @@ const level5 = {
     playerStart: { x: 100, y: 450 },
     flagPosition: { x: 4300, y: 100 },
 
+    checkpoints: [
+        { x: 900, y: 490 },   // After starting sequence
+        { x: 2100, y: 490 },  // After extreme heights
+        { x: 3500, y: 490 }   // After gauntlet section
+    ],
+
     coins: [
         // Starting sequence
         { x: 100, y: 470 },

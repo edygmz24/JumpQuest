@@ -77,6 +77,11 @@ const level3 = {
     playerStart: { x: 100, y: 450 },
     flagPosition: { x: 3800, y: 160 },
 
+    checkpoints: [
+        { x: 920, y: 490 },   // After section 1
+        { x: 2350, y: 490 }   // After section 3
+    ],
+
     coins: [
         // Starting area
         { x: 100, y: 470 },
