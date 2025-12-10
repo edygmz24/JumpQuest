@@ -136,7 +136,7 @@ function loadLevel(levelIndex) {
     // Collisions
     this.physics.add.collider(player, platforms);
     this.physics.add.collider(enemies, platforms);
-    this.physics.add.overlap(player, enemies, hitEnemy, null, this);
+    this.physics.add.overlap(player, enemies, handleEnemyCollision, null, this);
     this.physics.add.overlap(player, endFlag, reachEnd, null, this);
     this.physics.add.overlap(player, obstacles, hitEnemy, null, this);
     this.physics.add.overlap(player, coins, collectCoin, null, this);
@@ -231,6 +231,9 @@ function update() {
 
     // Enemy patrol behavior and update visual rectangles
     enemies.children.entries.forEach((enemy, index) => {
+        // Skip inactive enemies (stomped)
+        if (!enemy.active) return;
+
         if (enemy.body.velocity.x > 0 && enemy.body.blocked.right) {
             enemy.setVelocityX(-Math.abs(enemy.body.velocity.x));
         } else if (enemy.body.velocity.x < 0 && enemy.body.blocked.left) {
@@ -258,6 +261,58 @@ function collectCoin(player, coin) {
 
     coin.disableBody(true, true);
     score += 100;
+    const highScore = highScores['level' + currentLevelIndex] || 0;
+    scoreText.setText(`Score: ${score} | Best: ${highScore}`);
+}
+
+function handleEnemyCollision(player, enemy) {
+    if (gameOver) return;
+
+    // Check if player is falling and above the enemy
+    const playerBottom = player.y + player.displayHeight / 2;
+    const enemyTop = enemy.y - enemy.displayHeight / 2;
+    const isFalling = player.body.velocity.y > 0;
+    const isAbove = playerBottom < enemy.y;
+
+    if (isFalling && isAbove) {
+        // Stomp the enemy
+        stompEnemy.call(this, enemy);
+        // Bounce player up
+        player.setVelocityY(-250);
+    } else {
+        // Player dies
+        hitEnemy.call(this);
+    }
+}
+
+function stompEnemy(enemy) {
+    // Find the enemy visual
+    const enemyIndex = enemies.children.entries.indexOf(enemy);
+    const enemyRect = enemyRects[enemyIndex];
+
+    // Disable enemy physics immediately
+    enemy.disableBody(true, true);
+
+    // Animate the visual rectangle (squish, then fade out)
+    if (enemyRect) {
+        // Squish effect - flatten vertically
+        this.tweens.add({
+            targets: enemyRect,
+            scaleY: 0.2,
+            scaleX: 1.5,
+            alpha: 0,
+            duration: 300,
+            ease: 'Power2',
+            onComplete: () => {
+                enemyRect.destroy();
+            }
+        });
+        // Remove from array (set to null to maintain indices during animation)
+        enemyRects[enemyIndex] = null;
+    }
+
+    // Update score
+    score += 200;
     const highScore = highScores['level' + currentLevelIndex] || 0;
     scoreText.setText(`Score: ${score} | Best: ${highScore}`);
 }
