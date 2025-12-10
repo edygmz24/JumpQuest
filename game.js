@@ -231,6 +231,9 @@ function update() {
 
     // Enemy patrol behavior and update visual rectangles
     enemies.children.entries.forEach((enemy, index) => {
+        // Skip inactive enemies (stomped)
+        if (!enemy.active) return;
+
         if (enemy.body.velocity.x > 0 && enemy.body.blocked.right) {
             enemy.setVelocityX(-Math.abs(enemy.body.velocity.x));
         } else if (enemy.body.velocity.x < 0 && enemy.body.blocked.left) {
@@ -283,14 +286,32 @@ function handleEnemyCollision(player, enemy) {
 }
 
 function stompEnemy(enemy) {
-    // Find and remove enemy visual
+    // Find the enemy visual
     const enemyIndex = enemies.children.entries.indexOf(enemy);
-    if (enemyIndex !== -1 && enemyRects[enemyIndex]) {
-        enemyRects[enemyIndex].destroy();
-        enemyRects.splice(enemyIndex, 1);
+    const enemyRect = enemyRects[enemyIndex];
+
+    // Disable enemy physics immediately
+    enemy.disableBody(true, true);
+
+    // Animate the visual rectangle (squish, then fade out)
+    if (enemyRect) {
+        // Squish effect - flatten vertically
+        this.tweens.add({
+            targets: enemyRect,
+            scaleY: 0.2,
+            scaleX: 1.5,
+            alpha: 0,
+            duration: 300,
+            ease: 'Power2',
+            onComplete: () => {
+                enemyRect.destroy();
+            }
+        });
+        // Remove from array (set to null to maintain indices during animation)
+        enemyRects[enemyIndex] = null;
     }
 
-    enemy.disableBody(true, true);
+    // Update score
     score += 200;
     const highScore = highScores['level' + currentLevelIndex] || 0;
     scoreText.setText(`Score: ${score} | Best: ${highScore}`);
