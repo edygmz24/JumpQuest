@@ -464,57 +464,6 @@ function hitEnemy() {
     }
 }
 
-    // If we have a checkpoint, respawn there instead of game over
-    if (lastCheckpoint) {
-        // Respawn at checkpoint
-        player.setPosition(lastCheckpoint.x, lastCheckpoint.y);
-        playerRect.setPosition(lastCheckpoint.x, lastCheckpoint.y);
-        player.setVelocity(0, 0);
-
-        // Brief invincibility effect
-        player.setAlpha(0.5);
-        this.time.delayedCall(1500, () => {
-            player.setAlpha(1);
-        });
-
-        return;
-    }
-
-    // No checkpoint - game over
-    gameOver = true;
-    this.physics.pause();
-    player.setTint(0xff0000);
-
-    const gameOverText = this.add.text(this.cameras.main.centerX, 300, 'GAME OVER!', {
-        fontSize: '48px',
-        fill: '#ff0000',
-        backgroundColor: '#000',
-        padding: { x: 20, y: 10 }
-    });
-    gameOverText.setOrigin(0.5);
-    gameOverText.setScrollFactor(0);
-
-    const restartButton = this.add.text(this.cameras.main.centerX, 370, 'RESTART LEVEL', {
-        fontSize: '28px',
-        fill: '#fff',
-        backgroundColor: '#444',
-        padding: { x: 20, y: 10 }
-    });
-    restartButton.setOrigin(0.5);
-    restartButton.setScrollFactor(0);
-    restartButton.setDepth(1000);
-    restartButton.setInteractive({ useHandCursor: true });
-    restartButton.on('pointerover', () => {
-        restartButton.setStyle({ backgroundColor: '#666' });
-    });
-    restartButton.on('pointerout', () => {
-        restartButton.setStyle({ backgroundColor: '#444' });
-    });
-    restartButton.on('pointerup', () => {
-        this.scene.restart();
-    });
-}
-
 function reachEnd() {
     if (levelComplete) return;
 
