@@ -103,5 +103,14 @@ const level1 = {
         { x: 2750, y: 330 },
         { x: 2920, y: 270 },
         { x: 3080, y: 210 }
+    ],
+
+    movingPlatforms: [
+        // Horizontal moving platform in section 2
+        { x: 1000, y: 450, width: 100, height: 20, moveX: 100, moveY: 0, speed: 80 },
+        // Vertical moving platform in section 3
+        { x: 1900, y: 400, width: 80, height: 20, moveX: 0, moveY: 80, speed: 60 },
+        // Horizontal moving platform in section 4
+        { x: 2050, y: 380, width: 90, height: 20, moveX: 120, moveY: 0, speed: 100 }
     ]
 };

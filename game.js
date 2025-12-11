@@ -57,6 +57,9 @@ let bestTimes = JSON.parse(localStorage.getItem('marioBestTimes')) || {};
 let lives = 3;
 let livesText;
 
+// Moving Platforms
+let movingPlatforms = [];
+
 // Array of all levels (loaded from separate files)
 const levels = [level1, level2, level3, level4, level5];
 
@@ -75,6 +78,7 @@ function create() {
     score = 0;
     levelTimer = 0;
     lives = 3;
+    movingPlatforms = [];
 
     // Load the current level
     loadLevel.call(this, currentLevelIndex);
@@ -169,6 +173,31 @@ function loadLevel(levelIndex) {
     this.physics.add.overlap(player, obstacles, hitEnemy, null, this);
     this.physics.add.overlap(player, coins, collectCoin, null, this);
     // Note: Checkpoints are activated based on X position in update(), not by overlap
+
+    // Moving Platforms from level data
+    if (currentLevel.movingPlatforms) {
+        currentLevel.movingPlatforms.forEach(mp => {
+            const platform = this.physics.add.sprite(mp.x, mp.y, null).setDisplaySize(mp.width, mp.height);
+            platform.body.setImmovable(true);
+            platform.body.setAllowGravity(false);
+
+            const rect = this.add.rectangle(mp.x, mp.y, mp.width, mp.height, 0x9B7653);
+
+            movingPlatforms.push({
+                sprite: platform,
+                rect: rect,
+                startX: mp.x,
+                startY: mp.y,
+                moveX: mp.moveX,
+                moveY: mp.moveY,
+                speed: mp.speed,
+                direction: 1
+            });
+
+            // Add collision with player
+            this.physics.add.collider(player, platform);
+        });
+    }
 
     // Controls
     cursors = this.input.keyboard.createCursorKeys();
@@ -320,6 +349,45 @@ function update() {
     });
 
     // Fall off world
+
+    // Update moving platforms
+    movingPlatforms.forEach(mp => {
+        const platform = mp.sprite;
+        const deltaTime = this.game.loop.delta / 1000;
+
+        // Calculate movement
+        if (mp.moveX > 0) {
+            platform.x += mp.speed * mp.direction * deltaTime;
+            if (platform.x > mp.startX + mp.moveX || platform.x < mp.startX) {
+                mp.direction *= -1;
+            }
+        }
+
+        if (mp.moveY > 0) {
+            platform.y += mp.speed * mp.direction * deltaTime;
+            if (platform.y > mp.startY + mp.moveY || platform.y < mp.startY) {
+                mp.direction *= -1;
+            }
+        }
+
+        // Update physics body position
+        platform.body.updateFromGameObject();
+
+        // Update visual rectangle
+        mp.rect.setPosition(platform.x, platform.y);
+
+        // Move player with platform if standing on it
+        if (player.body.touching.down && platform.body.touching.up) {
+            const onPlatform = Math.abs(player.x - platform.x) < platform.displayWidth / 2 + player.displayWidth / 2;
+            if (onPlatform) {
+                if (mp.moveX > 0) {
+                    player.x += mp.speed * mp.direction * deltaTime;
+                    playerRect.x = player.x;
+                }
+            }
+        }
+    });
+
     if (player.y > 600) {
         hitEnemy.call(this);
     }
