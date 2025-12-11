@@ -1094,7 +1094,7 @@ bg.tilePositionX = this.cameras.main.scrollX * 0.5;
 | 1 | Collectibles & Scoring | Easy | None | DONE |
 | 2 | Stomp Enemies | Easy | None | DONE |
 | 3 | Checkpoints | Easy | None | |
-| 4 | Timer & Best Times | Easy | Scoring (optional) | |
+| 4 | Timer & Best Times | Easy | Scoring (optional) | DONE |
 | 5 | Lives System | Easy | Checkpoints | |
 | 6 | Power-ups | Medium | None | |
 | 7 | Moving Platforms | Medium | None | |
