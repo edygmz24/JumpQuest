@@ -53,6 +53,10 @@ let levelTimer = 0;
 let timerText;
 let bestTimes = JSON.parse(localStorage.getItem('marioBestTimes')) || {};
 
+// Lives System
+let lives = 3;
+let livesText;
+
 // Array of all levels (loaded from separate files)
 const levels = [level1, level2, level3, level4, level5];
 
@@ -70,6 +74,7 @@ function create() {
     lastCheckpoint = null;
     score = 0;
     levelTimer = 0;
+    lives = 3;
 
     // Load the current level
     loadLevel.call(this, currentLevelIndex);
@@ -214,6 +219,15 @@ function loadLevel(levelIndex) {
         padding: { x: 10, y: 5 }
     });
     timerText.setScrollFactor(0);
+
+    // Lives display
+    livesText = this.add.text(16, 186, `Lives: ${'❤'.repeat(lives)}`, {
+        fontSize: '14px',
+        fill: '#ff0000',
+        backgroundColor: '#000',
+        padding: { x: 10, y: 5 }
+    });
+    livesText.setScrollFactor(0);
 
     // Pause button
     pauseButton = this.add.text(750, 16, 'PAUSE', {
@@ -379,6 +393,76 @@ function stompEnemy(enemy) {
 
 function hitEnemy() {
     if (gameOver) return;
+
+    // Decrease lives
+    lives--;
+    livesText.setText(`Lives: ${'❤'.repeat(lives)}`);
+
+    if (lives <= 0) {
+        // Game over - no more lives
+        gameOver = true;
+        this.physics.pause();
+        player.setTint(0xff0000);
+
+        const gameOverText = this.add.text(this.cameras.main.centerX, 300, 'GAME OVER!', {
+            fontSize: '48px',
+            fill: '#ff0000',
+            backgroundColor: '#000',
+            padding: { x: 20, y: 10 }
+        });
+        gameOverText.setOrigin(0.5);
+        gameOverText.setScrollFactor(0);
+
+        const restartButton = this.add.text(this.cameras.main.centerX, 370, 'RESTART LEVEL', {
+            fontSize: '28px',
+            fill: '#fff',
+            backgroundColor: '#444',
+            padding: { x: 20, y: 10 }
+        });
+        restartButton.setOrigin(0.5);
+        restartButton.setScrollFactor(0);
+        restartButton.setDepth(1000);
+        restartButton.setInteractive({ useHandCursor: true });
+        restartButton.on('pointerover', () => {
+            restartButton.setStyle({ backgroundColor: '#666' });
+        });
+        restartButton.on('pointerout', () => {
+            restartButton.setStyle({ backgroundColor: '#444' });
+        });
+        restartButton.on('pointerup', () => {
+            this.scene.restart();
+        });
+    } else {
+        // Respawn at checkpoint or start
+        const spawnPoint = lastCheckpoint || { x: currentLevel.playerStart.x, y: currentLevel.playerStart.y };
+        player.setPosition(spawnPoint.x, spawnPoint.y);
+        playerRect.setPosition(spawnPoint.x, spawnPoint.y);
+        player.setVelocity(0, 0);
+
+        // Brief invincibility effect with visual feedback
+        player.setAlpha(0.5);
+        playerRect.setAlpha(0.5);
+
+        // Flash effect
+        let flashCount = 0;
+        const flashInterval = this.time.addEvent({
+            delay: 200,
+            callback: () => {
+                flashCount++;
+                const alpha = flashCount % 2 === 0 ? 0.5 : 0.3;
+                player.setAlpha(alpha);
+                playerRect.setAlpha(alpha);
+
+                if (flashCount >= 10) {
+                    flashInterval.remove();
+                    player.setAlpha(1);
+                    playerRect.setAlpha(1);
+                }
+            },
+            loop: true
+        });
+    }
+}
 
     // If we have a checkpoint, respawn there instead of game over
     if (lastCheckpoint) {
