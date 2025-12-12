@@ -359,42 +359,54 @@ function update() {
     // Fall off world
 
     // Update moving platforms
-    movingPlatforms.forEach(mp => {
-        const platform = mp.sprite;
-        const deltaTime = this.game.loop.delta / 1000;
+    if (movingPlatforms.length > 0) {
+        movingPlatforms.forEach((mp, index) => {
+            const platform = mp.sprite;
+            const deltaTime = this.game.loop.delta / 1000;
 
-        // Calculate movement
-        if (mp.moveX > 0) {
-            platform.x += mp.speed * mp.direction * deltaTime;
-            if (platform.x > mp.startX + mp.moveX || platform.x < mp.startX) {
-                mp.direction *= -1;
-            }
-        }
-
-        if (mp.moveY > 0) {
-            platform.y += mp.speed * mp.direction * deltaTime;
-            if (platform.y > mp.startY + mp.moveY || platform.y < mp.startY) {
-                mp.direction *= -1;
-            }
-        }
-
-        // Update physics body position
-        platform.body.updateFromGameObject();
-
-        // Update visual rectangle
-        mp.rect.setPosition(platform.x, platform.y);
-
-        // Move player with platform if standing on it
-        if (player.body.touching.down && platform.body.touching.up) {
-            const onPlatform = Math.abs(player.x - platform.x) < platform.displayWidth / 2 + player.displayWidth / 2;
-            if (onPlatform) {
-                if (mp.moveX > 0) {
-                    player.x += mp.speed * mp.direction * deltaTime;
-                    playerRect.x = player.x;
+            // Calculate movement
+            if (mp.moveX > 0) {
+                platform.x += mp.speed * mp.direction * deltaTime;
+                // Check bounds and reverse direction, clamping to prevent getting stuck
+                if (platform.x >= mp.startX + mp.moveX) {
+                    platform.x = mp.startX + mp.moveX;
+                    mp.direction = -1;
+                } else if (platform.x <= mp.startX) {
+                    platform.x = mp.startX;
+                    mp.direction = 1;
                 }
             }
-        }
-    });
+
+            if (mp.moveY > 0) {
+                platform.y += mp.speed * mp.direction * deltaTime;
+                // Check bounds and reverse direction, clamping to prevent getting stuck
+                if (platform.y >= mp.startY + mp.moveY) {
+                    platform.y = mp.startY + mp.moveY;
+                    mp.direction = -1;
+                } else if (platform.y <= mp.startY) {
+                    platform.y = mp.startY;
+                    mp.direction = 1;
+                }
+            }
+
+            // Update physics body position
+            platform.body.updateFromGameObject();
+
+            // Update visual rectangle
+            mp.rect.setPosition(platform.x, platform.y);
+
+            // Move player with platform if standing on it
+            if (player.body.touching.down && platform.body.touching.up) {
+                const onPlatform = Math.abs(player.x - platform.x) < platform.displayWidth / 2 + player.displayWidth / 2;
+                if (onPlatform) {
+                    if (mp.moveX > 0) {
+                        player.x += mp.speed * mp.direction * deltaTime;
+                        playerRect.x = player.x;
+                    }
+                }
+            }
+        });
+    }
 
     if (player.y > 600) {
         hitEnemy.call(this);
