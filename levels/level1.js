@@ -17,7 +17,7 @@ const level1 = {
 
         // Section 2 - Mid level
         { x: 900, y: 420, width: 150, height: 20 },
-        { x: 1100, y: 360, width: 100, height: 20 },
+        // Platform at 1100, 360 moved to movingPlatforms (horizontal)
         { x: 1250, y: 300, width: 120, height: 20 },
         { x: 1450, y: 380, width: 150, height: 20 },
 
@@ -26,13 +26,13 @@ const level1 = {
 
         // Section 3 - Higher platforms
         { x: 1650, y: 320, width: 100, height: 20 },
-        { x: 1800, y: 260, width: 120, height: 20 },
+        // Platform at 1800, 260 moved to movingPlatforms (vertical)
         { x: 1980, y: 340, width: 100, height: 20 },
 
         // Section 4 - Challenging jumps
         { x: 2150, y: 280, width: 80, height: 20 },
         { x: 2300, y: 220, width: 80, height: 20 },
-        { x: 2480, y: 280, width: 100, height: 20 },
+        // Platform at 2480, 280 moved to movingPlatforms (horizontal)
 
         // Checkpoint recovery platform 3
         { x: 2600, y: 520, width: 100, height: 20 },
@@ -106,11 +106,11 @@ const level1 = {
     ],
 
     movingPlatforms: [
-        // Horizontal moving platform in section 2
-        { x: 1000, y: 450, width: 100, height: 20, moveX: 100, moveY: 0, speed: 80 },
-        // Vertical moving platform in section 3
-        { x: 1900, y: 400, width: 80, height: 20, moveX: 0, moveY: 80, speed: 60 },
-        // Horizontal moving platform in section 4
-        { x: 2050, y: 380, width: 90, height: 20, moveX: 120, moveY: 0, speed: 100 }
+        // Section 2 - Horizontal moving platform (was static at 1100, 360)
+        { x: 1100, y: 360, width: 100, height: 20, moveX: 80, moveY: 0, speed: 60 },
+        // Section 3 - Vertical moving platform (was static at 1800, 260)
+        { x: 1800, y: 260, width: 120, height: 20, moveX: 0, moveY: 60, speed: 50 },
+        // Section 4 - Horizontal moving platform (was static at 2480, 280)
+        { x: 2480, y: 280, width: 100, height: 20, moveX: 100, moveY: 0, speed: 70 }
     ]
 };
