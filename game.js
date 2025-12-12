@@ -68,6 +68,14 @@ function preload() {
 }
 
 function create() {
+    // Clean up moving platforms from previous session
+    if (movingPlatforms && movingPlatforms.length > 0) {
+        movingPlatforms.forEach(mp => {
+            if (mp.sprite) mp.sprite.destroy();
+            if (mp.rect) mp.rect.destroy();
+        });
+    }
+
     // Reset game state
     gameOver = false;
     levelComplete = false;
