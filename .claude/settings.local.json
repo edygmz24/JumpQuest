@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(dir /s /b \"C:\\Users\\edygo\\Documents\\Coding\\MarioGame\")"
     ],
     "deny": [],
     "ask": []
