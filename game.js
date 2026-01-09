@@ -61,7 +61,26 @@ let livesText;
 let movingPlatforms = [];
 
 // Array of all levels (loaded from separate files)
-const levels = [level1, level2, level3, level4, level5];
+let levels = [level1, level2, level3, level4, level5];
+
+// Check for test level from editor
+let isTestMode = false;
+(function checkTestLevel() {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('testLevel') === 'true') {
+        const testLevelData = localStorage.getItem('editorTestLevel');
+        if (testLevelData) {
+            try {
+                const testLevel = JSON.parse(testLevelData);
+                levels = [testLevel]; // Replace levels array with just the test level
+                isTestMode = true;
+                console.log('Loaded test level from editor:', testLevel.name);
+            } catch (e) {
+                console.error('Failed to parse test level:', e);
+            }
+        }
+    }
+})();
 
 function preload() {
     // We'll use simple shapes instead of sprites for now
