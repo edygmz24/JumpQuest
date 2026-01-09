@@ -57,14 +57,44 @@ let bestTimes = JSON.parse(localStorage.getItem('marioBestTimes')) || {};
 let lives = 3;
 let livesText;
 
+// Moving Platforms
+let movingPlatforms = [];
+
 // Array of all levels (loaded from separate files)
-const levels = [level1, level2, level3, level4, level5];
+let levels = [level1, level2, level3, level4, level5];
+
+// Check for test level from editor
+let isTestMode = false;
+(function checkTestLevel() {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('testLevel') === 'true') {
+        const testLevelData = localStorage.getItem('editorTestLevel');
+        if (testLevelData) {
+            try {
+                const testLevel = JSON.parse(testLevelData);
+                levels = [testLevel]; // Replace levels array with just the test level
+                isTestMode = true;
+                console.log('Loaded test level from editor:', testLevel.name);
+            } catch (e) {
+                console.error('Failed to parse test level:', e);
+            }
+        }
+    }
+})();
 
 function preload() {
     // We'll use simple shapes instead of sprites for now
 }
 
 function create() {
+    // Clean up moving platforms from previous session
+    if (movingPlatforms && movingPlatforms.length > 0) {
+        movingPlatforms.forEach(mp => {
+            if (mp.sprite) mp.sprite.destroy();
+            if (mp.rect) mp.rect.destroy();
+        });
+    }
+
     // Reset game state
     gameOver = false;
     levelComplete = false;
@@ -75,6 +105,7 @@ function create() {
     score = 0;
     levelTimer = 0;
     lives = 3;
+    movingPlatforms = [];
 
     // Load the current level
     loadLevel.call(this, currentLevelIndex);
@@ -169,6 +200,31 @@ function loadLevel(levelIndex) {
     this.physics.add.overlap(player, obstacles, hitEnemy, null, this);
     this.physics.add.overlap(player, coins, collectCoin, null, this);
     // Note: Checkpoints are activated based on X position in update(), not by overlap
+
+    // Moving Platforms from level data
+    if (currentLevel.movingPlatforms) {
+        currentLevel.movingPlatforms.forEach(mp => {
+            const platform = this.physics.add.sprite(mp.x, mp.y, null).setDisplaySize(mp.width, mp.height);
+            platform.body.setImmovable(true);
+            platform.body.setAllowGravity(false);
+
+            const rect = this.add.rectangle(mp.x, mp.y, mp.width, mp.height, 0x9B7653);
+
+            movingPlatforms.push({
+                sprite: platform,
+                rect: rect,
+                startX: mp.x,
+                startY: mp.y,
+                moveX: mp.moveX,
+                moveY: mp.moveY,
+                speed: mp.speed,
+                direction: 1
+            });
+
+            // Add collision with player
+            this.physics.add.collider(player, platform);
+        });
+    }
 
     // Controls
     cursors = this.input.keyboard.createCursorKeys();
@@ -320,6 +376,57 @@ function update() {
     });
 
     // Fall off world
+
+    // Update moving platforms
+    if (movingPlatforms.length > 0) {
+        movingPlatforms.forEach((mp, index) => {
+            const platform = mp.sprite;
+            const deltaTime = this.game.loop.delta / 1000;
+
+            // Calculate movement
+            if (mp.moveX > 0) {
+                platform.x += mp.speed * mp.direction * deltaTime;
+                // Check bounds and reverse direction, clamping to prevent getting stuck
+                if (platform.x >= mp.startX + mp.moveX) {
+                    platform.x = mp.startX + mp.moveX;
+                    mp.direction = -1;
+                } else if (platform.x <= mp.startX) {
+                    platform.x = mp.startX;
+                    mp.direction = 1;
+                }
+            }
+
+            if (mp.moveY > 0) {
+                platform.y += mp.speed * mp.direction * deltaTime;
+                // Check bounds and reverse direction, clamping to prevent getting stuck
+                if (platform.y >= mp.startY + mp.moveY) {
+                    platform.y = mp.startY + mp.moveY;
+                    mp.direction = -1;
+                } else if (platform.y <= mp.startY) {
+                    platform.y = mp.startY;
+                    mp.direction = 1;
+                }
+            }
+
+            // Update physics body position
+            platform.body.updateFromGameObject();
+
+            // Update visual rectangle
+            mp.rect.setPosition(platform.x, platform.y);
+
+            // Move player with platform if standing on it
+            if (player.body.touching.down && platform.body.touching.up) {
+                const onPlatform = Math.abs(player.x - platform.x) < platform.displayWidth / 2 + player.displayWidth / 2;
+                if (onPlatform) {
+                    if (mp.moveX > 0) {
+                        player.x += mp.speed * mp.direction * deltaTime;
+                        playerRect.x = player.x;
+                    }
+                }
+            }
+        });
+    }
+
     if (player.y > 600) {
         hitEnemy.call(this);
     }

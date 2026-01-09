@@ -18,14 +18,14 @@ const level3 = {
 
         // Section 2 - Zigzag pattern (reduced vertical changes)
         { x: 1000, y: 380, width: 100, height: 20 },
-        { x: 1180, y: 340, width: 90, height: 20 },
+        // Platform at 1180, 340 moved to movingPlatforms (horizontal)
         { x: 1330, y: 300, width: 90, height: 20 },
         { x: 1510, y: 340, width: 100, height: 20 },
         { x: 1660, y: 380, width: 90, height: 20 },
 
         // Section 3 - Precision jumps (gentler slopes)
         { x: 1820, y: 340, width: 80, height: 20 },
-        { x: 1970, y: 300, width: 80, height: 20 },
+        // Platform at 1970, 300 moved to movingPlatforms (vertical)
         { x: 2120, y: 260, width: 80, height: 20 },
         { x: 2270, y: 300, width: 100, height: 20 },
 
@@ -35,7 +35,7 @@ const level3 = {
         // Section 4 - Enemy maze
         { x: 2450, y: 420, width: 120, height: 20 },
         { x: 2620, y: 360, width: 100, height: 20 },
-        { x: 2780, y: 300, width: 100, height: 20 },
+        // Platform at 2780, 300 moved to movingPlatforms (horizontal)
         { x: 2940, y: 360, width: 100, height: 20 },
 
         // Section 5 - Final challenge
@@ -113,5 +113,14 @@ const level3 = {
         { x: 3400, y: 250 },
         { x: 3550, y: 310 },
         { x: 3730, y: 230 }
+    ],
+
+    movingPlatforms: [
+        // Section 2 - Horizontal moving platform (was static at 1180, 340)
+        { x: 1180, y: 340, width: 90, height: 20, moveX: 85, moveY: 0, speed: 60 },
+        // Section 3 - Vertical moving platform (was static at 1970, 300)
+        { x: 1970, y: 300, width: 80, height: 20, moveX: 0, moveY: 65, speed: 50 },
+        // Section 4 - Horizontal moving platform (was static at 2780, 300)
+        { x: 2780, y: 300, width: 100, height: 20, moveX: 95, moveY: 0, speed: 65 }
     ]
 };

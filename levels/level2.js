@@ -18,13 +18,13 @@ const level2 = {
 
         // Section 2 - High jumps
         { x: 1050, y: 270, width: 100, height: 20 },
-        { x: 1220, y: 340, width: 90, height: 20 },
+        // Platform at 1220, 340 moved to movingPlatforms (horizontal)
         { x: 1380, y: 280, width: 100, height: 20 },
         { x: 1550, y: 220, width: 110, height: 20 },
 
         // Section 3 - Narrow platforms
         { x: 1750, y: 300, width: 80, height: 20 },
-        { x: 1900, y: 360, width: 80, height: 20 },
+        // Platform at 1900, 360 moved to movingPlatforms (vertical)
         { x: 2060, y: 300, width: 80, height: 20 },
 
         // Checkpoint recovery platform 2
@@ -32,7 +32,7 @@ const level2 = {
 
         // Section 4 - Mixed heights
         { x: 2280, y: 400, width: 120, height: 20 },
-        { x: 2480, y: 320, width: 100, height: 20 },
+        // Platform at 2480, 320 moved to movingPlatforms (horizontal)
         { x: 2650, y: 260, width: 90, height: 20 },
         { x: 2820, y: 340, width: 110, height: 20 },
 
@@ -101,5 +101,14 @@ const level2 = {
         { x: 3000, y: 250 },
         { x: 3180, y: 190 },
         { x: 3380, y: 250 }
+    ],
+
+    movingPlatforms: [
+        // Section 2 - Horizontal moving platform (was static at 1220, 340)
+        { x: 1220, y: 340, width: 90, height: 20, moveX: 100, moveY: 0, speed: 65 },
+        // Section 3 - Vertical moving platform (was static at 1900, 360)
+        { x: 1900, y: 360, width: 80, height: 20, moveX: 0, moveY: 70, speed: 55 },
+        // Section 4 - Horizontal moving platform (was static at 2480, 320)
+        { x: 2480, y: 320, width: 100, height: 20, moveX: 90, moveY: 0, speed: 70 }
     ]
 };

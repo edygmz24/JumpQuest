@@ -16,7 +16,7 @@ const level5 = {
 
         // Extreme heights section
         { x: 1000, y: 200, width: 80, height: 20 },
-        { x: 1140, y: 260, width: 80, height: 20 },
+        // Platform at 1140, 260 moved to movingPlatforms (vertical)
         { x: 1280, y: 200, width: 80, height: 20 },
         { x: 1420, y: 150, width: 80, height: 20 },
         { x: 1560, y: 220, width: 90, height: 20 },
@@ -31,14 +31,14 @@ const level5 = {
         // Precision platforming
         { x: 2200, y: 280, width: 70, height: 20 },
         { x: 2330, y: 220, width: 70, height: 20 },
-        { x: 2460, y: 280, width: 70, height: 20 },
+        // Platform at 2460, 280 moved to movingPlatforms (horizontal)
         { x: 2590, y: 220, width: 70, height: 20 },
         { x: 2720, y: 160, width: 70, height: 20 },
 
         // Gauntlet section
         { x: 2880, y: 340, width: 100, height: 20 },
         { x: 3040, y: 280, width: 90, height: 20 },
-        { x: 3190, y: 340, width: 90, height: 20 },
+        // Platform at 3190, 340 moved to movingPlatforms (horizontal)
         { x: 3340, y: 280, width: 90, height: 20 },
 
         // Checkpoint recovery platform 3
@@ -125,5 +125,14 @@ const level5 = {
         { x: 3900, y: 250 },
         { x: 4050, y: 190 },
         { x: 4220, y: 150 }
+    ],
+
+    movingPlatforms: [
+        // Extreme heights - Vertical moving platform (was static at 1140, 260)
+        { x: 1140, y: 260, width: 80, height: 20, moveX: 0, moveY: 75, speed: 50 },
+        // Precision platforming - Horizontal moving platform (was static at 2460, 280)
+        { x: 2460, y: 280, width: 70, height: 20, moveX: 80, moveY: 0, speed: 65 },
+        // Gauntlet section - Horizontal moving platform (was static at 3190, 340)
+        { x: 3190, y: 340, width: 90, height: 20, moveX: 95, moveY: 0, speed: 75 }
     ]
 };

@@ -1,0 +1,2010 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mario Level Editor</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Left Sidebar - Tools */
+        #sidebar {
+            width: 200px;
+            background: #16213e;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            border-right: 2px solid #0f3460;
+        }
+
+        #sidebar h2 {
+            color: #e94560;
+            margin-bottom: 10px;
+            font-size: 18px;
+        }
+
+        .tool-section {
+            margin-bottom: 15px;
+        }
+
+        .tool-section h3 {
+            color: #94a3b8;
+            font-size: 12px;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+
+        .tool-btn {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 5px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+
+        .tool-btn:hover {
+            transform: translateX(3px);
+        }
+
+        .tool-btn.active {
+            outline: 2px solid #fff;
+            outline-offset: 2px;
+        }
+
+        .tool-btn .preview {
+            width: 20px;
+            height: 20px;
+            border-radius: 3px;
+        }
+
+        .tool-platform { background: #8B4513; color: white; }
+        .tool-platform .preview { background: #8B4513; }
+
+        .tool-moving { background: #9B7653; color: white; }
+        .tool-moving .preview { background: #9B7653; }
+
+        .tool-enemy { background: #FF0000; color: white; }
+        .tool-enemy .preview { background: #FF0000; }
+
+        .tool-obstacle { background: #FF4444; color: white; }
+        .tool-obstacle .preview { background: #FF4444; border: 2px solid #AA0000; }
+
+        .tool-coin { background: #FFD700; color: #333; }
+        .tool-coin .preview { background: #FFD700; }
+
+        .tool-checkpoint { background: #888888; color: white; }
+        .tool-checkpoint .preview { background: #888888; }
+
+        .tool-player { background: #0000FF; color: white; }
+        .tool-player .preview { background: #0000FF; }
+
+        .tool-flag { background: #FFFF00; color: #333; }
+        .tool-flag .preview { background: #FFFF00; }
+
+        .tool-select { background: #4a5568; color: white; }
+        .tool-delete { background: #c53030; color: white; }
+
+        /* Main Canvas Area */
+        #main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        #toolbar {
+            background: #0f3460;
+            padding: 10px 15px;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        #toolbar label {
+            font-size: 13px;
+            color: #94a3b8;
+        }
+
+        #toolbar input, #toolbar select {
+            padding: 5px 10px;
+            border: 1px solid #4a5568;
+            border-radius: 4px;
+            background: #1a1a2e;
+            color: #fff;
+            font-size: 13px;
+        }
+
+        #toolbar input[type="number"] {
+            width: 80px;
+        }
+
+        .toolbar-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .action-btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+
+        .action-btn:hover {
+            transform: translateY(-1px);
+        }
+
+        .btn-import { background: #3b82f6; color: white; }
+        .btn-export { background: #10b981; color: white; }
+        .btn-clear { background: #ef4444; color: white; }
+        .btn-test { background: #8b5cf6; color: white; }
+        .btn-generate { background: #f59e0b; color: white; }
+
+        #canvas-container {
+            flex: 1;
+            overflow: auto;
+            background: #0a0a15;
+            position: relative;
+        }
+
+        #editor-canvas {
+            cursor: crosshair;
+        }
+
+        /* Right Panel - Properties */
+        #properties {
+            width: 280px;
+            background: #16213e;
+            padding: 15px;
+            border-left: 2px solid #0f3460;
+            overflow-y: auto;
+        }
+
+        #properties h2 {
+            color: #e94560;
+            margin-bottom: 15px;
+            font-size: 16px;
+        }
+
+        .property-group {
+            margin-bottom: 15px;
+        }
+
+        .property-group label {
+            display: block;
+            font-size: 12px;
+            color: #94a3b8;
+            margin-bottom: 4px;
+        }
+
+        .property-group input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #4a5568;
+            border-radius: 4px;
+            background: #1a1a2e;
+            color: #fff;
+            font-size: 13px;
+        }
+
+        .property-row {
+            display: flex;
+            gap: 10px;
+        }
+
+        .property-row .property-group {
+            flex: 1;
+        }
+
+        #no-selection {
+            color: #64748b;
+            font-style: italic;
+        }
+
+        #selection-info {
+            display: none;
+        }
+
+        .apply-btn {
+            width: 100%;
+            padding: 10px;
+            background: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 13px;
+            margin-top: 10px;
+        }
+
+        .apply-btn:hover {
+            background: #2563eb;
+        }
+
+        .delete-btn {
+            width: 100%;
+            padding: 10px;
+            background: #ef4444;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 13px;
+            margin-top: 5px;
+        }
+
+        .delete-btn:hover {
+            background: #dc2626;
+        }
+
+        /* Stats */
+        #stats {
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 1px solid #4a5568;
+        }
+
+        #stats h3 {
+            color: #e94560;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            padding: 3px 0;
+        }
+
+        .stat-item span:first-child {
+            color: #94a3b8;
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: #16213e;
+            padding: 25px;
+            border-radius: 10px;
+            max-width: 800px;
+            max-height: 80vh;
+            overflow: auto;
+            width: 90%;
+        }
+
+        .modal-content h2 {
+            color: #e94560;
+            margin-bottom: 15px;
+        }
+
+        .modal-content textarea {
+            width: 100%;
+            height: 400px;
+            background: #1a1a2e;
+            color: #10b981;
+            border: 1px solid #4a5568;
+            border-radius: 5px;
+            padding: 15px;
+            font-family: 'Consolas', monospace;
+            font-size: 12px;
+            resize: vertical;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            justify-content: flex-end;
+        }
+
+        .modal-buttons button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+
+        .btn-copy { background: #3b82f6; color: white; }
+        .btn-close { background: #4a5568; color: white; }
+        .btn-load { background: #10b981; color: white; }
+
+        /* Generate form */
+        .generate-form {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .generate-form .property-group {
+            margin-bottom: 0;
+        }
+
+        .generate-form select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #4a5568;
+            border-radius: 5px;
+            background: #1a1a2e;
+            color: #fff;
+            font-size: 13px;
+            cursor: pointer;
+        }
+
+        .generate-form select:hover {
+            border-color: #6366f1;
+        }
+
+        .generate-form label {
+            display: block;
+            font-size: 13px;
+            color: #94a3b8;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+
+        /* Grid toggle */
+        .toggle-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .toggle {
+            width: 40px;
+            height: 20px;
+            background: #4a5568;
+            border-radius: 10px;
+            position: relative;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .toggle.active {
+            background: #10b981;
+        }
+
+        .toggle::after {
+            content: '';
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            background: white;
+            border-radius: 50%;
+            top: 2px;
+            left: 2px;
+            transition: left 0.2s;
+        }
+
+        .toggle.active::after {
+            left: 22px;
+        }
+
+        /* Zoom controls */
+        #zoom-display {
+            background: #1a1a2e;
+            padding: 5px 10px;
+            border-radius: 4px;
+            min-width: 50px;
+            text-align: center;
+        }
+
+        /* Help text */
+        #help-text {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.7);
+            padding: 8px 12px;
+            border-radius: 5px;
+            font-size: 12px;
+            color: #94a3b8;
+        }
+
+        /* Level selector */
+        #level-select {
+            min-width: 120px;
+        }
+
+        /* Coordinate display */
+        #coords {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.7);
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <!-- Left Sidebar -->
+    <div id="sidebar">
+        <h2>Level Editor</h2>
+
+        <div class="tool-section">
+            <h3>Tools</h3>
+            <button class="tool-btn tool-select active" data-tool="select">
+                <span class="preview" style="background: transparent; border: 2px dashed #fff;"></span>
+                Select / Move
+            </button>
+            <button class="tool-btn tool-delete" data-tool="delete">
+                <span class="preview" style="background: transparent; color: white;">X</span>
+                Delete Mode
+            </button>
+        </div>
+
+        <div class="tool-section">
+            <h3>Elements</h3>
+            <button class="tool-btn tool-platform" data-tool="platform">
+                <span class="preview"></span>
+                Platform
+            </button>
+            <button class="tool-btn tool-moving" data-tool="movingPlatform">
+                <span class="preview"></span>
+                Moving Platform
+            </button>
+            <button class="tool-btn tool-enemy" data-tool="enemy">
+                <span class="preview"></span>
+                Enemy
+            </button>
+            <button class="tool-btn tool-obstacle" data-tool="obstacle">
+                <span class="preview"></span>
+                Obstacle (Spike)
+            </button>
+            <button class="tool-btn tool-coin" data-tool="coin">
+                <span class="preview"></span>
+                Coin
+            </button>
+            <button class="tool-btn tool-checkpoint" data-tool="checkpoint">
+                <span class="preview"></span>
+                Checkpoint
+            </button>
+        </div>
+
+        <div class="tool-section">
+            <h3>Special</h3>
+            <button class="tool-btn tool-player" data-tool="playerStart">
+                <span class="preview"></span>
+                Player Start
+            </button>
+            <button class="tool-btn tool-flag" data-tool="flag">
+                <span class="preview"></span>
+                End Flag
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Area -->
+    <div id="main">
+        <div id="toolbar">
+            <div class="toolbar-group">
+                <label>Level:</label>
+                <select id="level-select">
+                    <option value="new">New Level</option>
+                    <option value="1">Level 1</option>
+                    <option value="2">Level 2</option>
+                    <option value="3">Level 3</option>
+                    <option value="4">Level 4</option>
+                    <option value="5">Level 5</option>
+                </select>
+            </div>
+
+            <div class="toolbar-group">
+                <label>World Width:</label>
+                <input type="number" id="world-width" value="3200" min="800" step="100">
+            </div>
+
+            <div class="toolbar-group">
+                <label>Level Name:</label>
+                <input type="text" id="level-name" value="New Level" style="width: 120px;">
+            </div>
+
+            <div class="toolbar-group toggle-container">
+                <label>Grid:</label>
+                <div class="toggle active" id="grid-toggle"></div>
+            </div>
+
+            <div class="toolbar-group toggle-container">
+                <label>Snap:</label>
+                <div class="toggle active" id="snap-toggle"></div>
+            </div>
+
+            <div class="toolbar-group">
+                <label>Grid Size:</label>
+                <input type="number" id="grid-size" value="20" min="10" max="100" step="10" style="width: 60px;">
+            </div>
+
+            <div class="toolbar-group">
+                <label>Zoom:</label>
+                <button class="action-btn" onclick="zoomOut()" style="padding: 5px 10px;">-</button>
+                <span id="zoom-display">100%</span>
+                <button class="action-btn" onclick="zoomIn()" style="padding: 5px 10px;">+</button>
+            </div>
+
+            <div style="flex: 1;"></div>
+
+            <button class="action-btn btn-generate" onclick="showGenerateModal()">Generate</button>
+            <button class="action-btn btn-import" onclick="showImportModal()">Import</button>
+            <button class="action-btn btn-export" onclick="showExportModal()">Export</button>
+            <button class="action-btn btn-clear" onclick="clearLevel()">Clear All</button>
+            <button class="action-btn btn-test" onclick="testLevel()">Test in Game</button>
+        </div>
+
+        <div id="canvas-container">
+            <canvas id="editor-canvas"></canvas>
+            <div id="coords">X: 0 Y: 0</div>
+            <div id="help-text">Click to place • Drag to move • Scroll to pan • Ctrl+Scroll to zoom</div>
+        </div>
+    </div>
+
+    <!-- Right Panel -->
+    <div id="properties">
+        <h2>Properties</h2>
+
+        <div id="no-selection">Select an element to edit its properties</div>
+
+        <div id="selection-info">
+            <div class="property-group">
+                <label>Type</label>
+                <input type="text" id="prop-type" readonly>
+            </div>
+
+            <div class="property-row">
+                <div class="property-group">
+                    <label>X Position</label>
+                    <input type="number" id="prop-x">
+                </div>
+                <div class="property-group">
+                    <label>Y Position</label>
+                    <input type="number" id="prop-y">
+                </div>
+            </div>
+
+            <div class="property-row" id="size-props">
+                <div class="property-group">
+                    <label>Width</label>
+                    <input type="number" id="prop-width" min="20">
+                </div>
+                <div class="property-group">
+                    <label>Height</label>
+                    <input type="number" id="prop-height" min="20">
+                </div>
+            </div>
+
+            <div id="moving-props" style="display: none;">
+                <div class="property-row">
+                    <div class="property-group">
+                        <label>Move X (distance)</label>
+                        <input type="number" id="prop-moveX" min="0">
+                    </div>
+                    <div class="property-group">
+                        <label>Move Y (distance)</label>
+                        <input type="number" id="prop-moveY" min="0">
+                    </div>
+                </div>
+                <div class="property-group">
+                    <label>Speed (pixels/sec)</label>
+                    <input type="number" id="prop-speed" min="10" max="200">
+                </div>
+            </div>
+
+            <button class="apply-btn" onclick="applyProperties()">Apply Changes</button>
+            <button class="delete-btn" onclick="deleteSelected()">Delete Element</button>
+        </div>
+
+        <div id="stats">
+            <h3>Level Stats</h3>
+            <div class="stat-item"><span>Platforms:</span><span id="stat-platforms">0</span></div>
+            <div class="stat-item"><span>Moving Platforms:</span><span id="stat-moving">0</span></div>
+            <div class="stat-item"><span>Enemies:</span><span id="stat-enemies">0</span></div>
+            <div class="stat-item"><span>Obstacles:</span><span id="stat-obstacles">0</span></div>
+            <div class="stat-item"><span>Coins:</span><span id="stat-coins">0</span></div>
+            <div class="stat-item"><span>Checkpoints:</span><span id="stat-checkpoints">0</span></div>
+        </div>
+    </div>
+
+    <!-- Export Modal -->
+    <div class="modal" id="export-modal">
+        <div class="modal-content">
+            <h2>Export Level</h2>
+            <p style="margin-bottom: 10px; color: #94a3b8;">Copy this code and paste it into your level file (e.g., levels/level1.js)</p>
+            <textarea id="export-code" readonly></textarea>
+            <div class="modal-buttons">
+                <button class="btn-copy" onclick="copyExport()">Copy to Clipboard</button>
+                <button class="btn-close" onclick="closeModal('export-modal')">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Import Modal -->
+    <div class="modal" id="import-modal">
+        <div class="modal-content">
+            <h2>Import Level</h2>
+            <p style="margin-bottom: 10px; color: #94a3b8;">Paste level code here (the entire const levelN = {...} block)</p>
+            <textarea id="import-code" placeholder="Paste your level code here..."></textarea>
+            <div class="modal-buttons">
+                <button class="btn-load" onclick="loadImport()">Load Level</button>
+                <button class="btn-close" onclick="closeModal('import-modal')">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Generate Level Modal -->
+    <div class="modal" id="generate-modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <h2>Generate Level</h2>
+            <p style="margin-bottom: 15px; color: #94a3b8;">Configure parameters to procedurally generate a level layout</p>
+
+            <div class="generate-form">
+                <div class="property-group">
+                    <label>Level Length</label>
+                    <select id="gen-length">
+                        <option value="2400">Short (2400px)</option>
+                        <option value="3200" selected>Medium (3200px)</option>
+                        <option value="4000">Long (4000px)</option>
+                        <option value="4800">Extra Long (4800px)</option>
+                    </select>
+                </div>
+
+                <div class="property-group">
+                    <label>Difficulty</label>
+                    <select id="gen-difficulty">
+                        <option value="easy">Easy - Gentle jumps, few hazards</option>
+                        <option value="medium" selected>Medium - Balanced challenge</option>
+                        <option value="hard">Hard - Tight jumps, more enemies</option>
+                        <option value="expert">Expert - Precision platforming</option>
+                    </select>
+                </div>
+
+                <div class="property-group">
+                    <label>Platform Style</label>
+                    <select id="gen-platform-style">
+                        <option value="balanced" selected>Balanced - Mix of static and moving</option>
+                        <option value="static">Static Focus - Mostly static platforms</option>
+                        <option value="moving">Moving Focus - More moving platforms</option>
+                    </select>
+                </div>
+
+                <div class="property-group">
+                    <label>Coin Density</label>
+                    <select id="gen-coins">
+                        <option value="sparse">Sparse - Few coins</option>
+                        <option value="normal" selected>Normal - Moderate coins</option>
+                        <option value="rich">Rich - Many coins</option>
+                    </select>
+                </div>
+
+                <div class="property-group">
+                    <label>Enemy Density</label>
+                    <select id="gen-enemies">
+                        <option value="few">Few - Light enemy presence</option>
+                        <option value="normal" selected>Normal - Balanced enemies</option>
+                        <option value="many">Many - Heavy enemy presence</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="modal-buttons">
+                <button class="btn-load" onclick="executeGenerate()">Generate Level</button>
+                <button class="btn-close" onclick="closeModal('generate-modal')">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // =====================
+        // STATE
+        // =====================
+        const canvas = document.getElementById('editor-canvas');
+        const ctx = canvas.getContext('2d');
+        const container = document.getElementById('canvas-container');
+
+        let state = {
+            worldWidth: 3200,
+            worldHeight: 600,
+            levelName: 'New Level',
+            zoom: 1,
+            panX: 0,
+            panY: 0,
+            showGrid: true,
+            snapToGrid: true,
+            gridSize: 20,
+            currentTool: 'select',
+            selectedElement: null,
+            isDragging: false,
+            isResizing: false,
+            resizeHandle: null,
+            dragStartX: 0,
+            dragStartY: 0,
+            elementStartX: 0,
+            elementStartY: 0,
+            isPanning: false,
+            panStartX: 0,
+            panStartY: 0
+        };
+
+        let elements = {
+            platforms: [],
+            movingPlatforms: [],
+            enemies: [],
+            obstacles: [],
+            coins: [],
+            checkpoints: [],
+            playerStart: { x: 100, y: 450 },
+            flagPosition: { x: 3100, y: 200 }
+        };
+
+        // Element defaults
+        const defaults = {
+            platform: { width: 150, height: 20 },
+            movingPlatform: { width: 100, height: 20, moveX: 80, moveY: 0, speed: 60 },
+            enemy: { width: 32, height: 32 },
+            obstacle: { width: 30, height: 30 },
+            coin: { width: 20, height: 20 },
+            checkpoint: { width: 20, height: 50 },
+            playerStart: { width: 32, height: 32 },
+            flag: { width: 40, height: 60 }
+        };
+
+        // Colors
+        const colors = {
+            platform: '#8B4513',
+            movingPlatform: '#9B7653',
+            enemy: '#FF0000',
+            obstacle: '#FF4444',
+            coin: '#FFD700',
+            checkpoint: '#888888',
+            playerStart: '#0000FF',
+            flag: '#FFFF00',
+            ground: '#654321',
+            sky: '#87CEEB',
+            grid: 'rgba(255,255,255,0.1)',
+            selection: '#00FF00'
+        };
+
+        // =====================
+        // INITIALIZATION
+        // =====================
+        function init() {
+            resizeCanvas();
+            setupEventListeners();
+            render();
+        }
+
+        function resizeCanvas() {
+            canvas.width = Math.max(state.worldWidth * state.zoom + 100, container.clientWidth);
+            canvas.height = Math.max(state.worldHeight * state.zoom + 100, container.clientHeight);
+        }
+
+        function setupEventListeners() {
+            // Tool buttons
+            document.querySelectorAll('.tool-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    state.currentTool = btn.dataset.tool;
+                    state.selectedElement = null;
+                    updatePropertiesPanel();
+                });
+            });
+
+            // Canvas events
+            canvas.addEventListener('mousedown', onMouseDown);
+            canvas.addEventListener('mousemove', onMouseMove);
+            canvas.addEventListener('mouseup', onMouseUp);
+            canvas.addEventListener('wheel', onWheel);
+            canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+            // Toolbar inputs
+            document.getElementById('world-width').addEventListener('change', e => {
+                state.worldWidth = parseInt(e.target.value);
+                elements.flagPosition.x = state.worldWidth - 100;
+                resizeCanvas();
+                render();
+            });
+
+            document.getElementById('level-name').addEventListener('change', e => {
+                state.levelName = e.target.value;
+            });
+
+            document.getElementById('grid-toggle').addEventListener('click', e => {
+                e.target.classList.toggle('active');
+                state.showGrid = e.target.classList.contains('active');
+                render();
+            });
+
+            document.getElementById('snap-toggle').addEventListener('click', e => {
+                e.target.classList.toggle('active');
+                state.snapToGrid = e.target.classList.contains('active');
+            });
+
+            document.getElementById('grid-size').addEventListener('change', e => {
+                state.gridSize = parseInt(e.target.value);
+                render();
+            });
+
+            document.getElementById('level-select').addEventListener('change', e => {
+                if (e.target.value === 'new') {
+                    clearLevel();
+                } else {
+                    loadBuiltInLevel(parseInt(e.target.value));
+                }
+            });
+
+            // Keyboard shortcuts
+            document.addEventListener('keydown', onKeyDown);
+
+            // Window resize
+            window.addEventListener('resize', () => {
+                resizeCanvas();
+                render();
+            });
+        }
+
+        // =====================
+        // COORDINATE HELPERS
+        // =====================
+        function screenToWorld(screenX, screenY) {
+            // Use container's rect (stable reference) instead of canvas rect (moves when scrolling)
+            const rect = container.getBoundingClientRect();
+            const x = (screenX - rect.left + container.scrollLeft) / state.zoom;
+            const y = (screenY - rect.top + container.scrollTop) / state.zoom;
+            return { x, y };
+        }
+
+        function worldToScreen(worldX, worldY) {
+            return {
+                x: worldX * state.zoom,
+                y: worldY * state.zoom
+            };
+        }
+
+        function snapToGrid(value) {
+            if (!state.snapToGrid) return value;
+            return Math.round(value / state.gridSize) * state.gridSize;
+        }
+
+        // =====================
+        // MOUSE HANDLERS
+        // =====================
+        function onMouseDown(e) {
+            const world = screenToWorld(e.clientX, e.clientY);
+
+            // Middle mouse button or space+click for panning
+            if (e.button === 1) {
+                state.isPanning = true;
+                state.panStartX = e.clientX + container.scrollLeft;
+                state.panStartY = e.clientY + container.scrollTop;
+                canvas.style.cursor = 'grabbing';
+                return;
+            }
+
+            if (e.button !== 0) return;
+
+            if (state.currentTool === 'select') {
+                // Check for resize handles first
+                if (state.selectedElement) {
+                    const handle = getResizeHandle(world.x, world.y);
+                    if (handle) {
+                        state.isResizing = true;
+                        state.resizeHandle = handle;
+                        state.dragStartX = world.x;
+                        state.dragStartY = world.y;
+                        state.elementStartX = state.selectedElement.x;
+                        state.elementStartY = state.selectedElement.y;
+                        state.elementStartWidth = state.selectedElement.width;
+                        state.elementStartHeight = state.selectedElement.height;
+                        return;
+                    }
+                }
+
+                // Try to select an element
+                const element = findElementAt(world.x, world.y);
+                if (element) {
+                    state.selectedElement = element;
+                    state.isDragging = true;
+                    state.dragStartX = world.x;
+                    state.dragStartY = world.y;
+                    state.elementStartX = element.x;
+                    state.elementStartY = element.y;
+                    updatePropertiesPanel();
+                } else {
+                    state.selectedElement = null;
+                    updatePropertiesPanel();
+                }
+                render();
+            } else if (state.currentTool === 'delete') {
+                const element = findElementAt(world.x, world.y);
+                if (element) {
+                    deleteElement(element);
+                    render();
+                }
+            } else {
+                // Place new element
+                placeElement(world.x, world.y);
+            }
+        }
+
+        function onMouseMove(e) {
+            const world = screenToWorld(e.clientX, e.clientY);
+
+            // Update coordinates display
+            document.getElementById('coords').textContent =
+                `X: ${Math.round(world.x)} Y: ${Math.round(world.y)}`;
+
+            if (state.isPanning) {
+                container.scrollLeft = state.panStartX - e.clientX;
+                container.scrollTop = state.panStartY - e.clientY;
+                return;
+            }
+
+            if (state.isResizing && state.selectedElement) {
+                const dx = world.x - state.dragStartX;
+                const dy = world.y - state.dragStartY;
+
+                if (state.resizeHandle.includes('e')) {
+                    state.selectedElement.width = Math.max(20, snapToGrid(state.elementStartWidth + dx));
+                }
+                if (state.resizeHandle.includes('w')) {
+                    const newWidth = Math.max(20, snapToGrid(state.elementStartWidth - dx));
+                    state.selectedElement.x = snapToGrid(state.elementStartX + state.elementStartWidth - newWidth);
+                    state.selectedElement.width = newWidth;
+                }
+                if (state.resizeHandle.includes('s')) {
+                    state.selectedElement.height = Math.max(20, snapToGrid(state.elementStartHeight + dy));
+                }
+                if (state.resizeHandle.includes('n')) {
+                    const newHeight = Math.max(20, snapToGrid(state.elementStartHeight - dy));
+                    state.selectedElement.y = snapToGrid(state.elementStartY + state.elementStartHeight - newHeight);
+                    state.selectedElement.height = newHeight;
+                }
+
+                updatePropertiesPanel();
+                render();
+                return;
+            }
+
+            if (state.isDragging && state.selectedElement) {
+                const dx = world.x - state.dragStartX;
+                const dy = world.y - state.dragStartY;
+                state.selectedElement.x = snapToGrid(state.elementStartX + dx);
+                state.selectedElement.y = snapToGrid(state.elementStartY + dy);
+                updatePropertiesPanel();
+                render();
+            }
+
+            // Update cursor for resize handles
+            if (state.currentTool === 'select' && state.selectedElement) {
+                const handle = getResizeHandle(world.x, world.y);
+                if (handle) {
+                    if (handle === 'nw' || handle === 'se') canvas.style.cursor = 'nwse-resize';
+                    else if (handle === 'ne' || handle === 'sw') canvas.style.cursor = 'nesw-resize';
+                    else if (handle === 'n' || handle === 's') canvas.style.cursor = 'ns-resize';
+                    else if (handle === 'e' || handle === 'w') canvas.style.cursor = 'ew-resize';
+                } else {
+                    canvas.style.cursor = 'crosshair';
+                }
+            }
+        }
+
+        function onMouseUp(e) {
+            state.isDragging = false;
+            state.isResizing = false;
+            state.isPanning = false;
+            canvas.style.cursor = state.currentTool === 'select' ? 'default' : 'crosshair';
+        }
+
+        function onWheel(e) {
+            if (e.ctrlKey) {
+                e.preventDefault();
+                if (e.deltaY < 0) zoomIn();
+                else zoomOut();
+            }
+        }
+
+        function onKeyDown(e) {
+            if (e.key === 'Delete' || e.key === 'Backspace') {
+                if (state.selectedElement && document.activeElement.tagName !== 'INPUT') {
+                    deleteSelected();
+                }
+            }
+            if (e.key === 'Escape') {
+                state.selectedElement = null;
+                updatePropertiesPanel();
+                render();
+            }
+        }
+
+        // =====================
+        // ELEMENT MANAGEMENT
+        // =====================
+        function findElementAt(x, y) {
+            // Helper to check if point is inside element bounds
+            function isInside(el, width, height) {
+                const halfW = width / 2;
+                const halfH = height / 2;
+                return x >= el.x - halfW && x <= el.x + halfW &&
+                       y >= el.y - halfH && y <= el.y + halfH;
+            }
+
+            // Check special elements first (they render on top)
+            if (isInside(elements.flagPosition, 40, 60)) {
+                elements.flagPosition.type = 'flag';
+                elements.flagPosition.width = 40;
+                elements.flagPosition.height = 60;
+                return elements.flagPosition;
+            }
+            if (isInside(elements.playerStart, 32, 32)) {
+                elements.playerStart.type = 'playerStart';
+                elements.playerStart.width = 32;
+                elements.playerStart.height = 32;
+                return elements.playerStart;
+            }
+
+            // Check arrays in reverse order (last added = on top)
+            // Return actual references, not copies
+            for (let i = elements.checkpoints.length - 1; i >= 0; i--) {
+                const el = elements.checkpoints[i];
+                if (isInside(el, 20, 50)) {
+                    el.type = 'checkpoint';
+                    el.width = 20;
+                    el.height = 50;
+                    return el;
+                }
+            }
+            for (let i = elements.coins.length - 1; i >= 0; i--) {
+                const el = elements.coins[i];
+                if (isInside(el, 20, 20)) {
+                    el.type = 'coin';
+                    el.width = 20;
+                    el.height = 20;
+                    return el;
+                }
+            }
+            for (let i = elements.obstacles.length - 1; i >= 0; i--) {
+                const el = elements.obstacles[i];
+                if (isInside(el, 30, 30)) {
+                    el.type = 'obstacle';
+                    el.width = 30;
+                    el.height = 30;
+                    return el;
+                }
+            }
+            for (let i = elements.enemies.length - 1; i >= 0; i--) {
+                const el = elements.enemies[i];
+                if (isInside(el, 32, 32)) {
+                    el.type = 'enemy';
+                    el.width = 32;
+                    el.height = 32;
+                    return el;
+                }
+            }
+            for (let i = elements.movingPlatforms.length - 1; i >= 0; i--) {
+                const el = elements.movingPlatforms[i];
+                if (isInside(el, el.width, el.height)) {
+                    el.type = 'movingPlatform';
+                    return el;
+                }
+            }
+            for (let i = elements.platforms.length - 1; i >= 0; i--) {
+                const el = elements.platforms[i];
+                if (isInside(el, el.width, el.height)) {
+                    el.type = 'platform';
+                    return el;
+                }
+            }
+
+            return null;
+        }
+
+        function getResizeHandle(x, y) {
+            if (!state.selectedElement) return null;
+            if (!state.selectedElement.width || state.selectedElement.type === 'enemy' ||
+                state.selectedElement.type === 'coin' || state.selectedElement.type === 'obstacle' ||
+                state.selectedElement.type === 'checkpoint' || state.selectedElement.type === 'playerStart' ||
+                state.selectedElement.type === 'flag') return null;
+
+            const el = state.selectedElement;
+            const handleSize = 8 / state.zoom;
+            const halfW = el.width / 2;
+            const halfH = el.height / 2;
+
+            // Corner handles
+            if (Math.abs(x - (el.x - halfW)) < handleSize && Math.abs(y - (el.y - halfH)) < handleSize) return 'nw';
+            if (Math.abs(x - (el.x + halfW)) < handleSize && Math.abs(y - (el.y - halfH)) < handleSize) return 'ne';
+            if (Math.abs(x - (el.x - halfW)) < handleSize && Math.abs(y - (el.y + halfH)) < handleSize) return 'sw';
+            if (Math.abs(x - (el.x + halfW)) < handleSize && Math.abs(y - (el.y + halfH)) < handleSize) return 'se';
+
+            // Edge handles
+            if (Math.abs(x - (el.x - halfW)) < handleSize && y > el.y - halfH && y < el.y + halfH) return 'w';
+            if (Math.abs(x - (el.x + halfW)) < handleSize && y > el.y - halfH && y < el.y + halfH) return 'e';
+            if (Math.abs(y - (el.y - halfH)) < handleSize && x > el.x - halfW && x < el.x + halfW) return 'n';
+            if (Math.abs(y - (el.y + halfH)) < handleSize && x > el.x - halfW && x < el.x + halfW) return 's';
+
+            return null;
+        }
+
+        function placeElement(x, y) {
+            x = snapToGrid(x);
+            y = snapToGrid(y);
+
+            const tool = state.currentTool;
+
+            if (tool === 'platform') {
+                const el = { x, y, width: defaults.platform.width, height: defaults.platform.height, type: 'platform' };
+                elements.platforms.push(el);
+                state.selectedElement = el;
+            } else if (tool === 'movingPlatform') {
+                const el = {
+                    x, y,
+                    width: defaults.movingPlatform.width,
+                    height: defaults.movingPlatform.height,
+                    moveX: defaults.movingPlatform.moveX,
+                    moveY: defaults.movingPlatform.moveY,
+                    speed: defaults.movingPlatform.speed,
+                    type: 'movingPlatform'
+                };
+                elements.movingPlatforms.push(el);
+                state.selectedElement = el;
+            } else if (tool === 'enemy') {
+                const el = { x, y, type: 'enemy', width: 32, height: 32 };
+                elements.enemies.push(el);
+                state.selectedElement = el;
+            } else if (tool === 'obstacle') {
+                const el = { x, y, type: 'obstacle', width: 30, height: 30 };
+                elements.obstacles.push(el);
+                state.selectedElement = el;
+            } else if (tool === 'coin') {
+                const el = { x, y, type: 'coin', width: 20, height: 20 };
+                elements.coins.push(el);
+                state.selectedElement = el;
+            } else if (tool === 'checkpoint') {
+                const el = { x, y, type: 'checkpoint', width: 20, height: 50 };
+                elements.checkpoints.push(el);
+                state.selectedElement = el;
+            } else if (tool === 'playerStart') {
+                elements.playerStart = { x, y, type: 'playerStart', width: 32, height: 32 };
+                state.selectedElement = elements.playerStart;
+            } else if (tool === 'flag') {
+                elements.flagPosition = { x, y, type: 'flag', width: 40, height: 60 };
+                state.selectedElement = elements.flagPosition;
+            }
+
+            updatePropertiesPanel();
+            updateStats();
+            render();
+        }
+
+        function deleteElement(element) {
+            if (element.type === 'platform') {
+                elements.platforms = elements.platforms.filter(e => e !== element);
+            } else if (element.type === 'movingPlatform') {
+                elements.movingPlatforms = elements.movingPlatforms.filter(e => e !== element);
+            } else if (element.type === 'enemy') {
+                elements.enemies = elements.enemies.filter(e => e !== element);
+            } else if (element.type === 'obstacle') {
+                elements.obstacles = elements.obstacles.filter(e => e !== element);
+            } else if (element.type === 'coin') {
+                elements.coins = elements.coins.filter(e => e !== element);
+            } else if (element.type === 'checkpoint') {
+                elements.checkpoints = elements.checkpoints.filter(e => e !== element);
+            }
+            // Can't delete player start or flag
+
+            if (state.selectedElement === element) {
+                state.selectedElement = null;
+                updatePropertiesPanel();
+            }
+            updateStats();
+        }
+
+        function deleteSelected() {
+            if (state.selectedElement) {
+                deleteElement(state.selectedElement);
+                render();
+            }
+        }
+
+        // =====================
+        // RENDERING
+        // =====================
+        function render() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            ctx.save();
+            ctx.scale(state.zoom, state.zoom);
+
+            // Draw sky background
+            ctx.fillStyle = colors.sky;
+            ctx.fillRect(0, 0, state.worldWidth, state.worldHeight);
+
+            // Draw grid
+            if (state.showGrid) {
+                ctx.strokeStyle = colors.grid;
+                ctx.lineWidth = 1 / state.zoom;
+                for (let x = 0; x <= state.worldWidth; x += state.gridSize) {
+                    ctx.beginPath();
+                    ctx.moveTo(x, 0);
+                    ctx.lineTo(x, state.worldHeight);
+                    ctx.stroke();
+                }
+                for (let y = 0; y <= state.worldHeight; y += state.gridSize) {
+                    ctx.beginPath();
+                    ctx.moveTo(0, y);
+                    ctx.lineTo(state.worldWidth, y);
+                    ctx.stroke();
+                }
+            }
+
+            // Draw ground reference line
+            ctx.strokeStyle = '#654321';
+            ctx.lineWidth = 3 / state.zoom;
+            ctx.beginPath();
+            ctx.moveTo(0, 580);
+            ctx.lineTo(state.worldWidth, 580);
+            ctx.stroke();
+            ctx.fillStyle = 'rgba(101, 67, 33, 0.3)';
+            ctx.fillRect(0, 580, state.worldWidth, 20);
+
+            // Draw world bounds
+            ctx.strokeStyle = '#e94560';
+            ctx.lineWidth = 2 / state.zoom;
+            ctx.strokeRect(0, 0, state.worldWidth, state.worldHeight);
+
+            // Draw elements
+            drawElements();
+
+            // Draw selection
+            if (state.selectedElement) {
+                drawSelection(state.selectedElement);
+            }
+
+            ctx.restore();
+        }
+
+        function drawElements() {
+            // Draw platforms
+            elements.platforms.forEach(p => {
+                ctx.fillStyle = colors.platform;
+                ctx.fillRect(p.x - p.width/2, p.y - p.height/2, p.width, p.height);
+                ctx.strokeStyle = '#5D3A1A';
+                ctx.lineWidth = 2 / state.zoom;
+                ctx.strokeRect(p.x - p.width/2, p.y - p.height/2, p.width, p.height);
+            });
+
+            // Draw moving platforms with movement indicator
+            elements.movingPlatforms.forEach(p => {
+                // Draw movement range
+                ctx.strokeStyle = 'rgba(155, 118, 83, 0.4)';
+                ctx.lineWidth = 2 / state.zoom;
+                ctx.setLineDash([5, 5]);
+                if (p.moveX > 0) {
+                    ctx.strokeRect(p.x - p.width/2, p.y - p.height/2, p.width + p.moveX, p.height);
+                }
+                if (p.moveY > 0) {
+                    ctx.strokeRect(p.x - p.width/2, p.y - p.height/2, p.width, p.height + p.moveY);
+                }
+                ctx.setLineDash([]);
+
+                // Draw platform
+                ctx.fillStyle = colors.movingPlatform;
+                ctx.fillRect(p.x - p.width/2, p.y - p.height/2, p.width, p.height);
+                ctx.strokeStyle = '#7A5D3A';
+                ctx.lineWidth = 2 / state.zoom;
+                ctx.strokeRect(p.x - p.width/2, p.y - p.height/2, p.width, p.height);
+
+                // Draw arrow indicator
+                ctx.fillStyle = '#FFF';
+                ctx.font = `${12/state.zoom}px Arial`;
+                ctx.textAlign = 'center';
+                if (p.moveX > 0) ctx.fillText('↔', p.x, p.y + 4/state.zoom);
+                if (p.moveY > 0) ctx.fillText('↕', p.x, p.y + 4/state.zoom);
+            });
+
+            // Draw enemies
+            elements.enemies.forEach(e => {
+                ctx.fillStyle = colors.enemy;
+                ctx.fillRect(e.x - 16, e.y - 16, 32, 32);
+                ctx.fillStyle = '#FFF';
+                ctx.font = `${10/state.zoom}px Arial`;
+                ctx.textAlign = 'center';
+                ctx.fillText('E', e.x, e.y + 4/state.zoom);
+            });
+
+            // Draw obstacles
+            elements.obstacles.forEach(o => {
+                ctx.fillStyle = colors.obstacle;
+                ctx.fillRect(o.x - 15, o.y - 15, 30, 30);
+                // Draw spike shape
+                ctx.fillStyle = '#AA0000';
+                ctx.beginPath();
+                ctx.moveTo(o.x, o.y - 12);
+                ctx.lineTo(o.x - 10, o.y + 10);
+                ctx.lineTo(o.x + 10, o.y + 10);
+                ctx.closePath();
+                ctx.fill();
+            });
+
+            // Draw coins
+            elements.coins.forEach(c => {
+                ctx.fillStyle = colors.coin;
+                ctx.beginPath();
+                ctx.arc(c.x, c.y, 10, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#B8860B';
+                ctx.font = `${10/state.zoom}px Arial`;
+                ctx.textAlign = 'center';
+                ctx.fillText('$', c.x, c.y + 4/state.zoom);
+            });
+
+            // Draw checkpoints
+            elements.checkpoints.forEach(cp => {
+                ctx.fillStyle = colors.checkpoint;
+                ctx.fillRect(cp.x - 10, cp.y - 25, 20, 50);
+                ctx.fillStyle = '#FFF';
+                ctx.font = `${8/state.zoom}px Arial`;
+                ctx.textAlign = 'center';
+                ctx.fillText('CP', cp.x, cp.y);
+            });
+
+            // Draw player start
+            ctx.fillStyle = colors.playerStart;
+            ctx.fillRect(elements.playerStart.x - 16, elements.playerStart.y - 16, 32, 32);
+            ctx.fillStyle = '#FFF';
+            ctx.font = `${10/state.zoom}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.fillText('P', elements.playerStart.x, elements.playerStart.y + 4/state.zoom);
+
+            // Draw flag
+            ctx.fillStyle = colors.flag;
+            ctx.fillRect(elements.flagPosition.x - 20, elements.flagPosition.y - 30, 40, 60);
+            ctx.fillStyle = '#333';
+            ctx.font = `${12/state.zoom}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.fillText('END', elements.flagPosition.x, elements.flagPosition.y + 5/state.zoom);
+        }
+
+        function drawSelection(el) {
+            const halfW = (el.width || 32) / 2;
+            const halfH = (el.height || 32) / 2;
+
+            ctx.strokeStyle = colors.selection;
+            ctx.lineWidth = 2 / state.zoom;
+            ctx.setLineDash([5, 5]);
+            ctx.strokeRect(el.x - halfW - 2, el.y - halfH - 2, (el.width || 32) + 4, (el.height || 32) + 4);
+            ctx.setLineDash([]);
+
+            // Draw resize handles for resizable elements
+            if (el.type === 'platform' || el.type === 'movingPlatform') {
+                const handleSize = 6 / state.zoom;
+                ctx.fillStyle = colors.selection;
+
+                // Corners
+                ctx.fillRect(el.x - halfW - handleSize, el.y - halfH - handleSize, handleSize * 2, handleSize * 2);
+                ctx.fillRect(el.x + halfW - handleSize, el.y - halfH - handleSize, handleSize * 2, handleSize * 2);
+                ctx.fillRect(el.x - halfW - handleSize, el.y + halfH - handleSize, handleSize * 2, handleSize * 2);
+                ctx.fillRect(el.x + halfW - handleSize, el.y + halfH - handleSize, handleSize * 2, handleSize * 2);
+
+                // Edges
+                ctx.fillRect(el.x - handleSize, el.y - halfH - handleSize, handleSize * 2, handleSize * 2);
+                ctx.fillRect(el.x - handleSize, el.y + halfH - handleSize, handleSize * 2, handleSize * 2);
+                ctx.fillRect(el.x - halfW - handleSize, el.y - handleSize, handleSize * 2, handleSize * 2);
+                ctx.fillRect(el.x + halfW - handleSize, el.y - handleSize, handleSize * 2, handleSize * 2);
+            }
+        }
+
+        // =====================
+        // PROPERTIES PANEL
+        // =====================
+        function updatePropertiesPanel() {
+            const noSel = document.getElementById('no-selection');
+            const selInfo = document.getElementById('selection-info');
+            const sizeProps = document.getElementById('size-props');
+            const movingProps = document.getElementById('moving-props');
+
+            if (!state.selectedElement) {
+                noSel.style.display = 'block';
+                selInfo.style.display = 'none';
+                return;
+            }
+
+            noSel.style.display = 'none';
+            selInfo.style.display = 'block';
+
+            const el = state.selectedElement;
+            document.getElementById('prop-type').value = el.type;
+            document.getElementById('prop-x').value = Math.round(el.x);
+            document.getElementById('prop-y').value = Math.round(el.y);
+
+            // Show/hide size props
+            if (el.type === 'platform' || el.type === 'movingPlatform') {
+                sizeProps.style.display = 'flex';
+                document.getElementById('prop-width').value = el.width;
+                document.getElementById('prop-height').value = el.height;
+            } else {
+                sizeProps.style.display = 'none';
+            }
+
+            // Show/hide moving platform props
+            if (el.type === 'movingPlatform') {
+                movingProps.style.display = 'block';
+                document.getElementById('prop-moveX').value = el.moveX;
+                document.getElementById('prop-moveY').value = el.moveY;
+                document.getElementById('prop-speed').value = el.speed;
+            } else {
+                movingProps.style.display = 'none';
+            }
+        }
+
+        function applyProperties() {
+            if (!state.selectedElement) return;
+
+            const el = state.selectedElement;
+            el.x = parseInt(document.getElementById('prop-x').value);
+            el.y = parseInt(document.getElementById('prop-y').value);
+
+            if (el.type === 'platform' || el.type === 'movingPlatform') {
+                el.width = parseInt(document.getElementById('prop-width').value);
+                el.height = parseInt(document.getElementById('prop-height').value);
+            }
+
+            if (el.type === 'movingPlatform') {
+                el.moveX = parseInt(document.getElementById('prop-moveX').value);
+                el.moveY = parseInt(document.getElementById('prop-moveY').value);
+                el.speed = parseInt(document.getElementById('prop-speed').value);
+            }
+
+            render();
+        }
+
+        function updateStats() {
+            document.getElementById('stat-platforms').textContent = elements.platforms.length;
+            document.getElementById('stat-moving').textContent = elements.movingPlatforms.length;
+            document.getElementById('stat-enemies').textContent = elements.enemies.length;
+            document.getElementById('stat-obstacles').textContent = elements.obstacles.length;
+            document.getElementById('stat-coins').textContent = elements.coins.length;
+            document.getElementById('stat-checkpoints').textContent = elements.checkpoints.length;
+        }
+
+        // =====================
+        // ZOOM
+        // =====================
+        function zoomIn() {
+            state.zoom = Math.min(2, state.zoom + 0.1);
+            document.getElementById('zoom-display').textContent = Math.round(state.zoom * 100) + '%';
+            resizeCanvas();
+            render();
+        }
+
+        function zoomOut() {
+            state.zoom = Math.max(0.25, state.zoom - 0.1);
+            document.getElementById('zoom-display').textContent = Math.round(state.zoom * 100) + '%';
+            resizeCanvas();
+            render();
+        }
+
+        // =====================
+        // IMPORT / EXPORT
+        // =====================
+        function showExportModal() {
+            const code = generateLevelCode();
+            document.getElementById('export-code').value = code;
+            document.getElementById('export-modal').classList.add('active');
+        }
+
+        function generateLevelCode() {
+            const levelVarName = state.levelName.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+            let code = `const ${levelVarName || 'level'} = {\n`;
+            code += `    name: "${state.levelName}",\n`;
+            code += `    worldWidth: ${state.worldWidth},\n`;
+            code += `    worldHeight: ${state.worldHeight},\n\n`;
+
+            // Platforms
+            code += `    platforms: [\n`;
+            elements.platforms.forEach((p, i) => {
+                code += `        { x: ${Math.round(p.x)}, y: ${Math.round(p.y)}, width: ${p.width}, height: ${p.height} }`;
+                code += i < elements.platforms.length - 1 ? ',\n' : '\n';
+            });
+            code += `    ],\n\n`;
+
+            // Moving Platforms
+            code += `    movingPlatforms: [\n`;
+            elements.movingPlatforms.forEach((p, i) => {
+                code += `        { x: ${Math.round(p.x)}, y: ${Math.round(p.y)}, width: ${p.width}, height: ${p.height}, moveX: ${p.moveX}, moveY: ${p.moveY}, speed: ${p.speed} }`;
+                code += i < elements.movingPlatforms.length - 1 ? ',\n' : '\n';
+            });
+            code += `    ],\n\n`;
+
+            // Obstacles
+            code += `    obstacles: [\n`;
+            elements.obstacles.forEach((o, i) => {
+                code += `        { x: ${Math.round(o.x)}, y: ${Math.round(o.y)} }`;
+                code += i < elements.obstacles.length - 1 ? ',\n' : '\n';
+            });
+            code += `    ],\n\n`;
+
+            // Enemies
+            code += `    enemies: [\n`;
+            elements.enemies.forEach((e, i) => {
+                code += `        { x: ${Math.round(e.x)}, y: ${Math.round(e.y)} }`;
+                code += i < elements.enemies.length - 1 ? ',\n' : '\n';
+            });
+            code += `    ],\n\n`;
+
+            // Coins
+            code += `    coins: [\n`;
+            elements.coins.forEach((c, i) => {
+                code += `        { x: ${Math.round(c.x)}, y: ${Math.round(c.y)} }`;
+                code += i < elements.coins.length - 1 ? ',\n' : '\n';
+            });
+            code += `    ],\n\n`;
+
+            // Checkpoints
+            code += `    checkpoints: [\n`;
+            elements.checkpoints.forEach((cp, i) => {
+                code += `        { x: ${Math.round(cp.x)}, y: ${Math.round(cp.y)} }`;
+                code += i < elements.checkpoints.length - 1 ? ',\n' : '\n';
+            });
+            code += `    ],\n\n`;
+
+            // Player start and flag
+            code += `    playerStart: { x: ${Math.round(elements.playerStart.x)}, y: ${Math.round(elements.playerStart.y)} },\n`;
+            code += `    flagPosition: { x: ${Math.round(elements.flagPosition.x)}, y: ${Math.round(elements.flagPosition.y)} }\n`;
+
+            code += `};\n`;
+
+            return code;
+        }
+
+        function copyExport() {
+            const textarea = document.getElementById('export-code');
+            textarea.select();
+            document.execCommand('copy');
+            alert('Code copied to clipboard!');
+        }
+
+        function showImportModal() {
+            document.getElementById('import-code').value = '';
+            document.getElementById('import-modal').classList.add('active');
+        }
+
+        function loadImport() {
+            const code = document.getElementById('import-code').value;
+            try {
+                // Extract the object from the code
+                const match = code.match(/const\s+\w+\s*=\s*(\{[\s\S]*\});?/);
+                if (!match) {
+                    throw new Error('Could not find level object in code');
+                }
+
+                // Use Function constructor to safely evaluate the object
+                const levelData = eval('(' + match[1] + ')');
+                loadLevelData(levelData);
+                closeModal('import-modal');
+            } catch (e) {
+                alert('Error parsing level code: ' + e.message);
+            }
+        }
+
+        function loadLevelData(data) {
+            state.levelName = data.name || 'Imported Level';
+            state.worldWidth = data.worldWidth || 3200;
+            state.worldHeight = data.worldHeight || 600;
+
+            document.getElementById('level-name').value = state.levelName;
+            document.getElementById('world-width').value = state.worldWidth;
+
+            elements.platforms = (data.platforms || []).map(p => ({...p, type: 'platform'}));
+            elements.movingPlatforms = (data.movingPlatforms || []).map(p => ({...p, type: 'movingPlatform'}));
+            elements.enemies = (data.enemies || []).map(e => ({...e, type: 'enemy', width: 32, height: 32}));
+            elements.obstacles = (data.obstacles || []).map(o => ({...o, type: 'obstacle', width: 30, height: 30}));
+            elements.coins = (data.coins || []).map(c => ({...c, type: 'coin', width: 20, height: 20}));
+            elements.checkpoints = (data.checkpoints || []).map(cp => ({...cp, type: 'checkpoint', width: 20, height: 50}));
+
+            if (data.playerStart) {
+                elements.playerStart = {...data.playerStart, type: 'playerStart', width: 32, height: 32};
+            }
+            if (data.flagPosition) {
+                elements.flagPosition = {...data.flagPosition, type: 'flag', width: 40, height: 60};
+            }
+
+            state.selectedElement = null;
+            updatePropertiesPanel();
+            updateStats();
+            resizeCanvas();
+            render();
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.remove('active');
+        }
+
+        // Close modal on background click
+        document.querySelectorAll('.modal').forEach(modal => {
+            modal.addEventListener('click', e => {
+                if (e.target === modal) {
+                    modal.classList.remove('active');
+                }
+            });
+        });
+
+        // =====================
+        // BUILT-IN LEVELS
+        // =====================
+        async function loadBuiltInLevel(levelNum) {
+            try {
+                // Try to fetch the level file
+                const response = await fetch(`levels/level${levelNum}.js`);
+                const code = await response.text();
+
+                // Parse the level
+                const match = code.match(/const\s+level\d+\s*=\s*(\{[\s\S]*\});?/);
+                if (match) {
+                    const levelData = eval('(' + match[1] + ')');
+                    loadLevelData(levelData);
+                }
+            } catch (e) {
+                alert('Could not load level ' + levelNum + ': ' + e.message);
+            }
+        }
+
+        function clearLevel() {
+            if (!confirm('Clear all elements? This cannot be undone.')) return;
+
+            elements.platforms = [];
+            elements.movingPlatforms = [];
+            elements.enemies = [];
+            elements.obstacles = [];
+            elements.coins = [];
+            elements.checkpoints = [];
+            elements.playerStart = { x: 100, y: 450, type: 'playerStart', width: 32, height: 32 };
+            elements.flagPosition = { x: state.worldWidth - 100, y: 200, type: 'flag', width: 40, height: 60 };
+
+            state.selectedElement = null;
+            updatePropertiesPanel();
+            updateStats();
+            render();
+        }
+
+        function testLevel() {
+            // Store level data in localStorage for the game to pick up
+            const levelData = {
+                name: state.levelName,
+                worldWidth: state.worldWidth,
+                worldHeight: state.worldHeight,
+                platforms: elements.platforms.map(p => ({x: p.x, y: p.y, width: p.width, height: p.height})),
+                movingPlatforms: elements.movingPlatforms.map(p => ({
+                    x: p.x, y: p.y, width: p.width, height: p.height,
+                    moveX: p.moveX, moveY: p.moveY, speed: p.speed
+                })),
+                obstacles: elements.obstacles.map(o => ({x: o.x, y: o.y})),
+                enemies: elements.enemies.map(e => ({x: e.x, y: e.y})),
+                coins: elements.coins.map(c => ({x: c.x, y: c.y})),
+                checkpoints: elements.checkpoints.map(cp => ({x: cp.x, y: cp.y})),
+                playerStart: {x: elements.playerStart.x, y: elements.playerStart.y},
+                flagPosition: {x: elements.flagPosition.x, y: elements.flagPosition.y}
+            };
+
+            localStorage.setItem('editorTestLevel', JSON.stringify(levelData));
+
+            // Open game in new tab
+            window.open('index.html?testLevel=true', '_blank');
+        }
+
+        // =====================
+        // LEVEL GENERATION
+        // =====================
+        function showGenerateModal() {
+            document.getElementById('generate-modal').classList.add('active');
+        }
+
+        function executeGenerate() {
+            const params = {
+                length: parseInt(document.getElementById('gen-length').value),
+                difficulty: document.getElementById('gen-difficulty').value,
+                platformStyle: document.getElementById('gen-platform-style').value,
+                coinDensity: document.getElementById('gen-coins').value,
+                enemyDensity: document.getElementById('gen-enemies').value
+            };
+
+            generateLevel(params);
+            closeModal('generate-modal');
+        }
+
+        function generateLevel(params) {
+            // Clear existing elements
+            elements.platforms = [];
+            elements.movingPlatforms = [];
+            elements.enemies = [];
+            elements.obstacles = [];
+            elements.coins = [];
+            elements.checkpoints = [];
+
+            // Update world width
+            state.worldWidth = params.length;
+            state.levelName = 'Generated Level';
+            document.getElementById('world-width').value = state.worldWidth;
+            document.getElementById('level-name').value = state.levelName;
+
+            // Difficulty settings
+            const difficultySettings = {
+                easy: {
+                    gapMin: 80, gapMax: 140,
+                    heightChange: 40,
+                    enemyChance: 0.15,
+                    obstacleChance: 0.1,
+                    platformWidthMin: 120, platformWidthMax: 200
+                },
+                medium: {
+                    gapMin: 100, gapMax: 180,
+                    heightChange: 60,
+                    enemyChance: 0.25,
+                    obstacleChance: 0.15,
+                    platformWidthMin: 100, platformWidthMax: 180
+                },
+                hard: {
+                    gapMin: 120, gapMax: 200,
+                    heightChange: 80,
+                    enemyChance: 0.35,
+                    obstacleChance: 0.2,
+                    platformWidthMin: 80, platformWidthMax: 150
+                },
+                expert: {
+                    gapMin: 140, gapMax: 220,
+                    heightChange: 100,
+                    enemyChance: 0.4,
+                    obstacleChance: 0.25,
+                    platformWidthMin: 60, platformWidthMax: 120
+                }
+            };
+
+            const diff = difficultySettings[params.difficulty];
+
+            // Moving platform chance based on style
+            const movingChance = {
+                static: 0.1,
+                balanced: 0.25,
+                moving: 0.45
+            }[params.platformStyle];
+
+            // Coin multiplier
+            const coinMultiplier = {
+                sparse: 0.5,
+                normal: 1,
+                rich: 1.8
+            }[params.coinDensity];
+
+            // Enemy multiplier
+            const enemyMultiplier = {
+                few: 0.5,
+                normal: 1,
+                many: 1.5
+            }[params.enemyDensity];
+
+            // Section definitions (5 sections)
+            const sectionCount = 5;
+            const sectionWidth = params.length / sectionCount;
+            const sections = [
+                { name: 'Intro', diffMult: 0.6, enemyMult: 0.3, obstacleMult: 0.2 },
+                { name: 'Warmup', diffMult: 0.8, enemyMult: 0.6, obstacleMult: 0.5 },
+                { name: 'Challenge', diffMult: 1.0, enemyMult: 1.0, obstacleMult: 0.8 },
+                { name: 'Gauntlet', diffMult: 1.2, enemyMult: 1.3, obstacleMult: 1.2 },
+                { name: 'Finale', diffMult: 1.1, enemyMult: 0.8, obstacleMult: 0.6 }
+            ];
+
+            // Track all platforms for enemy/coin placement
+            let allPlatforms = [];
+
+            // Generate platforms for each section
+            let currentX = 100;
+            let currentY = 480; // Start near ground level
+
+            sections.forEach((section, sectionIndex) => {
+                const sectionStart = sectionIndex * sectionWidth;
+                const sectionEnd = (sectionIndex + 1) * sectionWidth;
+                const sectionDiff = section.diffMult;
+
+                // Calculate gaps and heights for this section
+                const sectionGapMin = diff.gapMin * sectionDiff;
+                const sectionGapMax = diff.gapMax * sectionDiff;
+                const sectionHeightChange = diff.heightChange * sectionDiff;
+
+                // Finale section: gradually ascend
+                const isFinale = sectionIndex === 4;
+                let finaleAscentRate = 0;
+                if (isFinale) {
+                    finaleAscentRate = -15; // Go up consistently
+                }
+
+                // Generate platforms until we pass section end
+                while (currentX < sectionEnd - 100) {
+                    // Determine platform width
+                    const platWidth = randomBetween(diff.platformWidthMin, diff.platformWidthMax);
+
+                    // Determine if this is a moving platform
+                    const isMoving = Math.random() < movingChance && sectionIndex > 0; // No moving in intro
+
+                    // Create platform
+                    const platform = {
+                        x: currentX + platWidth / 2,
+                        y: currentY,
+                        width: platWidth,
+                        height: 20,
+                        type: isMoving ? 'movingPlatform' : 'platform'
+                    };
+
+                    if (isMoving) {
+                        // Randomly choose horizontal or vertical movement
+                        const horizontal = Math.random() > 0.4;
+                        platform.moveX = horizontal ? randomBetween(60, 120) : 0;
+                        platform.moveY = horizontal ? 0 : randomBetween(40, 80);
+                        platform.speed = randomBetween(40, 70);
+                        elements.movingPlatforms.push(platform);
+                    } else {
+                        elements.platforms.push(platform);
+                    }
+
+                    allPlatforms.push(platform);
+
+                    // Add coins on or near platform
+                    const coinCount = Math.floor(randomBetween(0, 3) * coinMultiplier);
+                    for (let i = 0; i < coinCount; i++) {
+                        const coinX = platform.x + randomBetween(-platWidth/3, platWidth/3);
+                        const coinY = platform.y - randomBetween(40, 80);
+                        elements.coins.push({ x: coinX, y: coinY, type: 'coin', width: 20, height: 20 });
+                    }
+
+                    // Maybe add enemy on platform (not first platform, not moving platforms)
+                    if (allPlatforms.length > 1 && !isMoving) {
+                        if (Math.random() < diff.enemyChance * section.enemyMult * enemyMultiplier) {
+                            elements.enemies.push({
+                                x: platform.x,
+                                y: platform.y - 26,
+                                type: 'enemy',
+                                width: 32,
+                                height: 32
+                            });
+                        }
+                    }
+
+                    // Maybe add obstacle near ground level
+                    if (Math.random() < diff.obstacleChance * section.obstacleMult && currentY > 400) {
+                        elements.obstacles.push({
+                            x: currentX + randomBetween(20, 60),
+                            y: 555,
+                            type: 'obstacle',
+                            width: 30,
+                            height: 30
+                        });
+                    }
+
+                    // Calculate next platform position
+                    const gap = randomBetween(sectionGapMin, sectionGapMax);
+                    currentX += platWidth + gap;
+
+                    // Calculate height change
+                    let heightDelta;
+                    if (isFinale) {
+                        heightDelta = finaleAscentRate + randomBetween(-10, 5);
+                    } else {
+                        heightDelta = randomBetween(-sectionHeightChange, sectionHeightChange);
+                    }
+
+                    currentY += heightDelta;
+
+                    // Clamp Y to reasonable bounds
+                    currentY = Math.max(150, Math.min(520, currentY));
+                }
+
+                // Add checkpoint at end of sections 1-4 (not intro, not finale)
+                if (sectionIndex >= 1 && sectionIndex < 4) {
+                    const lastPlatform = allPlatforms[allPlatforms.length - 1];
+                    if (lastPlatform) {
+                        elements.checkpoints.push({
+                            x: lastPlatform.x,
+                            y: lastPlatform.y - 35,
+                            type: 'checkpoint',
+                            width: 20,
+                            height: 50
+                        });
+                    }
+                }
+            });
+
+            // Place player start on first platform
+            if (allPlatforms.length > 0) {
+                const firstPlatform = allPlatforms[0];
+                elements.playerStart = {
+                    x: firstPlatform.x,
+                    y: firstPlatform.y - 26,
+                    type: 'playerStart',
+                    width: 32,
+                    height: 32
+                };
+            }
+
+            // Place flag on last platform
+            if (allPlatforms.length > 0) {
+                const lastPlatform = allPlatforms[allPlatforms.length - 1];
+                elements.flagPosition = {
+                    x: lastPlatform.x,
+                    y: lastPlatform.y - 40,
+                    type: 'flag',
+                    width: 40,
+                    height: 60
+                };
+            }
+
+            // Add some bonus coins between platforms (floating)
+            const bonusCoinCount = Math.floor(allPlatforms.length * 0.5 * coinMultiplier);
+            for (let i = 0; i < bonusCoinCount; i++) {
+                const x = randomBetween(200, params.length - 200);
+                const y = randomBetween(200, 450);
+                elements.coins.push({ x, y, type: 'coin', width: 20, height: 20 });
+            }
+
+            // Update UI
+            state.selectedElement = null;
+            updatePropertiesPanel();
+            updateStats();
+            resizeCanvas();
+            render();
+        }
+
+        function randomBetween(min, max) {
+            return Math.floor(Math.random() * (max - min + 1)) + min;
+        }
+
+        // =====================
+        // INIT
+        // =====================
+        init();
+    </script>
+</body>
+</html>

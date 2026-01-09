@@ -15,12 +15,12 @@ const level4 = {
         // Mid section - ascending
         { x: 700, y: 420, width: 100, height: 20 },
         { x: 860, y: 360, width: 100, height: 20 },
-        { x: 1020, y: 300, width: 90, height: 20 },
+        // Platform at 1020, 300 moved to movingPlatforms (horizontal)
         { x: 1180, y: 240, width: 90, height: 20 },
 
         // High platforms
         { x: 1340, y: 280, width: 90, height: 20 },
-        { x: 1490, y: 340, width: 90, height: 20 },
+        // Platform at 1490, 340 moved to movingPlatforms (vertical)
         { x: 1640, y: 280, width: 90, height: 20 },
 
         // Checkpoint recovery platform 2
@@ -30,7 +30,7 @@ const level4 = {
         { x: 1900, y: 380, width: 120, height: 20 },
         { x: 2070, y: 320, width: 100, height: 20 },
         { x: 2220, y: 380, width: 100, height: 20 },
-        { x: 2380, y: 320, width: 100, height: 20 },
+        // Platform at 2380, 320 moved to movingPlatforms (horizontal)
 
         // Checkpoint recovery platform 3
         { x: 2550, y: 520, width: 100, height: 20 },
@@ -114,5 +114,14 @@ const level4 = {
         { x: 3480, y: 230 },
         { x: 3650, y: 290 },
         { x: 3840, y: 230 }
+    ],
+
+    movingPlatforms: [
+        // Mid section - Horizontal moving platform (was static at 1020, 300)
+        { x: 1020, y: 300, width: 90, height: 20, moveX: 90, moveY: 0, speed: 60 },
+        // High platforms - Vertical moving platform (was static at 1490, 340)
+        { x: 1490, y: 340, width: 90, height: 20, moveX: 0, moveY: 70, speed: 55 },
+        // Mid-level traverse - Horizontal moving platform (was static at 2380, 320)
+        { x: 2380, y: 320, width: 100, height: 20, moveX: 100, moveY: 0, speed: 70 }
     ]
 };
