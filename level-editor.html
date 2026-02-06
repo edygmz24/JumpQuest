@@ -682,6 +682,20 @@
 
             <div class="generate-form">
                 <div class="property-group">
+                    <label>Theme Preset</label>
+                    <select id="gen-theme">
+                        <option value="custom">Custom (use settings below)</option>
+                        <option value="tower-climb">Tower Climb - Vertical ascent focus</option>
+                        <option value="speed-run">Speed Run - Horizontal dash, wide gaps</option>
+                        <option value="coin-collector">Coin Collector - Exploration & rewards</option>
+                        <option value="precision">Precision Challenge - Tight platforming</option>
+                        <option value="enemy-gauntlet">Enemy Gauntlet - Combat focus</option>
+                        <option value="moving-maze">Moving Maze - Dynamic platforms</option>
+                    </select>
+                </div>
+
+                <div id="custom-params">
+                <div class="property-group">
                     <label>Level Length</label>
                     <select id="gen-length">
                         <option value="2400">Short (2400px)</option>
@@ -727,6 +741,12 @@
                         <option value="many">Many - Heavy enemy presence</option>
                     </select>
                 </div>
+                </div>
+            </div>
+
+            <div id="theme-description" style="display: none; margin-top: 15px; padding: 12px; background: #1a1a2e; border-radius: 5px; border-left: 3px solid #f59e0b;">
+                <strong style="color: #f59e0b;" id="theme-name"></strong>
+                <p style="color: #94a3b8; margin-top: 5px; font-size: 13px;" id="theme-desc-text"></p>
             </div>
 
             <div class="modal-buttons">
@@ -1740,20 +1760,84 @@
         // =====================
         // LEVEL GENERATION
         // =====================
+
+        // Theme definitions with descriptions
+        const themeDefinitions = {
+            'tower-climb': {
+                name: 'Tower Climb',
+                description: 'Vertical ascent focus with zigzag platforms and vertical movers. Fewer enemies, more precision jumps.',
+                generator: generateTowerClimb
+            },
+            'speed-run': {
+                name: 'Speed Run',
+                description: 'Horizontal dash with wide gaps and momentum-friendly layouts. Minimal obstacles, predictable enemies.',
+                generator: generateSpeedRun
+            },
+            'coin-collector': {
+                name: 'Coin Collector',
+                description: 'High coin density with multiple paths and exploration rewards. Moderate difficulty.',
+                generator: generateCoinCollector
+            },
+            'precision': {
+                name: 'Precision Challenge',
+                description: 'Narrow platforms (60-80px) requiring exact jumps. Minimal margin for error.',
+                generator: generatePrecisionChallenge
+            },
+            'enemy-gauntlet': {
+                name: 'Enemy Gauntlet',
+                description: 'High enemy density requiring strategic stomping. Wider platforms for combat maneuvering.',
+                generator: generateEnemyGauntlet
+            },
+            'moving-maze': {
+                name: 'Moving Maze',
+                description: '60%+ moving platforms with timing-based navigation. Mix of horizontal and vertical movers.',
+                generator: generateMovingMaze
+            }
+        };
+
         function showGenerateModal() {
             document.getElementById('generate-modal').classList.add('active');
+            updateThemeUI();
         }
 
-        function executeGenerate() {
-            const params = {
-                length: parseInt(document.getElementById('gen-length').value),
-                difficulty: document.getElementById('gen-difficulty').value,
-                platformStyle: document.getElementById('gen-platform-style').value,
-                coinDensity: document.getElementById('gen-coins').value,
-                enemyDensity: document.getElementById('gen-enemies').value
-            };
+        function updateThemeUI() {
+            const theme = document.getElementById('gen-theme').value;
+            const customParams = document.getElementById('custom-params');
+            const themeDesc = document.getElementById('theme-description');
 
-            generateLevel(params);
+            if (theme === 'custom') {
+                customParams.style.display = 'block';
+                themeDesc.style.display = 'none';
+            } else {
+                customParams.style.display = 'none';
+                themeDesc.style.display = 'block';
+                const def = themeDefinitions[theme];
+                document.getElementById('theme-name').textContent = def.name;
+                document.getElementById('theme-desc-text').textContent = def.description;
+            }
+        }
+
+        // Add event listener for theme dropdown
+        document.getElementById('gen-theme').addEventListener('change', updateThemeUI);
+
+        function executeGenerate() {
+            const theme = document.getElementById('gen-theme').value;
+
+            if (theme === 'custom') {
+                // Use existing parameter-based generation
+                const params = {
+                    length: parseInt(document.getElementById('gen-length').value),
+                    difficulty: document.getElementById('gen-difficulty').value,
+                    platformStyle: document.getElementById('gen-platform-style').value,
+                    coinDensity: document.getElementById('gen-coins').value,
+                    enemyDensity: document.getElementById('gen-enemies').value
+                };
+                generateLevel(params);
+            } else {
+                // Use themed generator
+                themeDefinitions[theme].generator();
+            }
+
             closeModal('generate-modal');
         }
 
@@ -1999,6 +2083,570 @@
 
         function randomBetween(min, max) {
             return Math.floor(Math.random() * (max - min + 1)) + min;
+        }
+
+        // =====================
+        // THEMED GENERATORS
+        // =====================
+
+        function clearForGeneration() {
+            elements.platforms = [];
+            elements.movingPlatforms = [];
+            elements.enemies = [];
+            elements.obstacles = [];
+            elements.coins = [];
+            elements.checkpoints = [];
+        }
+
+        function finalizeGeneration(levelName, worldWidth) {
+            state.worldWidth = worldWidth;
+            state.levelName = levelName;
+            document.getElementById('world-width').value = worldWidth;
+            document.getElementById('level-name').value = levelName;
+            state.selectedElement = null;
+            updatePropertiesPanel();
+            updateStats();
+            resizeCanvas();
+            render();
+        }
+
+        // Tower Climb - Vertical ascent with zigzag pattern
+        function generateTowerClimb() {
+            clearForGeneration();
+            const worldWidth = 3200;
+            const platformCount = 18;
+
+            let currentX = 150;
+            let currentY = 520;
+            let direction = 1; // 1 = right, -1 = left
+            const xStep = 140;
+            const yStep = -50; // Always going up
+
+            for (let i = 0; i < platformCount; i++) {
+                const width = randomBetween(80, 120);
+                const isMoving = i > 2 && i < platformCount - 1 && Math.random() < 0.3;
+
+                const platform = {
+                    x: currentX,
+                    y: currentY,
+                    width: width,
+                    height: 20,
+                    type: isMoving ? 'movingPlatform' : 'platform'
+                };
+
+                if (isMoving) {
+                    // Vertical movers for tower climb
+                    platform.moveX = 0;
+                    platform.moveY = randomBetween(40, 70);
+                    platform.speed = randomBetween(35, 55);
+                    elements.movingPlatforms.push(platform);
+                } else {
+                    elements.platforms.push(platform);
+                }
+
+                // Add coins in arc above platform
+                if (Math.random() < 0.6) {
+                    for (let c = 0; c < randomBetween(1, 3); c++) {
+                        elements.coins.push({
+                            x: currentX + randomBetween(-30, 30),
+                            y: currentY - randomBetween(40, 70),
+                            type: 'coin', width: 20, height: 20
+                        });
+                    }
+                }
+
+                // Checkpoint every 5 platforms
+                if (i > 0 && i % 5 === 0 && !isMoving) {
+                    elements.checkpoints.push({
+                        x: currentX, y: currentY - 35,
+                        type: 'checkpoint', width: 20, height: 50
+                    });
+                }
+
+                // Calculate next position - zigzag pattern
+                currentX += direction * xStep;
+                currentY += yStep;
+
+                // Bounce off walls
+                if (currentX > worldWidth - 200) {
+                    direction = -1;
+                    currentX = worldWidth - 200;
+                } else if (currentX < 200) {
+                    direction = 1;
+                    currentX = 200;
+                }
+
+                // Clamp Y
+                currentY = Math.max(120, currentY);
+            }
+
+            // Player start
+            elements.playerStart = { x: 150, y: 494, type: 'playerStart', width: 32, height: 32 };
+
+            // Flag at top
+            const lastPlat = elements.platforms.length > 0 ?
+                elements.platforms[elements.platforms.length - 1] :
+                elements.movingPlatforms[elements.movingPlatforms.length - 1];
+            elements.flagPosition = {
+                x: lastPlat ? lastPlat.x : worldWidth - 100,
+                y: lastPlat ? lastPlat.y - 40 : 150,
+                type: 'flag', width: 40, height: 60
+            };
+
+            finalizeGeneration('Tower Climb', worldWidth);
+        }
+
+        // Speed Run - Horizontal dash with wide gaps
+        function generateSpeedRun() {
+            clearForGeneration();
+            const worldWidth = 4000;
+            let currentX = 100;
+            let currentY = 450;
+
+            while (currentX < worldWidth - 300) {
+                const width = randomBetween(100, 160);
+                const gap = randomBetween(150, 220);
+
+                elements.platforms.push({
+                    x: currentX + width/2,
+                    y: currentY,
+                    width: width,
+                    height: 20,
+                    type: 'platform'
+                });
+
+                // Trail of coins along the path
+                for (let c = 0; c < 3; c++) {
+                    elements.coins.push({
+                        x: currentX + width + gap * (c + 1) / 4,
+                        y: currentY - 40 - c * 15,
+                        type: 'coin', width: 20, height: 20
+                    });
+                }
+
+                // Occasional enemy (predictable positions)
+                if (Math.random() < 0.2 && elements.platforms.length > 2) {
+                    elements.enemies.push({
+                        x: currentX + width/2,
+                        y: currentY - 26,
+                        type: 'enemy', width: 32, height: 32
+                    });
+                }
+
+                currentX += width + gap;
+                currentY += randomBetween(-20, 20);
+                currentY = Math.max(350, Math.min(500, currentY));
+            }
+
+            // Final platform
+            elements.platforms.push({
+                x: worldWidth - 150,
+                y: currentY,
+                width: 200,
+                height: 20,
+                type: 'platform'
+            });
+
+            // Checkpoints at 1/3 and 2/3
+            const platCount = elements.platforms.length;
+            [Math.floor(platCount/3), Math.floor(2*platCount/3)].forEach(idx => {
+                const p = elements.platforms[idx];
+                if (p) {
+                    elements.checkpoints.push({
+                        x: p.x, y: p.y - 35,
+                        type: 'checkpoint', width: 20, height: 50
+                    });
+                }
+            });
+
+            elements.playerStart = {
+                x: elements.platforms[0].x,
+                y: elements.platforms[0].y - 26,
+                type: 'playerStart', width: 32, height: 32
+            };
+            elements.flagPosition = {
+                x: worldWidth - 150,
+                y: currentY - 40,
+                type: 'flag', width: 40, height: 60
+            };
+
+            finalizeGeneration('Speed Run', worldWidth);
+        }
+
+        // Coin Collector - High coin density with exploration paths
+        function generateCoinCollector() {
+            clearForGeneration();
+            const worldWidth = 3600;
+            let currentX = 100;
+            let mainPathY = 420;
+
+            while (currentX < worldWidth - 300) {
+                const width = randomBetween(120, 180);
+                const gap = randomBetween(100, 150);
+
+                // Main path platform
+                elements.platforms.push({
+                    x: currentX + width/2,
+                    y: mainPathY,
+                    width: width,
+                    height: 20,
+                    type: 'platform'
+                });
+
+                // Coins on main path
+                for (let c = 0; c < randomBetween(2, 4); c++) {
+                    elements.coins.push({
+                        x: currentX + randomBetween(10, width - 10),
+                        y: mainPathY - randomBetween(40, 60),
+                        type: 'coin', width: 20, height: 20
+                    });
+                }
+
+                // Alternate path above (50% chance) with bonus coins
+                if (Math.random() < 0.5) {
+                    const upperY = mainPathY - randomBetween(100, 150);
+                    const upperWidth = randomBetween(80, 120);
+                    elements.platforms.push({
+                        x: currentX + width/2,
+                        y: upperY,
+                        width: upperWidth,
+                        height: 20,
+                        type: 'platform'
+                    });
+
+                    // Bonus coin cluster on upper path
+                    for (let c = 0; c < randomBetween(3, 5); c++) {
+                        elements.coins.push({
+                            x: currentX + width/2 + randomBetween(-40, 40),
+                            y: upperY - randomBetween(30, 60),
+                            type: 'coin', width: 20, height: 20
+                        });
+                    }
+                }
+
+                // Floating coin trails between platforms
+                const midX = currentX + width + gap/2;
+                for (let c = 0; c < 3; c++) {
+                    elements.coins.push({
+                        x: midX,
+                        y: mainPathY - 30 - c * 25,
+                        type: 'coin', width: 20, height: 20
+                    });
+                }
+
+                // Few enemies (exploration, not combat)
+                if (Math.random() < 0.15) {
+                    elements.enemies.push({
+                        x: currentX + width/2,
+                        y: mainPathY - 26,
+                        type: 'enemy', width: 32, height: 32
+                    });
+                }
+
+                currentX += width + gap;
+                mainPathY += randomBetween(-30, 30);
+                mainPathY = Math.max(300, Math.min(480, mainPathY));
+            }
+
+            // Final platform
+            elements.platforms.push({
+                x: worldWidth - 150, y: mainPathY,
+                width: 180, height: 20, type: 'platform'
+            });
+
+            // Checkpoints
+            const mainPlats = elements.platforms.filter((_, i) => i % 5 === 4);
+            mainPlats.slice(0, 3).forEach(p => {
+                elements.checkpoints.push({
+                    x: p.x, y: p.y - 35,
+                    type: 'checkpoint', width: 20, height: 50
+                });
+            });
+
+            elements.playerStart = {
+                x: elements.platforms[0].x,
+                y: elements.platforms[0].y - 26,
+                type: 'playerStart', width: 32, height: 32
+            };
+            elements.flagPosition = {
+                x: worldWidth - 150, y: mainPathY - 40,
+                type: 'flag', width: 40, height: 60
+            };
+
+            finalizeGeneration('Coin Collector', worldWidth);
+        }
+
+        // Precision Challenge - Narrow platforms, tight jumps
+        function generatePrecisionChallenge() {
+            clearForGeneration();
+            const worldWidth = 3200;
+            let currentX = 100;
+            let currentY = 450;
+
+            const patterns = ['straight', 'descend', 'ascend', 'zigzag'];
+
+            while (currentX < worldWidth - 200) {
+                const pattern = patterns[Math.floor(Math.random() * patterns.length)];
+                const segmentLength = randomBetween(3, 5);
+
+                for (let i = 0; i < segmentLength && currentX < worldWidth - 200; i++) {
+                    const width = randomBetween(60, 85); // Narrow!
+                    const gap = randomBetween(110, 160);
+
+                    elements.platforms.push({
+                        x: currentX + width/2,
+                        y: currentY,
+                        width: width,
+                        height: 20,
+                        type: 'platform'
+                    });
+
+                    // Sparse coins - precision is the reward
+                    if (Math.random() < 0.4) {
+                        elements.coins.push({
+                            x: currentX + width/2,
+                            y: currentY - 50,
+                            type: 'coin', width: 20, height: 20
+                        });
+                    }
+
+                    currentX += width + gap;
+
+                    // Pattern-based Y movement
+                    switch (pattern) {
+                        case 'straight': break;
+                        case 'descend': currentY += 25; break;
+                        case 'ascend': currentY -= 25; break;
+                        case 'zigzag': currentY += (i % 2 === 0 ? 40 : -40); break;
+                    }
+                    currentY = Math.max(180, Math.min(500, currentY));
+                }
+            }
+
+            // Final platform (wider for relief)
+            elements.platforms.push({
+                x: worldWidth - 120, y: currentY,
+                width: 140, height: 20, type: 'platform'
+            });
+
+            // Strategic checkpoints after hard sections
+            [5, 12, 18].forEach(idx => {
+                const p = elements.platforms[idx];
+                if (p) {
+                    elements.checkpoints.push({
+                        x: p.x, y: p.y - 35,
+                        type: 'checkpoint', width: 20, height: 50
+                    });
+                }
+            });
+
+            // Very few enemies - platforms are the challenge
+            [4, 10, 16].forEach(idx => {
+                const p = elements.platforms[idx];
+                if (p && p.width >= 70) {
+                    elements.enemies.push({
+                        x: p.x, y: p.y - 26,
+                        type: 'enemy', width: 32, height: 32
+                    });
+                }
+            });
+
+            elements.playerStart = {
+                x: elements.platforms[0].x,
+                y: elements.platforms[0].y - 26,
+                type: 'playerStart', width: 32, height: 32
+            };
+            elements.flagPosition = {
+                x: worldWidth - 120, y: currentY - 40,
+                type: 'flag', width: 40, height: 60
+            };
+
+            finalizeGeneration('Precision Challenge', worldWidth);
+        }
+
+        // Enemy Gauntlet - High enemy density, combat focus
+        function generateEnemyGauntlet() {
+            clearForGeneration();
+            const worldWidth = 3200;
+            let currentX = 100;
+            let currentY = 450;
+
+            while (currentX < worldWidth - 300) {
+                const width = randomBetween(150, 220); // Wider for combat
+                const gap = randomBetween(100, 140);
+
+                elements.platforms.push({
+                    x: currentX + width/2,
+                    y: currentY,
+                    width: width,
+                    height: 20,
+                    type: 'platform'
+                });
+
+                // Multiple enemies per platform
+                const enemyCount = randomBetween(1, 3);
+                const spacing = width / (enemyCount + 1);
+                for (let e = 0; e < enemyCount; e++) {
+                    const enemyX = currentX + spacing * (e + 1);
+                    elements.enemies.push({
+                        x: enemyX,
+                        y: currentY - 26,
+                        type: 'enemy', width: 32, height: 32
+                    });
+
+                    // Coin above each enemy (stomp bonus)
+                    elements.coins.push({
+                        x: enemyX,
+                        y: currentY - 70,
+                        type: 'coin', width: 20, height: 20
+                    });
+                }
+
+                // Occasional obstacle between platforms
+                if (Math.random() < 0.25) {
+                    elements.obstacles.push({
+                        x: currentX + width + gap/2,
+                        y: 555,
+                        type: 'obstacle', width: 30, height: 30
+                    });
+                }
+
+                currentX += width + gap;
+                currentY += randomBetween(-30, 30);
+                currentY = Math.max(350, Math.min(500, currentY));
+            }
+
+            // Boss platform (extra enemies)
+            elements.platforms.push({
+                x: worldWidth - 200, y: 400,
+                width: 280, height: 20, type: 'platform'
+            });
+            for (let e = 0; e < 4; e++) {
+                elements.enemies.push({
+                    x: worldWidth - 300 + e * 60,
+                    y: 374,
+                    type: 'enemy', width: 32, height: 32
+                });
+            }
+
+            // Checkpoints after enemy clusters
+            [4, 8, 12].forEach(idx => {
+                const p = elements.platforms[idx];
+                if (p) {
+                    elements.checkpoints.push({
+                        x: p.x, y: p.y - 35,
+                        type: 'checkpoint', width: 20, height: 50
+                    });
+                }
+            });
+
+            elements.playerStart = {
+                x: elements.platforms[0].x,
+                y: elements.platforms[0].y - 26,
+                type: 'playerStart', width: 32, height: 32
+            };
+            elements.flagPosition = {
+                x: worldWidth - 200, y: 360,
+                type: 'flag', width: 40, height: 60
+            };
+
+            finalizeGeneration('Enemy Gauntlet', worldWidth);
+        }
+
+        // Moving Maze - Heavy moving platform usage
+        function generateMovingMaze() {
+            clearForGeneration();
+            const worldWidth = 3600;
+            let currentX = 100;
+            let currentY = 450;
+
+            // Start platform (static for safety)
+            elements.platforms.push({
+                x: 175, y: 480, width: 150, height: 20, type: 'platform'
+            });
+            currentX = 300;
+
+            while (currentX < worldWidth - 400) {
+                const width = randomBetween(90, 130);
+                const gap = randomBetween(120, 170);
+                const isMoving = Math.random() < 0.65; // 65% moving
+
+                const platform = {
+                    x: currentX + width/2,
+                    y: currentY,
+                    width: width,
+                    height: 20,
+                    type: isMoving ? 'movingPlatform' : 'platform'
+                };
+
+                if (isMoving) {
+                    // Mix of horizontal and vertical
+                    if (Math.random() < 0.5) {
+                        platform.moveX = randomBetween(70, 120);
+                        platform.moveY = 0;
+                    } else {
+                        platform.moveX = 0;
+                        platform.moveY = randomBetween(50, 90);
+                    }
+                    platform.speed = randomBetween(45, 70);
+                    elements.movingPlatforms.push(platform);
+                } else {
+                    elements.platforms.push(platform);
+                }
+
+                // Coins placed considering movement
+                if (Math.random() < 0.5) {
+                    elements.coins.push({
+                        x: platform.x,
+                        y: platform.y - 50,
+                        type: 'coin', width: 20, height: 20
+                    });
+                }
+
+                // Sparse enemies (timing is the challenge)
+                if (!isMoving && Math.random() < 0.2) {
+                    elements.enemies.push({
+                        x: platform.x,
+                        y: platform.y - 26,
+                        type: 'enemy', width: 32, height: 32
+                    });
+                }
+
+                currentX += width + gap;
+                currentY += randomBetween(-40, 40);
+                currentY = Math.max(250, Math.min(480, currentY));
+            }
+
+            // End platform (static)
+            elements.platforms.push({
+                x: worldWidth - 150, y: 350,
+                width: 180, height: 20, type: 'platform'
+            });
+
+            // Checkpoints on static platforms
+            let checkpointCount = 0;
+            elements.platforms.forEach((p, i) => {
+                if (i > 0 && i < elements.platforms.length - 1 && checkpointCount < 3) {
+                    if (i % 3 === 0) {
+                        elements.checkpoints.push({
+                            x: p.x, y: p.y - 35,
+                            type: 'checkpoint', width: 20, height: 50
+                        });
+                        checkpointCount++;
+                    }
+                }
+            });
+
+            elements.playerStart = {
+                x: 175, y: 454,
+                type: 'playerStart', width: 32, height: 32
+            };
+            elements.flagPosition = {
+                x: worldWidth - 150, y: 310,
+                type: 'flag', width: 40, height: 60
+            };
+
+            finalizeGeneration('Moving Maze', worldWidth);
         }
 
         // =====================
