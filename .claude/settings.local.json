@@ -3,7 +3,9 @@
     "allow": [
       "Bash(npm install:*)",
       "Bash(dir /s /b \"C:\\Users\\edygo\\Documents\\Coding\\MarioGame\")",
-      "Bash(pkill:*)"
+      "Bash(pkill:*)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(chmod +x /Users/edygomez/Documents/JumpQuest/node_modules/.bin/http-server)"
     ],
     "deny": [],
     "ask": []

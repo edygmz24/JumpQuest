@@ -1,114 +1,121 @@
 const level2 = {
-    name: "Level 2 - Rising Heights",
-    worldWidth: 3600,
+    name: "Level 2 - Coin Canyon",
+    worldWidth: 3200,
     worldHeight: 600,
 
+    theme: {
+        skyColor: 0xE8A87C,
+        groundColor: 0xCD853F,
+        platformColor: 0x8B6914,
+        bgColor1: 0xC19552,
+        bgColor2: 0x8B7355
+    },
+
     platforms: [
-        // Starting area
-        { x: 120, y: 520, width: 180, height: 20 },
-        { x: 320, y: 480, width: 140, height: 20 },
+        // Section 1 (0-700): Intro platforming
+        { x: 200, y: 500, width: 160, height: 20 },
+        { x: 450, y: 460, width: 140, height: 20 },
 
-        // Section 1 - Ascending
-        { x: 500, y: 440, width: 120, height: 20 },
-        { x: 680, y: 390, width: 100, height: 20 },
-        { x: 850, y: 330, width: 120, height: 20 },
+        // Section 2 (700-1400): Branching paths
+        // Upper path (narrow platforms, more coins)
+        { x: 750, y: 380, width: 80, height: 20 },
+        { x: 900, y: 340, width: 80, height: 20 },
+        { x: 1050, y: 380, width: 80, height: 20 },
+        { x: 1200, y: 420, width: 100, height: 20 },
+        // Lower path (wide platforms, fewer coins)
+        { x: 720, y: 510, width: 160, height: 20 },
+        { x: 950, y: 510, width: 160, height: 20 },
+        { x: 1180, y: 510, width: 140, height: 20 },
 
-        // Checkpoint recovery platform 1
-        { x: 1000, y: 520, width: 100, height: 20 },
+        // Merge point
+        { x: 1350, y: 480, width: 180, height: 20 },
 
-        // Section 2 - High jumps
-        { x: 1050, y: 270, width: 100, height: 20 },
-        // Platform at 1220, 340 moved to movingPlatforms (horizontal)
-        { x: 1380, y: 280, width: 100, height: 20 },
-        { x: 1550, y: 220, width: 110, height: 20 },
+        // Section 3 (1400-2000): Jumper enemies on wide platforms
+        { x: 1550, y: 480, width: 200, height: 20 },
+        { x: 1850, y: 470, width: 200, height: 20 },
 
-        // Section 3 - Narrow platforms
-        { x: 1750, y: 300, width: 80, height: 20 },
-        // Platform at 1900, 360 moved to movingPlatforms (vertical)
-        { x: 2060, y: 300, width: 80, height: 20 },
+        // Section 4 (2000-2600): Power-up area + moving platform section
+        { x: 2050, y: 490, width: 140, height: 20 },
+        { x: 2500, y: 480, width: 140, height: 20 },
 
-        // Checkpoint recovery platform 2
-        { x: 2200, y: 520, width: 100, height: 20 },
-
-        // Section 4 - Mixed heights
-        { x: 2280, y: 400, width: 120, height: 20 },
-        // Platform at 2480, 320 moved to movingPlatforms (horizontal)
-        { x: 2650, y: 260, width: 90, height: 20 },
-        { x: 2820, y: 340, width: 110, height: 20 },
-
-        // Section 5 - Final gauntlet
-        { x: 3000, y: 280, width: 100, height: 20 },
-        { x: 3180, y: 220, width: 120, height: 20 },
-        { x: 3380, y: 280, width: 140, height: 20 }
-    ],
-
-    obstacles: [
-        { x: 450, y: 555 },
-        { x: 750, y: 555 },
-        { x: 1150, y: 555 },
-        { x: 1450, y: 555 },
-        { x: 1850, y: 555 },
-        { x: 2350, y: 555 },
-        { x: 2750, y: 555 },
-        { x: 3100, y: 555 }
-    ],
-
-    enemies: [
-        { x: 500, y: 400 },
-        { x: 850, y: 290 },
-        { x: 1050, y: 230 },
-        { x: 1380, y: 240 },
-        { x: 1750, y: 260 },
-        { x: 1900, y: 320 },
-        { x: 2280, y: 360 },
-        { x: 2650, y: 220 },
-        { x: 3000, y: 240 },
-        { x: 3380, y: 240 }
-    ],
-
-    playerStart: { x: 120, y: 470 },
-    flagPosition: { x: 3450, y: 180 },
-
-    checkpoints: [
-        { x: 1000, y: 490 },  // After section 1
-        { x: 2200, y: 490 }   // After section 3
-    ],
-
-    coins: [
-        // Starting area
-        { x: 120, y: 490 },
-        { x: 170, y: 490 },
-        { x: 320, y: 450 },
-        // Section 1
-        { x: 500, y: 410 },
-        { x: 680, y: 360 },
-        { x: 850, y: 300 },
-        // Section 2
-        { x: 1050, y: 240 },
-        { x: 1220, y: 310 },
-        { x: 1380, y: 250 },
-        { x: 1550, y: 190 },
-        // Section 3
-        { x: 1750, y: 270 },
-        { x: 1900, y: 330 },
-        { x: 2060, y: 270 },
-        // Section 4
-        { x: 2280, y: 370 },
-        { x: 2480, y: 290 },
-        { x: 2650, y: 230 },
-        { x: 2820, y: 310 },
-        // Section 5
-        { x: 3000, y: 250 },
-        { x: 3180, y: 190 },
-        { x: 3380, y: 250 }
+        // Section 5 (2600-3200): Long platform with walkers, then flag area
+        { x: 2750, y: 490, width: 300, height: 20 },
+        { x: 3100, y: 500, width: 120, height: 20 }
     ],
 
     movingPlatforms: [
-        // Section 2 - Horizontal moving platform (was static at 1220, 340)
-        { x: 1220, y: 340, width: 90, height: 20, moveX: 100, moveY: 0, speed: 65 },
-        // Section 3 - Vertical moving platform (was static at 1900, 360)
-        { x: 1900, y: 360, width: 80, height: 20, moveX: 0, moveY: 70, speed: 55 },
-        // Section 4 - Horizontal moving platform (was static at 2480, 320)
-        { x: 2480, y: 320, width: 100, height: 20, moveX: 90, moveY: 0, speed: 70 }
-    ]
+        // Section 4: Two moving platforms in sequence
+        { x: 2230, y: 470, width: 100, height: 20, moveX: 120, moveY: 0, speed: 55 },
+        { x: 2400, y: 450, width: 100, height: 20, moveX: 0, moveY: -60, speed: 50 }
+    ],
+
+    enemies: [
+        // Section 1: A walker on the intro platform
+        { x: 470, y: 444, type: 'walker' },
+
+        // Section 3: Two jumper enemies
+        { x: 1600, y: 464, type: 'jumper' },
+        { x: 1900, y: 454, type: 'jumper' },
+
+        // Section 5: Three walkers on the long platform
+        { x: 2780, y: 474, type: 'walker' },
+        { x: 2860, y: 474, type: 'walker' },
+        { x: 2940, y: 474, type: 'walker' }
+    ],
+
+    obstacles: [],
+
+    coins: [
+        // Section 1: Couple coins on intro platforms
+        { x: 220, y: 470 },
+        { x: 460, y: 430 },
+
+        // Section 2 - Upper path (6 coins - the rewarding path)
+        { x: 750, y: 350 },
+        { x: 830, y: 350 },
+        { x: 900, y: 310 },
+        { x: 975, y: 310 },
+        { x: 1050, y: 350 },
+        { x: 1200, y: 390 },
+
+        // Section 2 - Lower path (2 coins - the safe path)
+        { x: 800, y: 480 },
+        { x: 1020, y: 480 },
+
+        // Section 3: Coins around jumper areas
+        { x: 1550, y: 450 },
+        { x: 1650, y: 450 },
+        { x: 1850, y: 440 },
+        { x: 1950, y: 440 },
+
+        // Section 4: Coins on moving platforms
+        { x: 2280, y: 440 },
+        { x: 2450, y: 420 },
+
+        // Section 5: Coins along the long platform
+        { x: 2800, y: 460 },
+        { x: 2850, y: 460 },
+        { x: 2900, y: 460 },
+        { x: 2950, y: 460 },
+        { x: 3100, y: 470 }
+    ],
+
+    checkpoints: [
+        // After the jumper enemies in Section 3
+        { x: 2000, y: 555 }
+    ],
+
+    powerUps: [
+        // Speed boost before the moving platform section
+        { x: 2080, y: 460, type: 'speed' }
+    ],
+
+    breakableBlocks: [
+        // Hidden coins in breakable blocks
+        { x: 1370, y: 450, width: 40, height: 20, contains: 'coin' },
+        { x: 2530, y: 450, width: 40, height: 20, contains: 'coin' }
+    ],
+
+    playerStart: { x: 60, y: 540 },
+    flagPosition: { x: 3150, y: 475 }
 };
