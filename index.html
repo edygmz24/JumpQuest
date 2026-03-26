@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>JumpQuest - A Platformer Adventure</title>
     <style>
         body {
@@ -18,10 +18,52 @@
         #game-container {
             box-shadow: 0 0 20px rgba(0,0,0,0.3);
         }
+
+        /* Touch controls overlay */
+        #touch-controls {
+            display: none;
+            position: fixed;
+            bottom: 0; left: 0; right: 0;
+            height: 160px;
+            pointer-events: none;
+            z-index: 100;
+        }
+        #touch-controls.visible { display: block; }
+
+        .touch-btn {
+            position: absolute;
+            width: 75px; height: 75px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.25);
+            border: 3px solid rgba(255,255,255,0.5);
+            color: white;
+            font-size: 28px;
+            display: flex; align-items: center; justify-content: center;
+            pointer-events: all;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+        }
+        .touch-btn:active {
+            background: rgba(255,255,255,0.45);
+        }
+        #btn-left  { bottom: 20px; left: 20px; }
+        #btn-right { bottom: 20px; left: 110px; }
+        #btn-dash  { bottom: 20px; right: 110px; }
+        #btn-jump  { bottom: 20px; right: 20px; }
     </style>
 </head>
 <body>
     <div id="game-container"></div>
+
+    <!-- Touch control buttons (shown only on touch devices via JS below) -->
+    <div id="touch-controls">
+        <div class="touch-btn" id="btn-left">◀</div>
+        <div class="touch-btn" id="btn-right">▶</div>
+        <div class="touch-btn" id="btn-dash">💨</div>
+        <div class="touch-btn" id="btn-jump">▲</div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.90.0/dist/phaser.min.js"></script>
     <!-- Load level files first -->
     <script src="levels/level1.js"></script>
@@ -39,5 +81,26 @@
     <script src="menu.js"></script>
     <!-- Load main game file last -->
     <script src="game.js"></script>
+
+    <!-- Touch controls wiring (runs after game.js so globals are defined) -->
+    <script>
+    (function() {
+        if (navigator.maxTouchPoints <= 0) return;
+
+        document.getElementById('touch-controls').classList.add('visible');
+
+        function bindBtn(id, onStart, onEnd) {
+            var el = document.getElementById(id);
+            el.addEventListener('touchstart',  function(e) { e.preventDefault(); onStart(); }, { passive: false });
+            el.addEventListener('touchend',    function(e) { e.preventDefault(); onEnd();   }, { passive: false });
+            el.addEventListener('touchcancel', function(e) { e.preventDefault(); onEnd();   }, { passive: false });
+        }
+
+        bindBtn('btn-left',  function() { touchLeft  = true;  }, function() { touchLeft  = false; });
+        bindBtn('btn-right', function() { touchRight = true;  }, function() { touchRight = false; });
+        bindBtn('btn-jump',  function() { touchJump  = true;  }, function() { touchJump  = false; });
+        bindBtn('btn-dash',  function() { touchDashPressed = true; }, function() {});
+    })();
+    </script>
 </body>
 </html>

@@ -1,8 +1,12 @@
 const config = {
     type: Phaser.AUTO,
     parent: 'game-container',
-    width: 800,
-    height: 600,
+    scale: {
+        mode: Phaser.Scale.FIT,
+        autoCenter: Phaser.Scale.CENTER_BOTH,
+        width: 800,
+        height: 600
+    },
     physics: {
         default: 'arcade',
         arcade: {
@@ -23,6 +27,12 @@ let player;
 let playerRect;
 let platforms;
 let cursors;
+
+// Touch control state (set by index.html touch buttons)
+let touchLeft = false;
+let touchRight = false;
+let touchJump = false;
+let touchDashPressed = false;
 let enemies;
 let enemyRects = [];
 let gameOver = false;
@@ -536,7 +546,7 @@ function update() {
 
     const deltaS = this.game.loop.delta / 1000;
     const onGround = player.body.touching.down || player.body.blocked.down;
-    const jumpPressed = cursors.up.isDown || cursors.space.isDown;
+    const jumpPressed = cursors.up.isDown || cursors.space.isDown || touchJump;
 
     // --- Coyote Time ---
     if (onGround) {
@@ -553,8 +563,8 @@ function update() {
     }
 
     // --- Track facing direction ---
-    if (cursors.left.isDown) lastFacingDir = -1;
-    else if (cursors.right.isDown) lastFacingDir = 1;
+    if (cursors.left.isDown || touchLeft) lastFacingDir = -1;
+    else if (cursors.right.isDown || touchRight) lastFacingDir = 1;
 
     // --- Reset double jump on landing ---
     if (onGround) {
@@ -577,7 +587,8 @@ function update() {
         }
     }
 
-    if (Phaser.Input.Keyboard.JustDown(dashKey) && dashCooldown <= 0 && !isDashing) {
+    if ((Phaser.Input.Keyboard.JustDown(dashKey) || touchDashPressed) && dashCooldown <= 0 && !isDashing) {
+        touchDashPressed = false;
         if (onGround || canAirDash) {
             isDashing = true;
             dashTimer = DASH_DURATION;
@@ -611,10 +622,10 @@ function update() {
         const decel = onGround ? GROUND_DECEL : AIR_DECEL;
         let vx = player.body.velocity.x;
 
-        if (cursors.left.isDown) {
+        if (cursors.left.isDown || touchLeft) {
             vx -= accel * deltaS;
             if (vx < -maxSpeed) vx = -maxSpeed;
-        } else if (cursors.right.isDown) {
+        } else if (cursors.right.isDown || touchRight) {
             vx += accel * deltaS;
             if (vx > maxSpeed) vx = maxSpeed;
         } else {
@@ -922,7 +933,7 @@ function handleEnemyCollision(player, enemy) {
 
     if (isFalling && isAbove) {
         stompEnemy.call(this, enemy);
-        const jumpPressed = cursors.up.isDown || cursors.space.isDown;
+        const jumpPressed = cursors.up.isDown || cursors.space.isDown || touchJump;
         player.setVelocityY(jumpPressed ? -400 : -250);
     } else {
         hitEnemy.call(this);
