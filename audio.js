@@ -51,12 +51,10 @@ function playSound(name) {
 function toggleMute() {
     audioMuted = !audioMuted;
     if (audioMuted) {
-        stopBackgroundMusic();
+        if (bgMusic) bgMusic.pause();
     } else {
-        // Restart music if it should be playing
-        if (typeof currentLevelIndex !== 'undefined') {
-            startBackgroundMusic(currentLevelIndex);
-        }
+        if (bgMusic) bgMusic.play().catch(() => {});
+        else if (typeof currentLevelIndex !== 'undefined') startBackgroundMusic(currentLevelIndex);
     }
     return audioMuted;
 }
@@ -471,69 +469,28 @@ function playBossDefeatSound() {
 // Background Music System
 // ========================
 
-let bgMusicInterval = null;
+let bgMusic = null;
 let bgMusicPlaying = false;
-
-// Simple chord progressions for different level moods
-const MUSIC_KEYS = [
-    { bass: [131, 165, 147, 175], melody: [523, 659, 587, 698] },  // C major - cheerful
-    { bass: [147, 175, 165, 131], melody: [587, 698, 659, 523] },  // D mixo - adventurous
-    { bass: [110, 131, 147, 131], melody: [440, 523, 587, 523] },  // A minor - mysterious
-    { bass: [165, 196, 175, 147], melody: [659, 784, 698, 587] },  // E major - intense
-    { bass: [131, 147, 165, 175], melody: [523, 587, 659, 698] },  // C ascending - epic
-];
 
 function startBackgroundMusic(levelIndex) {
     if (audioMuted || bgMusicPlaying) return;
+
+    if (!bgMusic) {
+        bgMusic = new Audio('Top_Floor_Dash.mp3');
+        bgMusic.loop = true;
+        bgMusic.volume = 0.2; // Low volume so it doesn't overpower sound effects
+    }
+
+    bgMusic.play().catch(() => {
+        // Autoplay blocked — will retry on next user interaction
+    });
     bgMusicPlaying = true;
-
-    const keySet = MUSIC_KEYS[levelIndex % MUSIC_KEYS.length];
-    let beat = 0;
-    const bpm = 120 + (levelIndex * 5); // Faster for later levels
-    const beatDuration = 60000 / bpm;
-
-    bgMusicInterval = setInterval(() => {
-        if (audioMuted) return;
-        try {
-            const ctx = getAudioContext();
-            const t = ctx.currentTime;
-            const chordIndex = Math.floor(beat / 4) % 4;
-
-            // Bass note (every 4 beats)
-            if (beat % 4 === 0) {
-                const bassOsc = ctx.createOscillator();
-                const bassGain = createGain(ctx, 0.08);
-                bassOsc.type = 'sine';
-                bassOsc.frequency.setValueAtTime(keySet.bass[chordIndex], t);
-                bassGain.gain.exponentialRampToValueAtTime(0.001, t + beatDuration * 3.5 / 1000);
-                bassOsc.connect(bassGain);
-                bassOsc.start(t);
-                bassOsc.stop(t + beatDuration * 4 / 1000);
-            }
-
-            // Melody note (every beat, with some rests)
-            if (beat % 2 === 0 || Math.random() > 0.5) {
-                const melOsc = ctx.createOscillator();
-                const melGain = createGain(ctx, 0.05);
-                melOsc.type = 'square';
-                const noteIndex = (beat + Math.floor(Math.random() * 2)) % 4;
-                const octaveShift = Math.random() > 0.7 ? 2 : 1;
-                melOsc.frequency.setValueAtTime(keySet.melody[noteIndex] * octaveShift, t);
-                melGain.gain.exponentialRampToValueAtTime(0.001, t + beatDuration * 0.8 / 1000);
-                melOsc.connect(melGain);
-                melOsc.start(t);
-                melOsc.stop(t + beatDuration / 1000);
-            }
-
-            beat++;
-        } catch (e) { /* ignore */ }
-    }, beatDuration);
 }
 
 function stopBackgroundMusic() {
-    if (bgMusicInterval) {
-        clearInterval(bgMusicInterval);
-        bgMusicInterval = null;
+    if (bgMusic) {
+        bgMusic.pause();
+        bgMusic.currentTime = 0;
     }
     bgMusicPlaying = false;
 }
