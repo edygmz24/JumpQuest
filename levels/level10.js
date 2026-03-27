@@ -1,6 +1,6 @@
 const level10 = {
     name: "Level 10 - The Gauntlet Supreme",
-    worldWidth: 5500,
+    worldWidth: 6000,
     worldHeight: 600,
     theme: {
         skyColor: 0x1a0033,
@@ -56,7 +56,17 @@ const level10 = {
         { x: 4670, y: 450, width: 100, height: 20 },
         { x: 4830, y: 400, width: 100, height: 20 },
         { x: 5000, y: 460, width: 120, height: 20 },
-        { x: 5200, y: 500, width: 150, height: 20 }
+        { x: 5200, y: 500, width: 150, height: 20 },
+
+        // === BOSS ARENA ===
+        // Ground-level wide platform
+        { x: 5600, y: 560, width: 500, height: 20 },
+        // Mid-tier platforms
+        { x: 5450, y: 440, width: 120, height: 20 },
+        { x: 5750, y: 440, width: 120, height: 20 },
+        // High-tier platforms
+        { x: 5520, y: 320, width: 100, height: 20 },
+        { x: 5700, y: 320, width: 100, height: 20 }
     ],
 
     movingPlatforms: [
@@ -65,7 +75,10 @@ const level10 = {
         { x: 2130, y: 400, width: 80, height: 20, moveX: 80, moveY: 0, speed: 65 },
         { x: 2350, y: 440, width: 80, height: 20, moveX: 0, moveY: 60, speed: 50 },
         // Section 5 - one final moving platform challenge
-        { x: 4580, y: 430, width: 80, height: 20, moveX: 60, moveY: 40, speed: 60 }
+        { x: 4580, y: 430, width: 80, height: 20, moveX: 60, moveY: 40, speed: 60 },
+        // Boss arena - moving platforms for reaching phase 3 boss
+        { x: 5550, y: 380, width: 70, height: 20, moveX: 80, moveY: 0, speed: 50 },
+        { x: 5680, y: 350, width: 70, height: 20, moveX: 0, moveY: 60, speed: 45 }
     ],
 
     enemies: [
@@ -193,5 +206,6 @@ const level10 = {
     ],
 
     playerStart: { x: 100, y: 540 },
-    flagPosition: { x: 5400, y: 530 }
+    flagPosition: { x: 5850, y: 530 },
+    bossArena: { x: 5350, width: 500 }
 };

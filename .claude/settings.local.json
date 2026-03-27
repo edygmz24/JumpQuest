@@ -5,7 +5,11 @@
       "Bash(dir /s /b \"C:\\Users\\edygo\\Documents\\Coding\\MarioGame\")",
       "Bash(pkill:*)",
       "mcp__Claude_Preview__preview_start",
-      "Bash(chmod +x /Users/edygomez/Documents/JumpQuest/node_modules/.bin/http-server)"
+      "Bash(chmod +x /Users/edygomez/Documents/JumpQuest/node_modules/.bin/http-server)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(node -c game.js)"
     ],
     "deny": [],
     "ask": []

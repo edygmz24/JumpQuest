@@ -123,6 +123,31 @@ const level9 = {
         { x: 2640, y: 420, width: 40, height: 40, contains: 'coin' }
     ],
 
+    // Secret area: hidden wall-jump shaft at x:2930 (the "brief vertical moment")
+    // Wall-jump up the shaft to find secret coins and a doubleJump power-up at the top
+    // Add walls on both sides to create a shaft for wall-jumping
+    secretPlatforms: [
+        // Left wall of shaft
+        { x: 2900, y: 350, width: 20, height: 200 },
+        // Right wall of shaft
+        { x: 2960, y: 350, width: 20, height: 200 },
+        // Reward platform at top
+        { x: 2930, y: 140, width: 100, height: 20 }
+    ],
+    secretCoins: [
+        { x: 2930, y: 300, revealTrigger: { x: 2930, y: 250, radius: 80 } },
+        { x: 2930, y: 260, revealTrigger: { x: 2930, y: 250, radius: 80 } },
+        { x: 2930, y: 220, revealTrigger: { x: 2930, y: 250, radius: 80 } },
+        { x: 2930, y: 180, revealTrigger: { x: 2930, y: 250, radius: 80 } },
+        { x: 2910, y: 110, revealTrigger: { x: 2930, y: 140, radius: 50 } },
+        { x: 2950, y: 110, revealTrigger: { x: 2930, y: 140, radius: 50 } },
+        { x: 2930, y: 80, revealTrigger: { x: 2930, y: 140, radius: 50 } }
+    ],
+    // doubleJump power-up at the top of the shaft
+    secretPowerUps: [
+        { x: 2930, y: 110, type: 'doubleJump', revealTrigger: { x: 2930, y: 140, radius: 50 } }
+    ],
+
     playerStart: { x: 100, y: 540 },
     flagPosition: { x: 4900, y: 530 }
 };

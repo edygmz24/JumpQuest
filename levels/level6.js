@@ -128,6 +128,23 @@ const level6 = {
         { x: 2640, y: 300, width: 40, height: 40, contains: 'coin' }
     ],
 
+    // Secret area: dash-through wall shortcut near x:2020
+    // A fake wall between the descent and high cloud section - dash through for shortcut
+    fakeWalls: [
+        { x: 2080, y: 380, width: 40, height: 80 }
+    ],
+    secretCoins: [
+        { x: 2130, y: 340, revealTrigger: { x: 2080, y: 380, radius: 50 } },
+        { x: 2170, y: 340, revealTrigger: { x: 2080, y: 380, radius: 50 } },
+        { x: 2210, y: 340, revealTrigger: { x: 2080, y: 380, radius: 50 } },
+        { x: 2150, y: 370, revealTrigger: { x: 2080, y: 380, radius: 50 } },
+        { x: 2190, y: 370, revealTrigger: { x: 2080, y: 380, radius: 50 } }
+    ],
+    // Speed power-up behind the fake wall as a reward
+    secretPowerUps: [
+        { x: 2180, y: 400, type: 'speed', revealTrigger: { x: 2080, y: 380, radius: 50 } }
+    ],
+
     playerStart: { x: 100, y: 540 },
     flagPosition: { x: 3700, y: 530 }
 };

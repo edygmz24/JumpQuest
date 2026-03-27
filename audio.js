@@ -37,7 +37,10 @@ function playSound(name) {
             powerup: playPowerupSound,
             dash: playDashSound,
             wallSlide: playWallSlideSound,
-            gameOver: playGameOverSound
+            gameOver: playGameOverSound,
+            bossRoar: playBossRoarSound,
+            bossHit: playBossHitSound,
+            bossDefeat: playBossDefeatSound
         };
         if (sounds[name]) sounds[name]();
     } catch (e) {
@@ -69,17 +72,20 @@ function playJumpSound() {
     osc.stop(t + 0.1);
 }
 
-// --- Coin: Two bright ascending notes ---
-function playCoinSound() {
+// --- Coin: Two bright ascending notes (pitch scales with combo) ---
+function playCoinSound(combo) {
     const ctx = getAudioContext();
     const t = ctx.currentTime;
+    combo = combo || 0;
+    // Pitch scales up with combo: +5% per combo hit, capped at +60%
+    const pitchMult = 1 + Math.min(combo * 0.05, 0.6);
 
     [880, 1320].forEach((freq, i) => {
         const osc = ctx.createOscillator();
         const gain = createGain(ctx, 0.2);
 
         osc.type = 'square';
-        osc.frequency.setValueAtTime(freq, t + i * 0.06);
+        osc.frequency.setValueAtTime(freq * pitchMult, t + i * 0.06);
 
         gain.gain.setValueAtTime(0, t);
         gain.gain.setValueAtTime(0.2 * masterVolume, t + i * 0.06);
@@ -297,6 +303,160 @@ function playGameOverSound() {
         osc.start(t + i * 0.2);
         osc.stop(t + i * 0.2 + 0.25);
     });
+}
+
+// --- Achievement: Triumphant ascending arpeggio (distinct from level complete) ---
+function playAchievementSound() {
+    const ctx = getAudioContext();
+    const t = ctx.currentTime;
+
+    // Golden arpeggio: C5 E5 G5 C6 with shimmer
+    [523, 659, 784, 1047, 1319, 1568].forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        const gain = createGain(ctx, 0.15);
+
+        osc.type = i < 4 ? 'sine' : 'triangle';
+        osc.frequency.setValueAtTime(freq, t + i * 0.08);
+
+        gain.gain.setValueAtTime(0, t);
+        gain.gain.setValueAtTime(0.15 * masterVolume, t + i * 0.08);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + i * 0.08 + 0.2);
+
+        osc.connect(gain);
+        osc.start(t + i * 0.08);
+        osc.stop(t + i * 0.08 + 0.2);
+    });
+}
+
+// --- Boss Roar: Low menacing rumble ---
+function playBossRoarSound() {
+    const ctx = getAudioContext();
+    const t = ctx.currentTime;
+
+    // Deep rumble oscillator
+    const osc1 = ctx.createOscillator();
+    const gain1 = createGain(ctx, 0.35);
+    osc1.type = 'sawtooth';
+    osc1.frequency.setValueAtTime(55, t);
+    osc1.frequency.linearRampToValueAtTime(35, t + 0.8);
+    gain1.gain.setValueAtTime(0.35 * masterVolume, t);
+    gain1.gain.linearRampToValueAtTime(0.001, t + 0.8);
+    osc1.connect(gain1);
+    osc1.start(t);
+    osc1.stop(t + 0.8);
+
+    // Sub bass layer
+    const osc2 = ctx.createOscillator();
+    const gain2 = createGain(ctx, 0.25);
+    osc2.type = 'sine';
+    osc2.frequency.setValueAtTime(40, t);
+    osc2.frequency.linearRampToValueAtTime(25, t + 1.0);
+    gain2.gain.setValueAtTime(0.25 * masterVolume, t);
+    gain2.gain.linearRampToValueAtTime(0.001, t + 1.0);
+    osc2.connect(gain2);
+    osc2.start(t);
+    osc2.stop(t + 1.0);
+
+    // Noise burst for texture
+    const bufferSize = ctx.sampleRate * 0.3;
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+        data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize) * 0.5;
+    }
+    const noise = ctx.createBufferSource();
+    noise.buffer = buffer;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(200, t);
+    filter.frequency.linearRampToValueAtTime(80, t + 0.5);
+    const noiseGain = createGain(ctx, 0.15);
+    noiseGain.gain.linearRampToValueAtTime(0.001, t + 0.5);
+    noise.connect(filter);
+    filter.connect(noiseGain);
+    noise.start(t);
+    noise.stop(t + 0.5);
+}
+
+// --- Boss Hit: Thuddy impact with distortion ---
+function playBossHitSound() {
+    const ctx = getAudioContext();
+    const t = ctx.currentTime;
+
+    // Heavy thud
+    const osc = ctx.createOscillator();
+    const gain = createGain(ctx, 0.4);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(200, t);
+    osc.frequency.exponentialRampToValueAtTime(30, t + 0.2);
+    gain.gain.setValueAtTime(0.4 * masterVolume, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+    osc.connect(gain);
+    osc.start(t);
+    osc.stop(t + 0.2);
+
+    // Crunch noise
+    const bufferSize = ctx.sampleRate * 0.1;
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+        data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
+    }
+    const noise = ctx.createBufferSource();
+    noise.buffer = buffer;
+    const noiseGain = createGain(ctx, 0.2);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+    noise.connect(noiseGain);
+    noise.start(t);
+    noise.stop(t + 0.1);
+
+    // Metallic ring
+    const osc2 = ctx.createOscillator();
+    const gain2 = createGain(ctx, 0.15);
+    osc2.type = 'square';
+    osc2.frequency.setValueAtTime(600, t);
+    osc2.frequency.exponentialRampToValueAtTime(100, t + 0.15);
+    gain2.gain.setValueAtTime(0.15 * masterVolume, t);
+    gain2.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+    osc2.connect(gain2);
+    osc2.start(t);
+    osc2.stop(t + 0.15);
+}
+
+// --- Boss Defeat: Extended triumphant fanfare ---
+function playBossDefeatSound() {
+    const ctx = getAudioContext();
+    const t = ctx.currentTime;
+
+    // Dramatic ascending notes
+    const notes = [262, 330, 392, 523, 659, 784, 1047, 784, 1047, 1319, 1047, 1319];
+    const durations = [0.1, 0.1, 0.1, 0.15, 0.1, 0.1, 0.2, 0.1, 0.15, 0.2, 0.15, 0.4];
+    let offset = 0;
+
+    notes.forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        const gain = createGain(ctx, 0.2);
+        osc.type = i < 6 ? 'square' : 'triangle';
+        osc.frequency.setValueAtTime(freq, t + offset);
+        gain.gain.setValueAtTime(0, t);
+        gain.gain.setValueAtTime(0.2 * masterVolume, t + offset);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + offset + durations[i]);
+        osc.connect(gain);
+        osc.start(t + offset);
+        osc.stop(t + offset + durations[i] + 0.01);
+        offset += durations[i];
+    });
+
+    // Victory bass note
+    const bassOsc = ctx.createOscillator();
+    const bassGain = createGain(ctx, 0.15);
+    bassOsc.type = 'sine';
+    bassOsc.frequency.setValueAtTime(131, t + offset - 0.4);
+    bassGain.gain.setValueAtTime(0.15 * masterVolume, t + offset - 0.4);
+    bassGain.gain.linearRampToValueAtTime(0.001, t + offset + 0.3);
+    bassOsc.connect(bassGain);
+    bassOsc.start(t + offset - 0.4);
+    bassOsc.stop(t + offset + 0.3);
 }
 
 // ========================

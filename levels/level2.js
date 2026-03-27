@@ -116,6 +116,19 @@ const level2 = {
         { x: 2530, y: 450, width: 40, height: 20, contains: 'coin' }
     ],
 
+    // Secret area: hidden coin stash underground near x:1200
+    // A fake wall disguised as ground - dash through to find hidden coins
+    fakeWalls: [
+        { x: 1300, y: 560, width: 120, height: 40 }
+    ],
+    secretCoins: [
+        { x: 1260, y: 530, revealTrigger: { x: 1300, y: 540, radius: 60 } },
+        { x: 1290, y: 530, revealTrigger: { x: 1300, y: 540, radius: 60 } },
+        { x: 1320, y: 530, revealTrigger: { x: 1300, y: 540, radius: 60 } },
+        { x: 1350, y: 530, revealTrigger: { x: 1300, y: 540, radius: 60 } },
+        { x: 1300, y: 500, revealTrigger: { x: 1300, y: 540, radius: 60 } }
+    ],
+
     playerStart: { x: 60, y: 540 },
     flagPosition: { x: 3150, y: 475 }
 };

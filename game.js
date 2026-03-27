@@ -116,6 +116,28 @@ const ENEMY_TYPES = {
 let projectiles;
 let projectileRects = [];
 
+// Boss System
+let bossActive = false;
+let bossPhase = 0;
+let bossHP = 9;
+let bossSprite = null;
+let bossRect = null;
+let bossCoreRect = null;
+let bossShockwave = null;
+let bossShockwaveRect = null;
+let bossTriggered = false;
+let bossAttackTimer = 0;
+let bossInvulnerable = false;
+let bossArenaWall = null;
+let bossArenaWallRect = null;
+let bossDashing = false;
+let bossDashTimer = 0;
+let bossProjectiles = [];
+let bossHPBar = null;
+let bossHPBarBg = null;
+let bossHPText = null;
+let bossFlagHidden = false;
+
 // Wall Slide / Wall Jump
 let isWallSliding = false;
 let wallSlideDir = 0; // -1 left, 1 right
@@ -137,6 +159,44 @@ let breakableBlocks;
 let breakableBlockRects = [];
 let totalLevelCoins = 0;
 let coinsCollected = 0;
+
+// Secret Areas
+let fakeWalls = [];
+let fakeWallRects = [];
+let secretCoins = [];
+let secretCoinRects = [];
+let invisiblePlatforms = [];
+let invisiblePlatformRects = [];
+let secretPowerUps = [];
+let secretPowerUpRects = [];
+
+// Combo System
+let comboCount = 0;
+let comboTimer = 0;
+let comboMultiplier = 1;
+let maxCombo = 0;
+let comboText;
+let comboTimerBar;
+let comboTimerBarBg;
+const COMBO_COIN_WINDOW = 2000;   // ms to chain coins
+const COMBO_STOMP_WINDOW = 3000;  // ms to chain stomps (more generous)
+
+// Death Tracking
+let deathCount = 0;
+let bestDeaths = JSON.parse(localStorage.getItem('jqBestDeaths')) || {};
+
+// Dash HUD
+let dashCooldownBar;
+let dashCooldownBarBg;
+let dashReadyPulse = 0;
+
+// Ghost Racing
+let ghostData = [];          // recording: array of {x, y, sx, sy} per frame
+let ghostReplay = null;      // loaded replay data from localStorage
+let ghostSprite = null;       // ghost visual (translucent rectangle)
+let ghostFrameIndex = 0;     // current frame in replay
+let ghostEnabled = true;      // toggle from pause menu
+let isRecordingGhost = true;  // always recording during gameplay
 
 // Array of all levels (loaded from separate files)
 let levels = [level1, level2, level3, level4, level5, level6, level7, level8, level9, level10];
@@ -204,17 +264,110 @@ function create() {
     dashTimer = 0;
     lastFacingDir = 1;
     breakableBlockRects = [];
+    fakeWalls = [];
+    fakeWallRects = [];
+    secretCoins = [];
+    secretCoinRects = [];
+    invisiblePlatforms = [];
+    invisiblePlatformRects = [];
+    secretPowerUps = [];
+    secretPowerUpRects = [];
     totalLevelCoins = 0;
     coinsCollected = 0;
+    comboCount = 0;
+    comboTimer = 0;
+    comboMultiplier = 1;
+    maxCombo = 0;
+    deathCount = 0;
+    dashReadyPulse = 0;
+    bossActive = false;
+    bossPhase = 0;
+    bossHP = 9;
+    bossSprite = null;
+    bossRect = null;
+    bossCoreRect = null;
+    bossShockwave = null;
+    bossShockwaveRect = null;
+    bossTriggered = false;
+    bossAttackTimer = 0;
+    bossInvulnerable = false;
+    bossArenaWall = null;
+    bossArenaWallRect = null;
+    bossDashing = false;
+    bossDashTimer = 0;
+    bossProjectiles = [];
+    bossHPBar = null;
+    bossHPBarBg = null;
+    bossHPText = null;
+    bossFlagHidden = false;
+
+    // Ghost Racing reset
+    if (ghostSprite) { ghostSprite.destroy(); ghostSprite = null; }
+    ghostData = [];
+    ghostFrameIndex = 0;
+    isRecordingGhost = true;
+    // Load ghost replay for this level
+    const savedGhost = localStorage.getItem('jqGhost_level' + currentLevelIndex);
+    ghostReplay = savedGhost ? JSON.parse(savedGhost) : null;
+
+    // Initialize systems
+    if (typeof initStats === 'function') initStats();
+    if (typeof initCosmetics === 'function') initCosmetics();
+    if (typeof resetLevelAchievementTrackers === 'function') resetLevelAchievementTrackers();
 
     // Load the current level
     loadLevel.call(this, currentLevelIndex);
 
-    // Show main menu on first load
-    if (showingMenu && typeof showMainMenu === 'function') {
+    // Start endless mode if active
+    if (typeof endlessMode !== 'undefined' && endlessMode && typeof startEndlessMode === 'function') {
+        startEndlessMode.call(this, this);
+    }
+
+    // Apply difficulty modifiers
+    if (typeof applyModifiers === 'function') applyModifiers(this);
+
+    // Apply daily challenge modifiers
+    if (typeof dailyChallengeMode !== 'undefined' && dailyChallengeMode && typeof applyDailyModifiers === 'function') {
+        applyDailyModifiers(this);
+        if (typeof showDailyModifierHUD === 'function') showDailyModifierHUD(this);
+    }
+
+    // Camera fade in for smooth transitions
+    this.cameras.main.fadeIn(300, 0, 0, 0);
+
+    // Endless mode: skip menu/story, hide base level flag and enemies
+    if (typeof endlessMode !== 'undefined' && endlessMode) {
+        // Hide the base level's flag so player doesn't accidentally complete it
+        if (endFlag) { endFlag.setAlpha(0); if (endFlag.body) endFlag.body.enable = false; }
+        if (endText) { endText.setAlpha(0); }
+        if (startText) { startText.setAlpha(0); }
+        // Remove base level enemies for clean endless experience
+        if (enemies) {
+            enemies.children.entries.forEach(e => e.disableBody(true, true));
+        }
+        enemyRects.forEach(r => { if (r && r.destroy) r.destroy(); else if (r && r.rect) r.rect.destroy(); });
+        enemyRects = [];
+        // Remove base level coins (endless generates its own)
+        if (coins) {
+            coins.children.entries.forEach(c => c.disableBody(true, true));
+        }
+        coinRects.forEach(c => { if (c && c.rect) c.rect.destroy(); else if (c && c.destroy) c.destroy(); });
+        coinRects = [];
+        totalLevelCoins = 0;
+        coinsCollected = 0;
+    } else if (showingMenu && typeof showMainMenu === 'function') {
+        // Show main menu on first load
         showMainMenu(this);
     } else if (showingLevelSelect && typeof showLevelSelect === 'function') {
         showLevelSelect(this);
+    } else if (typeof shouldShowStory === 'function' && shouldShowStory(currentLevelIndex)) {
+        // Show story card before level starts, pause physics while showing
+        isPaused = true;
+        this.physics.pause();
+        showStoryCard(this, currentLevelIndex, () => {
+            isPaused = false;
+            this.physics.resume();
+        });
     }
 }
 
@@ -309,6 +462,13 @@ function loadLevel(levelIndex) {
     // Player
     player = this.physics.add.sprite(currentLevel.playerStart.x, currentLevel.playerStart.y, null).setDisplaySize(32, 32);
     playerRect = this.add.rectangle(currentLevel.playerStart.x, currentLevel.playerStart.y, 32, 32, 0x0000ff);
+
+    // Ghost sprite (translucent white rectangle showing best-time replay)
+    if (ghostReplay && ghostEnabled) {
+        ghostSprite = this.add.rectangle(ghostReplay[0]?.x || 100, ghostReplay[0]?.y || 500, 32, 32, 0xffffff, 0.25);
+        ghostSprite.setDepth(50);
+    }
+
     player.setBounce(0);
     player.setCollideWorldBounds(true);
 
@@ -393,9 +553,95 @@ function loadLevel(levelIndex) {
         });
     }
 
+    // --- Secret Areas ---
+
+    // Fake Walls: look like platforms but can be dashed through
+    fakeWalls = [];
+    fakeWallRects = [];
+    const fakeWallGroup = this.physics.add.staticGroup();
+    if (currentLevel.fakeWalls) {
+        currentLevel.fakeWalls.forEach(fwData => {
+            const fw = fakeWallGroup.create(fwData.x, fwData.y, null).setDisplaySize(fwData.width, fwData.height).refreshBody();
+            const fwRect = this.add.rectangle(fwData.x, fwData.y, fwData.width, fwData.height, platformColor);
+            fakeWalls.push({ body: fw, rect: fwRect, x: fwData.x, y: fwData.y, width: fwData.width, height: fwData.height, broken: false });
+            fakeWallRects.push(fwRect);
+        });
+        // Fake walls collide with player but can be broken by dashing
+        this.physics.add.collider(player, fakeWallGroup, function(player, wall) {
+            if (isDashing) {
+                breakFakeWall.call(this, wall);
+            }
+        }, null, this);
+    }
+
+    // Secret Platforms: additional platforms for secret areas (like wall-jump shafts)
+    if (currentLevel.secretPlatforms) {
+        currentLevel.secretPlatforms.forEach(sp => {
+            platforms.create(sp.x, sp.y, null).setDisplaySize(sp.width, sp.height).refreshBody();
+            this.add.rectangle(sp.x, sp.y, sp.width, sp.height, platformColor);
+        });
+    }
+
+    // Invisible Platforms: barely visible until player stands on them
+    invisiblePlatforms = [];
+    invisiblePlatformRects = [];
+    const invisPlatGroup = this.physics.add.staticGroup();
+    if (currentLevel.invisiblePlatforms) {
+        currentLevel.invisiblePlatforms.forEach(ipData => {
+            const ip = invisPlatGroup.create(ipData.x, ipData.y, null).setDisplaySize(ipData.width, ipData.height).refreshBody();
+            const ipRect = this.add.rectangle(ipData.x, ipData.y, ipData.width, ipData.height, platformColor);
+            ipRect.setAlpha(0.05);
+            invisiblePlatforms.push({ body: ip, rect: ipRect, x: ipData.x, y: ipData.y, width: ipData.width, height: ipData.height, revealed: false });
+            invisiblePlatformRects.push(ipRect);
+        });
+        this.physics.add.collider(player, invisPlatGroup);
+    }
+
+    // Secret Coins: invisible until player enters trigger zone
+    secretCoins = [];
+    secretCoinRects = [];
+    if (currentLevel.secretCoins) {
+        totalLevelCoins += currentLevel.secretCoins.length;
+        currentLevel.secretCoins.forEach(scData => {
+            const sc = coins.create(scData.x, scData.y, null).setDisplaySize(20, 20).refreshBody();
+            sc.setAlpha(0);
+            sc.body.enable = false;
+            const scRect = this.add.rectangle(scData.x, scData.y, 20, 20, 0xffd700);
+            scRect.setAlpha(0);
+            coinRects.push({ rect: scRect, body: sc });
+            secretCoinRects.push({ rect: scRect, body: sc, trigger: scData.revealTrigger, revealed: false });
+        });
+    }
+
+    // Secret Power-ups: invisible until triggered
+    secretPowerUps = [];
+    secretPowerUpRects = [];
+    if (currentLevel.secretPowerUps) {
+        currentLevel.secretPowerUps.forEach(spuData => {
+            const puConfig = POWERUP_TYPES[spuData.type];
+            if (!puConfig) return;
+            const spu = powerUps.create(spuData.x, spuData.y, null).setDisplaySize(25, 25).refreshBody();
+            spu.powerUpType = spuData.type;
+            spu.setAlpha(0);
+            spu.body.enable = false;
+            const spuRect = this.add.rectangle(spuData.x, spuData.y, 25, 25, puConfig.color);
+            spuRect.setStrokeStyle(2, 0xffffff);
+            spuRect.setAlpha(0);
+            powerUpRects.push({ rect: spuRect, body: spu });
+            secretPowerUpRects.push({ rect: spuRect, body: spu, trigger: spuData.revealTrigger, revealed: false });
+        });
+    }
+
     // End flag at the position from level data
     endFlag = this.add.rectangle(currentLevel.flagPosition.x, currentLevel.flagPosition.y, 40, 60, 0xffff00);
     this.physics.add.existing(endFlag, true);
+
+    // Hide the flag on boss levels until boss is defeated
+    if (currentLevel.bossArena) {
+        endFlag.setAlpha(0);
+        endFlag.body.enable = false;
+        bossFlagHidden = true;
+    }
 
     // Start indicator
     startText = this.add.text(50, 450, 'START', { fontSize: '20px', fill: '#fff' });
@@ -503,6 +749,31 @@ function loadLevel(levelIndex) {
     });
     livesText.setScrollFactor(0);
 
+    // Combo display (top-right area)
+    comboText = this.add.text(784, 50, '', {
+        fontSize: '20px',
+        fill: '#ff0',
+        fontStyle: 'bold',
+        stroke: '#000',
+        strokeThickness: 3
+    });
+    comboText.setOrigin(1, 0).setScrollFactor(0).setDepth(100);
+
+    // Combo timer bar
+    comboTimerBarBg = this.add.rectangle(730, 75, 60, 6, 0x333333);
+    comboTimerBarBg.setOrigin(0.5, 0).setScrollFactor(0).setDepth(100).setAlpha(0);
+    comboTimerBar = this.add.rectangle(730, 75, 60, 6, 0xffdd00);
+    comboTimerBar.setOrigin(0.5, 0).setScrollFactor(0).setDepth(100).setAlpha(0);
+
+    // Dash cooldown bar
+    dashCooldownBarBg = this.add.rectangle(16, 218, 60, 8, 0x333333);
+    dashCooldownBarBg.setOrigin(0, 0.5).setScrollFactor(0).setDepth(100);
+    dashCooldownBar = this.add.rectangle(16, 218, 60, 8, 0x00ccff);
+    dashCooldownBar.setOrigin(0, 0.5).setScrollFactor(0).setDepth(100);
+    const dashLabel = this.add.text(80, 218, 'DASH', {
+        fontSize: '10px', fill: '#00ccff'
+    }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(100);
+
     // Pause button
     pauseButton = this.add.text(750, 16, 'PAUSE', {
         fontSize: '16px',
@@ -535,14 +806,81 @@ function update() {
         return;
     }
 
+    // Update difficulty modifiers
+    if (typeof updateModifiers === 'function') updateModifiers(this, this.game.loop.delta);
+
     // Update timer
     levelTimer += this.game.loop.delta;
     const bestTime = bestTimes['level' + currentLevelIndex];
     const bestTimeStr = bestTime ? formatTime(bestTime) : '--:--';
     timerText.setText(`Time: ${formatTime(levelTimer)} | Best: ${bestTimeStr}`);
 
+    // --- Combo Timer ---
+    if (comboTimer > 0) {
+        comboTimer -= this.game.loop.delta;
+        if (comboTimer <= 0) {
+            comboCount = 0;
+            comboMultiplier = 1;
+            comboTimer = 0;
+        }
+    }
+    // Combo HUD update
+    if (comboCount >= 2) {
+        comboText.setText(`${comboCount}x COMBO!`);
+        comboText.setAlpha(1);
+        comboTimerBar.setAlpha(1);
+        comboTimerBarBg.setAlpha(0.5);
+        const pct = Math.max(0, comboTimer / COMBO_COIN_WINDOW);
+        comboTimerBar.setScale(pct, 1);
+        // Color escalation
+        if (comboMultiplier >= 3) {
+            comboText.setStyle({ fontSize: '24px', fill: '#ff2222', fontStyle: 'bold', stroke: '#000', strokeThickness: 3 });
+        } else if (comboMultiplier >= 2) {
+            comboText.setStyle({ fontSize: '22px', fill: '#ff8800', fontStyle: 'bold', stroke: '#000', strokeThickness: 3 });
+        } else if (comboMultiplier >= 1.5) {
+            comboText.setStyle({ fontSize: '20px', fill: '#ffdd00', fontStyle: 'bold', stroke: '#000', strokeThickness: 3 });
+        }
+    } else {
+        comboText.setAlpha(0);
+        comboTimerBar.setAlpha(0);
+        comboTimerBarBg.setAlpha(0);
+    }
+
+    // --- Dash Cooldown Bar ---
+    const dashPct = Math.max(0, 1 - dashCooldown / DASH_COOLDOWN);
+    dashCooldownBar.setScale(dashPct, 1);
+    if (dashPct >= 1) {
+        dashReadyPulse += this.game.loop.delta * 0.004;
+        dashCooldownBar.setAlpha(0.7 + Math.sin(dashReadyPulse) * 0.3);
+    } else {
+        dashReadyPulse = 0;
+        dashCooldownBar.setAlpha(1);
+        dashCooldownBar.setFillStyle(0x666666);
+    }
+    if (dashPct >= 1) dashCooldownBar.setFillStyle(0x00ccff);
+
     // Update player rectangle position to follow physics sprite
     playerRect.setPosition(player.x, player.y);
+
+    // Ghost: record current frame
+    if (isRecordingGhost && !gameOver && !levelComplete) {
+        ghostData.push({
+            x: player.x,
+            y: player.y,
+            sx: playerRect.scaleX,
+            sy: playerRect.scaleY
+        });
+    }
+
+    // Ghost: playback
+    if (ghostSprite && ghostReplay && ghostEnabled && ghostFrameIndex < ghostReplay.length) {
+        const gf = ghostReplay[ghostFrameIndex];
+        ghostSprite.setPosition(gf.x, gf.y);
+        ghostSprite.setScale(gf.sx, gf.sy);
+        ghostFrameIndex++;
+    } else if (ghostSprite && ghostFrameIndex >= (ghostReplay?.length || 0)) {
+        ghostSprite.setAlpha(0); // hide when replay ends
+    }
 
     const deltaS = this.game.loop.delta / 1000;
     const onGround = player.body.touching.down || player.body.blocked.down;
@@ -597,6 +935,7 @@ function update() {
             player.body.setAllowGravity(false);
             if (!onGround) canAirDash = false;
             playSound('dash');
+            if (typeof incrementStat === 'function') incrementStat('totalDashes', 1);
         }
     }
 
@@ -656,6 +995,10 @@ function update() {
             jumpBufferTimer = 0;
             isWallSliding = false;
             playSound('jump');
+            if (typeof incrementStat === 'function') {
+                incrementStat('totalWallJumps', 1);
+                if (typeof jqStats !== 'undefined') jqStats.wallJumpsThisLevel++;
+            }
         } else if (canJump) {
             player.setVelocityY(jumpVelocity);
             coyoteTimer = 0;
@@ -802,6 +1145,18 @@ function update() {
     // Invincibility flash effect
     if (activePowerUps.invincibility) {
         playerRect.setFillStyle(Math.floor(this.time.now / 100) % 2 === 0 ? 0xffffff : 0x0000ff);
+    } else if (typeof applyPlayerColor === 'function') {
+        applyPlayerColor(playerRect, this.time.now);
+    }
+
+    // Cosmetic trail particles
+    if (typeof spawnTrailParticle === 'function' && (Math.abs(player.body.velocity.x) > 50 || Math.abs(player.body.velocity.y) > 100)) {
+        spawnTrailParticle(this, player.x, player.y + 8);
+    }
+
+    // Achievement timers (play time, secret achievements)
+    if (typeof updateAchievementTimers === 'function') {
+        updateAchievementTimers(this, this.game.loop.delta);
     }
 
     // Check checkpoint activation based on player X position
@@ -822,6 +1177,78 @@ function update() {
             });
             spawnParticles(this, cpData.body.x, cpData.body.y - 25, 0x00ff00, 10, 60);
             playSound('checkpoint');
+        }
+    });
+
+    // --- Secret Area Checks ---
+
+    // Check if player is near any secret coin trigger zone -> reveal those coins
+    secretCoinRects.forEach(sc => {
+        if (!sc.revealed && sc.trigger) {
+            const dx = player.x - sc.trigger.x;
+            const dy = player.y - sc.trigger.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < sc.trigger.radius) {
+                sc.revealed = true;
+                sc.body.setAlpha(1);
+                sc.body.body.enable = true;
+                // Sparkle reveal effect
+                this.tweens.add({
+                    targets: sc.rect,
+                    alpha: 1,
+                    duration: 400,
+                    ease: 'Power2'
+                });
+                spawnParticles(this, sc.body.x, sc.body.y, 0xffd700, 4, 20);
+            }
+        }
+    });
+
+    // Check if player is near any secret power-up trigger zone -> reveal them
+    secretPowerUpRects.forEach(spu => {
+        if (!spu.revealed && spu.trigger) {
+            const dx = player.x - spu.trigger.x;
+            const dy = player.y - spu.trigger.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < spu.trigger.radius) {
+                spu.revealed = true;
+                spu.body.setAlpha(1);
+                spu.body.body.enable = true;
+                this.tweens.add({
+                    targets: spu.rect,
+                    alpha: 1,
+                    duration: 400,
+                    ease: 'Power2'
+                });
+                spawnParticles(this, spu.body.x, spu.body.y, 0x00ffff, 6, 30);
+            }
+        }
+    });
+
+    // Check if player is standing on any invisible platform -> reveal it
+    invisiblePlatforms.forEach(ip => {
+        if (!ip.revealed) {
+            // Check if player's feet are near the top of the invisible platform
+            const playerBottom = player.y + 16;
+            const playerLeft = player.x - 16;
+            const playerRight = player.x + 16;
+            const platTop = ip.y - ip.height / 2;
+            const platLeft = ip.x - ip.width / 2;
+            const platRight = ip.x + ip.width / 2;
+            const onPlatform = playerBottom >= platTop - 5 && playerBottom <= platTop + 10
+                && playerRight > platLeft && playerLeft < platRight
+                && (player.body.touching.down || player.body.blocked.down);
+            if (onPlatform) {
+                ip.revealed = true;
+                this.tweens.add({
+                    targets: ip.rect,
+                    alpha: 1,
+                    duration: 300,
+                    ease: 'Power2'
+                });
+                spawnParticles(this, ip.x, ip.y, 0xffffff, 8, 25);
+                playSound('checkpoint');
+            }
         }
     });
 
@@ -877,8 +1304,28 @@ function update() {
         });
     }
 
+    // Boss trigger
+    if (currentLevelIndex === 9 && !bossTriggered && currentLevel.bossArena && player.x > currentLevel.bossArena.x) {
+        bossTriggered = true;
+        triggerBoss.call(this);
+    }
+
+    // Boss AI update
+    if (bossActive) {
+        updateBoss.call(this);
+    }
+
     if (player.y > 600) {
-        hitEnemy.call(this);
+        if (typeof endlessMode !== 'undefined' && endlessMode && typeof endEndlessMode === 'function') {
+            endEndlessMode.call(this, this);
+        } else {
+            hitEnemy.call(this);
+        }
+    }
+
+    // Endless mode chunk generation & cleanup
+    if (typeof endlessMode !== 'undefined' && endlessMode && typeof updateEndlessMode === 'function') {
+        updateEndlessMode.call(this, this);
     }
 }
 
@@ -894,15 +1341,34 @@ function collectCoin(player, coin) {
     }
 
     coin.disableBody(true, true);
-    score += 100;
+
+    // Combo system
+    comboCount++;
+    comboTimer = COMBO_COIN_WINDOW;
+    comboMultiplier = 1 + Math.floor(comboCount / 5) * 0.5;
+    if (comboCount > maxCombo) maxCombo = comboCount;
+
+    const basePoints = 100;
+    const points = Math.floor(basePoints * comboMultiplier);
+    score += points;
     coinsCollected++;
     const highScore = highScores['level' + currentLevelIndex] || 0;
     scoreText.setText(`Score: ${score} | Best: ${highScore}`);
 
     // Visual juice: gold particle burst + score popup + sound
-    spawnParticles(this, cx, cy, 0xffd700, 6, 40);
-    showScorePopup(this, cx, cy - 10, '+100', '#ffd700');
-    playSound('coin');
+    const particleCount = comboMultiplier >= 2 ? 10 : 6;
+    spawnParticles(this, cx, cy, 0xffd700, particleCount, 40);
+    const popupText = comboMultiplier > 1 ? `+${points} x${comboMultiplier}` : `+${points}`;
+    const popupColor = comboMultiplier >= 2.5 ? '#ff4444' : comboMultiplier >= 2 ? '#ff8800' : comboMultiplier >= 1.5 ? '#ffdd00' : '#ffd700';
+    showScorePopup(this, cx, cy - 10, popupText, popupColor);
+    playCoinSound(comboCount);
+
+    // Achievement tracking
+    if (typeof incrementStat === 'function') {
+        incrementStat('totalCoins', 1);
+        updateStat('maxCombo', Math.max((typeof jqStats !== 'undefined' ? jqStats.maxCombo : 0), comboCount));
+        checkAchievements(this);
+    }
 }
 
 function handleEnemyCollision(player, enemy) {
@@ -979,22 +1445,53 @@ function stompEnemy(enemy) {
         enemyRects[enemyIndex] = null;
     }
 
-    // Score: shield enemies are worth more
-    const points = (enemy.enemyType === 'shield') ? 400 : 200;
+    // Combo: stomps add 3 to combo and give more time
+    comboCount += 3;
+    comboTimer = COMBO_STOMP_WINDOW;
+    comboMultiplier = 1 + Math.floor(comboCount / 5) * 0.5;
+    if (comboCount > maxCombo) maxCombo = comboCount;
+
+    // Score: shield enemies are worth more, with combo multiplier
+    const basePoints = (enemy.enemyType === 'shield') ? 400 : 200;
+    const points = Math.floor(basePoints * comboMultiplier);
     score += points;
     const highScore = highScores['level' + currentLevelIndex] || 0;
     scoreText.setText(`Score: ${score} | Best: ${highScore}`);
 
     // Visual juice
     const color = ENEMY_TYPES[enemy.enemyType]?.color || 0xff0000;
-    spawnParticles(this, ex, ey, color, 8, 50);
+    const particleCount = comboMultiplier >= 2 ? 12 : 8;
+    spawnParticles(this, ex, ey, color, particleCount, 50);
     shakeCamera(this, 25, 100);
-    showScorePopup(this, ex, ey - 20, `+${points}`, '#ff4444');
+    const popupText = comboMultiplier > 1 ? `+${points} x${comboMultiplier}` : `+${points}`;
+    showScorePopup(this, ex, ey - 20, popupText, '#ff4444');
     playSound('stomp');
+
+    // Achievement tracking
+    if (typeof incrementStat === 'function') {
+        incrementStat('totalStomps', 1);
+        updateStat('maxCombo', Math.max((typeof jqStats !== 'undefined' ? jqStats.maxCombo : 0), comboCount));
+        checkAchievements(this);
+    }
 }
 
 function hitEnemy() {
     if (gameOver) return;
+
+    // Death tracking
+    deathCount++;
+
+    // Reset combo on death
+    comboCount = 0;
+    comboMultiplier = 1;
+    comboTimer = 0;
+
+    // Achievement tracking
+    if (typeof incrementStat === 'function') {
+        incrementStat('totalDeaths', 1);
+        if (typeof jqStats !== 'undefined') jqStats.deathsThisLevel++;
+        checkAchievements(this);
+    }
 
     // Screen shake on hit + sound
     shakeCamera(this, 40, 150);
@@ -1038,7 +1535,7 @@ function hitEnemy() {
             restartButton.setStyle({ backgroundColor: '#444' });
         });
         restartButton.on('pointerup', () => {
-            this.scene.restart();
+            restartWithTransition(this);
         });
     } else {
         // Respawn at checkpoint or start
@@ -1080,19 +1577,38 @@ function reachEnd() {
     if (typeof stopBackgroundMusic === 'function') stopBackgroundMusic();
     playSound('levelComplete');
 
-    // Save high score
     const levelKey = 'level' + currentLevelIndex;
-    if (!highScores[levelKey] || score > highScores[levelKey]) {
+
+    // Calculate deltas before saving
+    const prevHighScore = highScores[levelKey] || 0;
+    const prevBestTime = bestTimes[levelKey] || null;
+    const prevBestDeaths = bestDeaths[levelKey] !== undefined ? bestDeaths[levelKey] : null;
+    const isNewHighScore = score > prevHighScore;
+    const isNewBestTime = !prevBestTime || levelTimer < prevBestTime;
+    const isNewBestDeaths = prevBestDeaths === null || deathCount < prevBestDeaths;
+    const isFlawless = deathCount === 0;
+
+    // Save high score
+    if (isNewHighScore) {
         highScores[levelKey] = score;
         localStorage.setItem('marioHighScores', JSON.stringify(highScores));
-        scoreText.setText(`Score: ${score} | Best: ${score} (NEW!)`);
     }
 
     // Save best time
-    if (!bestTimes[levelKey] || levelTimer < bestTimes[levelKey]) {
+    if (isNewBestTime) {
         bestTimes[levelKey] = levelTimer;
         localStorage.setItem('marioBestTimes', JSON.stringify(bestTimes));
-        timerText.setText(`Time: ${formatTime(levelTimer)} | Best: ${formatTime(levelTimer)} (NEW!)`);
+    }
+
+    // Save ghost replay on new best time
+    if (isNewBestTime && ghostData.length > 0 && ghostData.length < 3600) {
+        localStorage.setItem('jqGhost_level' + currentLevelIndex, JSON.stringify(ghostData));
+    }
+
+    // Save best deaths
+    if (isNewBestDeaths) {
+        bestDeaths[levelKey] = deathCount;
+        localStorage.setItem('jqBestDeaths', JSON.stringify(bestDeaths));
     }
 
     // Save completion & stars
@@ -1100,75 +1616,186 @@ function reachEnd() {
     if (typeof saveCompletion === 'function') {
         earnedStars = saveCompletion(currentLevelIndex, coinsCollected, totalLevelCoins, levelTimer);
     }
+    if (typeof markHardcoreComplete === 'function') markHardcoreComplete(currentLevelIndex);
+
+    // Save leaderboard entry
+    let leaderRanks = { scoreRank: 0, timeRank: 0 };
+    if (typeof saveLeaderboardEntry === 'function') {
+        leaderRanks = saveLeaderboardEntry(currentLevelIndex, score, levelTimer);
+    }
+
+    // Achievement tracking: record level completion
+    if (typeof recordLevelCompletion === 'function') {
+        recordLevelCompletion(currentLevelIndex);
+        updateStat('maxCombo', Math.max((typeof jqStats !== 'undefined' ? jqStats.maxCombo : 0), maxCombo));
+        checkAchievements(this);
+    }
+
+    // Daily challenge completion
+    let dailyResult = null;
+    if (typeof dailyChallengeMode !== 'undefined' && dailyChallengeMode && typeof completeDailyChallenge === 'function') {
+        dailyResult = completeDailyChallenge();
+    }
 
     const isLastLevel = currentLevelIndex >= levels.length - 1;
+    const scene = this;
 
     // Overlay
     const overlay = this.add.rectangle(400, 300, 800, 600, 0x000000, 0.7);
     overlay.setScrollFactor(0).setDepth(999);
 
-    const winText = this.add.text(400, 160,
+    const winText = this.add.text(400, 120,
         isLastLevel ? 'GAME COMPLETE!' : 'LEVEL COMPLETE!', {
         fontSize: '42px', fill: '#00ff00', fontStyle: 'bold',
         stroke: '#000', strokeThickness: 3
     }).setOrigin(0.5).setScrollFactor(0).setDepth(1000);
+    winText.setAlpha(0);
+    this.tweens.add({ targets: winText, alpha: 1, duration: 400, ease: 'Power2' });
 
-    // Star display
+    // Animated star display (appear one at a time)
     const starLabels = ['Complete', 'Coins (80%)', 'Speed Run'];
     const starResults = [earnedStars.completion, earnedStars.coins, earnedStars.time];
     for (let i = 0; i < 3; i++) {
-        const sy = 220 + i * 30;
+        const sy = 175 + i * 28;
         const icon = starResults[i] ? '\u2605' : '\u2606';
         const color = starResults[i] ? '#ffd700' : '#555';
-        this.add.text(300, sy, `${icon} ${starLabels[i]}`, {
+        const starText = scene.add.text(300, sy, `${icon} ${starLabels[i]}`, {
             fontSize: '18px', fill: color
         }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(1000);
+        starText.setAlpha(0).setScale(0.5);
+        scene.tweens.add({
+            targets: starText,
+            alpha: 1, scaleX: 1, scaleY: 1,
+            duration: 300, delay: 500 + i * 300,
+            ease: 'Back.easeOut',
+            onStart: () => {
+                if (starResults[i]) {
+                    spawnParticles(scene, 310, sy, 0xffd700, 6, 30);
+                }
+            }
+        });
     }
 
-    // Coin count
-    this.add.text(400, 330, `Coins: ${coinsCollected}/${totalLevelCoins} | Time: ${formatTime(levelTimer)}`, {
-        fontSize: '14px', fill: '#aaa'
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(1000);
+    // Stats section (appears after stars)
+    const statsDelay = 1500;
 
-    // Buttons
-    let btnY = 380;
+    // Score delta
+    const scoreDelta = score - prevHighScore;
+    const scoreStr = isNewHighScore ? `Score: ${score} (+${scoreDelta} NEW BEST!)` : `Score: ${score}`;
+    const scoreColor = isNewHighScore ? '#00ff00' : '#ccc';
+    const scoreDisplay = this.add.text(400, 270, scoreStr, {
+        fontSize: '14px', fill: scoreColor
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(1000).setAlpha(0);
+    this.tweens.add({ targets: scoreDisplay, alpha: 1, duration: 300, delay: statsDelay });
+
+    // Time delta
+    let timeStr = `Time: ${formatTime(levelTimer)}`;
+    if (prevBestTime && !isNewBestTime) {
+        const diff = levelTimer - prevBestTime;
+        timeStr += ` (+${formatTime(diff)})`;
+    } else if (isNewBestTime && prevBestTime) {
+        const diff = prevBestTime - levelTimer;
+        timeStr += ` (-${formatTime(diff)} NEW BEST!)`;
+    } else if (isNewBestTime) {
+        timeStr += ' (NEW BEST!)';
+    }
+    const timeColor = isNewBestTime ? '#00ffff' : '#ccc';
+    const timeDisplay = this.add.text(400, 290, timeStr, {
+        fontSize: '14px', fill: timeColor
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(1000).setAlpha(0);
+    this.tweens.add({ targets: timeDisplay, alpha: 1, duration: 300, delay: statsDelay + 150 });
+
+    // Coins
+    const coinStr = `Coins: ${coinsCollected}/${totalLevelCoins}`;
+    const coinDisplay = this.add.text(400, 310, coinStr, {
+        fontSize: '14px', fill: '#ffd700'
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(1000).setAlpha(0);
+    this.tweens.add({ targets: coinDisplay, alpha: 1, duration: 300, delay: statsDelay + 300 });
+
+    // Max combo
+    if (maxCombo >= 2) {
+        const comboStr = `Max Combo: ${maxCombo}x (x${1 + Math.floor(maxCombo / 5) * 0.5} multiplier)`;
+        const comboDisplay = this.add.text(400, 330, comboStr, {
+            fontSize: '14px', fill: '#ff8800'
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(1000).setAlpha(0);
+        this.tweens.add({ targets: comboDisplay, alpha: 1, duration: 300, delay: statsDelay + 450 });
+    }
+
+    // Deaths
+    const deathY = maxCombo >= 2 ? 350 : 330;
+    let deathStr = `Deaths: ${deathCount}`;
+    if (prevBestDeaths !== null && isNewBestDeaths && deathCount < prevBestDeaths) {
+        deathStr += ` (was ${prevBestDeaths}, NEW BEST!)`;
+    }
+    const deathDisplay = this.add.text(400, deathY, deathStr, {
+        fontSize: '14px', fill: isFlawless ? '#ffd700' : '#aaa'
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(1000).setAlpha(0);
+    this.tweens.add({ targets: deathDisplay, alpha: 1, duration: 300, delay: statsDelay + 600 });
+
+    // FLAWLESS badge
+    if (isFlawless) {
+        const flawlessY = deathY + 25;
+        const flawlessText = this.add.text(400, flawlessY, 'FLAWLESS!', {
+            fontSize: '28px', fill: '#ffd700', fontStyle: 'bold',
+            stroke: '#000', strokeThickness: 4
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(1000).setAlpha(0).setScale(0.3);
+        this.tweens.add({
+            targets: flawlessText,
+            alpha: 1, scaleX: 1, scaleY: 1,
+            duration: 500, delay: statsDelay + 800,
+            ease: 'Back.easeOut',
+            onStart: () => {
+                spawnParticles(scene, 400, flawlessY, 0xffd700, 15, 60);
+                shakeCamera(scene, 15, 100);
+            }
+        });
+    }
+
+    // Buttons (appear after all stats)
+    const buttonDelay = statsDelay + (isFlawless ? 1400 : 900);
+    let btnY = isFlawless ? deathY + 60 : deathY + 30;
 
     if (!isLastLevel) {
         const nextBtn = this.add.text(400, btnY, 'NEXT LEVEL', {
             fontSize: '24px', fill: '#fff', fontStyle: 'bold',
             backgroundColor: '#0a0', padding: { x: 20, y: 8 }
-        }).setOrigin(0.5).setScrollFactor(0).setDepth(1000);
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(1000).setAlpha(0);
+        this.tweens.add({ targets: nextBtn, alpha: 1, duration: 300, delay: buttonDelay });
         nextBtn.setInteractive({ useHandCursor: true });
         nextBtn.on('pointerover', () => nextBtn.setStyle({ backgroundColor: '#0c0' }));
         nextBtn.on('pointerout', () => nextBtn.setStyle({ backgroundColor: '#0a0' }));
-        nextBtn.on('pointerup', () => { currentLevelIndex++; this.scene.restart(); });
-        btnY += 50;
+        nextBtn.on('pointerup', () => { currentLevelIndex++; restartWithTransition(this); });
+        btnY += 45;
     }
 
     const restartBtn = this.add.text(400, btnY, isLastLevel ? 'PLAY AGAIN' : 'RESTART', {
         fontSize: '20px', fill: '#fff',
         backgroundColor: '#666', padding: { x: 20, y: 8 }
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(1000);
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(1000).setAlpha(0);
+    this.tweens.add({ targets: restartBtn, alpha: 1, duration: 300, delay: buttonDelay + 100 });
     restartBtn.setInteractive({ useHandCursor: true });
     restartBtn.on('pointerover', () => restartBtn.setStyle({ backgroundColor: '#888' }));
     restartBtn.on('pointerout', () => restartBtn.setStyle({ backgroundColor: '#666' }));
     restartBtn.on('pointerup', () => {
         if (isLastLevel) currentLevelIndex = 0;
-        this.scene.restart();
+        restartWithTransition(this);
     });
 
-    const menuBtn = this.add.text(400, btnY + 45, 'LEVEL SELECT', {
+    const menuBtn = this.add.text(400, btnY + 40, 'LEVEL SELECT', {
         fontSize: '18px', fill: '#fff',
         backgroundColor: '#06a', padding: { x: 20, y: 6 }
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(1000);
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(1000).setAlpha(0);
+    this.tweens.add({ targets: menuBtn, alpha: 1, duration: 300, delay: buttonDelay + 200 });
     menuBtn.setInteractive({ useHandCursor: true });
     menuBtn.on('pointerover', () => menuBtn.setStyle({ backgroundColor: '#08c' }));
     menuBtn.on('pointerout', () => menuBtn.setStyle({ backgroundColor: '#06a' }));
     menuBtn.on('pointerup', () => {
         showingLevelSelect = true;
-        this.scene.restart();
+        restartWithTransition(this);
     });
 }
+
+let pauseMenuObjects = [];
 
 function togglePause() {
     if (gameOver || levelComplete) {
@@ -1182,47 +1809,112 @@ function togglePause() {
         this.physics.pause();
         pauseButton.setText('RESUME');
 
-        // Create pause overlay
-        pauseOverlay = this.add.rectangle(400, 300, 800, 600, 0x000000, 0.7);
-        pauseOverlay.setScrollFactor(0);
-        pauseOverlay.setDepth(999);
+        const scene = this;
 
-        const pausedText = this.add.text(400, 250, 'PAUSED', {
-            fontSize: '64px',
-            fill: '#fff',
-            backgroundColor: '#000',
-            padding: { x: 20, y: 10 }
+        // Dark overlay
+        const bg = scene.add.rectangle(400, 300, 800, 600, 0x000000, 0.8);
+        bg.setScrollFactor(0).setDepth(1500);
+        pauseMenuObjects.push(bg);
+
+        // Title
+        const title = scene.add.text(400, 150, 'PAUSED', {
+            fontSize: '52px', fill: '#fff', fontStyle: 'bold',
+            stroke: '#000', strokeThickness: 4
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(1501);
+        pauseMenuObjects.push(title);
+
+        // Resume button
+        const resumeBtn = scene.add.text(400, 240, 'RESUME', {
+            fontSize: '22px', fill: '#fff', fontStyle: 'bold',
+            backgroundColor: '#0a0', padding: { x: 30, y: 10 }
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(1501);
+        resumeBtn.setInteractive({ useHandCursor: true });
+        resumeBtn.on('pointerover', () => resumeBtn.setStyle({ backgroundColor: '#0c0' }));
+        resumeBtn.on('pointerout', () => resumeBtn.setStyle({ backgroundColor: '#0a0' }));
+        resumeBtn.on('pointerup', () => { togglePause.call(scene); });
+        pauseMenuObjects.push(resumeBtn);
+
+        // Restart Level button
+        const restartBtn = scene.add.text(400, 295, 'RESTART LEVEL', {
+            fontSize: '22px', fill: '#fff', fontStyle: 'bold',
+            backgroundColor: '#c60', padding: { x: 30, y: 10 }
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(1501);
+        restartBtn.setInteractive({ useHandCursor: true });
+        restartBtn.on('pointerover', () => restartBtn.setStyle({ backgroundColor: '#e80' }));
+        restartBtn.on('pointerout', () => restartBtn.setStyle({ backgroundColor: '#c60' }));
+        restartBtn.on('pointerup', () => {
+            cleanupPauseMenu();
+            isPaused = false;
+            scene.physics.resume();
+            restartWithTransition(scene);
         });
-        pausedText.setOrigin(0.5);
-        pausedText.setScrollFactor(0);
-        pausedText.setDepth(1000);
+        pauseMenuObjects.push(restartBtn);
 
-        const resumeText = this.add.text(400, 330, 'Press ESC or click RESUME to continue', {
-            fontSize: '20px',
-            fill: '#fff',
-            backgroundColor: '#000',
-            padding: { x: 10, y: 5 }
+        // Sound toggle button
+        const soundLabel = audioMuted ? 'SOUND: OFF' : 'SOUND: ON';
+        const soundColor = audioMuted ? '#800' : '#068';
+        const soundHover = audioMuted ? '#a00' : '#08a';
+        const soundBtn = scene.add.text(400, 350, soundLabel, {
+            fontSize: '22px', fill: '#fff', fontStyle: 'bold',
+            backgroundColor: soundColor, padding: { x: 30, y: 10 }
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(1501);
+        soundBtn.setInteractive({ useHandCursor: true });
+        soundBtn.on('pointerover', () => soundBtn.setStyle({ backgroundColor: soundHover }));
+        soundBtn.on('pointerout', () => soundBtn.setStyle({ backgroundColor: soundColor }));
+        soundBtn.on('pointerup', () => {
+            if (typeof toggleMute === 'function') toggleMute();
+            const newLabel = audioMuted ? 'SOUND: OFF' : 'SOUND: ON';
+            const newColor = audioMuted ? '#800' : '#068';
+            soundBtn.setText(newLabel);
+            soundBtn.setStyle({ backgroundColor: newColor });
         });
-        resumeText.setOrigin(0.5);
-        resumeText.setScrollFactor(0);
-        resumeText.setDepth(1000);
+        pauseMenuObjects.push(soundBtn);
 
-        // Store references for cleanup
-        pauseOverlay.pausedText = pausedText;
-        pauseOverlay.resumeText = resumeText;
+        // Level Select button
+        const levelBtn = scene.add.text(400, 405, 'LEVEL SELECT', {
+            fontSize: '22px', fill: '#fff', fontStyle: 'bold',
+            backgroundColor: '#06a', padding: { x: 30, y: 10 }
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(1501);
+        levelBtn.setInteractive({ useHandCursor: true });
+        levelBtn.on('pointerover', () => levelBtn.setStyle({ backgroundColor: '#08c' }));
+        levelBtn.on('pointerout', () => levelBtn.setStyle({ backgroundColor: '#06a' }));
+        levelBtn.on('pointerup', () => {
+            cleanupPauseMenu();
+            isPaused = false;
+            scene.physics.resume();
+            showingLevelSelect = true;
+            scene.scene.restart();
+        });
+        pauseMenuObjects.push(levelBtn);
+
+        // Quit to Menu button
+        const quitBtn = scene.add.text(400, 460, 'QUIT TO MENU', {
+            fontSize: '22px', fill: '#fff', fontStyle: 'bold',
+            backgroundColor: '#600', padding: { x: 30, y: 10 }
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(1501);
+        quitBtn.setInteractive({ useHandCursor: true });
+        quitBtn.on('pointerover', () => quitBtn.setStyle({ backgroundColor: '#800' }));
+        quitBtn.on('pointerout', () => quitBtn.setStyle({ backgroundColor: '#600' }));
+        quitBtn.on('pointerup', () => {
+            cleanupPauseMenu();
+            isPaused = false;
+            scene.physics.resume();
+            showingMenu = true;
+            scene.scene.restart();
+        });
+        pauseMenuObjects.push(quitBtn);
+
     } else {
         // Resume the game
         this.physics.resume();
         pauseButton.setText('PAUSE');
-
-        // Remove pause overlay
-        if (pauseOverlay) {
-            pauseOverlay.pausedText.destroy();
-            pauseOverlay.resumeText.destroy();
-            pauseOverlay.destroy();
-            pauseOverlay = null;
-        }
+        cleanupPauseMenu();
     }
+}
+
+function cleanupPauseMenu() {
+    pauseMenuObjects.forEach(obj => obj.destroy());
+    pauseMenuObjects = [];
 }
 
 // ========================
@@ -1315,6 +2007,74 @@ function hitByProjectile(player, projectile) {
 // Breakable Blocks
 // ========================
 
+function breakFakeWall(wall) {
+    // Find the fake wall data
+    const fwIndex = fakeWalls.findIndex(fw => fw.body === wall);
+    if (fwIndex === -1 || fakeWalls[fwIndex].broken) return;
+
+    const fw = fakeWalls[fwIndex];
+    fw.broken = true;
+
+    // Particle burst to simulate crumbling
+    spawnParticles(this, fw.x, fw.y, 0x888888, 12, 50);
+    spawnParticles(this, fw.x, fw.y, 0xaaaaaa, 8, 30);
+
+    // Fade out the visual rect
+    this.tweens.add({
+        targets: fw.rect,
+        alpha: 0,
+        duration: 200,
+        ease: 'Power2'
+    });
+
+    // Remove the physics body
+    wall.disableBody(true, true);
+
+    // Play a sound (reuse stomp sound for wall breaking)
+    playSound('stomp');
+
+    // Reveal any nearby secret coins and power-ups whose triggers overlap this wall
+    secretCoinRects.forEach(sc => {
+        if (!sc.revealed && sc.trigger) {
+            const dx = fw.x - sc.trigger.x;
+            const dy = fw.y - sc.trigger.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < sc.trigger.radius + Math.max(fw.width, fw.height)) {
+                sc.revealed = true;
+                sc.body.setAlpha(1);
+                sc.body.body.enable = true;
+                this.tweens.add({
+                    targets: sc.rect,
+                    alpha: 1,
+                    duration: 400,
+                    ease: 'Power2'
+                });
+                spawnParticles(this, sc.body.x, sc.body.y, 0xffd700, 4, 20);
+            }
+        }
+    });
+
+    secretPowerUpRects.forEach(spu => {
+        if (!spu.revealed && spu.trigger) {
+            const dx = fw.x - spu.trigger.x;
+            const dy = fw.y - spu.trigger.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < spu.trigger.radius + Math.max(fw.width, fw.height)) {
+                spu.revealed = true;
+                spu.body.setAlpha(1);
+                spu.body.body.enable = true;
+                this.tweens.add({
+                    targets: spu.rect,
+                    alpha: 1,
+                    duration: 400,
+                    ease: 'Power2'
+                });
+                spawnParticles(this, spu.body.x, spu.body.y, 0x00ffff, 6, 30);
+            }
+        }
+    });
+}
+
 function handleBreakableBlockCollision(player, block) {
     // Break from below (player hitting head on block)
     const hitFromBelow = player.body.velocity.y < 0 && player.y > block.y;
@@ -1360,6 +2120,443 @@ function breakBlock(block) {
 }
 
 // ========================
+// Boss System
+// ========================
+
+function triggerBoss() {
+    const scene = this;
+    const arena = currentLevel.bossArena;
+    bossActive = true;
+    bossPhase = 0;
+    bossHP = 9;
+    bossAttackTimer = 2000;
+
+    // Create invisible wall at arena entrance so player can't retreat
+    bossArenaWall = scene.physics.add.sprite(arena.x, 400, null).setDisplaySize(20, 400);
+    bossArenaWall.body.setImmovable(true);
+    bossArenaWall.body.setAllowGravity(false);
+    bossArenaWall.setAlpha(0);
+    bossArenaWallRect = scene.add.rectangle(arena.x, 400, 20, 400, 0x440066, 0.3);
+    scene.physics.add.collider(player, bossArenaWall);
+
+    // Create boss physics sprite at center-right of arena
+    const bossX = arena.x + arena.width * 0.65;
+    const bossY = 500;
+    bossSprite = scene.physics.add.sprite(bossX, bossY, null).setDisplaySize(64, 64);
+    bossSprite.setBounce(0);
+    bossSprite.setCollideWorldBounds(true);
+    bossSprite.body.setMaxVelocityY(600);
+
+    // Boss visual: dark purple rectangle with pulsing red core
+    bossRect = scene.add.rectangle(bossX, bossY, 64, 64, 0x440066);
+    bossRect.setStrokeStyle(3, 0x8800cc);
+    bossCoreRect = scene.add.rectangle(bossX, bossY, 24, 24, 0xff0000);
+
+    // Collide boss with platforms
+    scene.physics.add.collider(bossSprite, platforms);
+    movingPlatforms.forEach(mp => {
+        scene.physics.add.collider(bossSprite, mp.sprite);
+    });
+
+    // Set up overlap for boss collision
+    scene.physics.add.overlap(player, bossSprite, handleBossCollision, null, scene);
+
+    // Boss walks left initially
+    bossSprite.setVelocityX(-80);
+
+    // Camera effects
+    shakeCamera(scene, 50, 400);
+    scene.cameras.main.flash(300, 68, 0, 102);
+
+    // Boss entrance sound
+    playSound('bossRoar');
+
+    // Show "THE GUARDIAN" text with fade
+    const titleText = scene.add.text(400, 200, 'THE GUARDIAN', {
+        fontSize: '48px',
+        fill: '#ff0000',
+        fontStyle: 'bold',
+        stroke: '#000',
+        strokeThickness: 5
+    }).setOrigin(0.5).setDepth(200);
+    titleText.setScrollFactor(0);
+    titleText.setAlpha(0);
+    scene.tweens.add({
+        targets: titleText,
+        alpha: 1,
+        duration: 500,
+        yoyo: true,
+        hold: 1500,
+        onComplete: () => titleText.destroy()
+    });
+
+    // Boss HP bar (fixed to camera)
+    bossHPBarBg = scene.add.rectangle(400, 560, 300, 16, 0x333333);
+    bossHPBarBg.setScrollFactor(0).setDepth(150);
+    bossHPBar = scene.add.rectangle(400, 560, 296, 12, 0x00ff00);
+    bossHPBar.setScrollFactor(0).setDepth(151);
+    bossHPText = scene.add.text(400, 560, 'THE GUARDIAN', {
+        fontSize: '10px', fill: '#fff', fontStyle: 'bold'
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(152);
+}
+
+function handleBossCollision(playerObj, boss) {
+    if (gameOver || bossInvulnerable || !bossActive) return;
+
+    // Check if player is falling and above the boss (stomp logic)
+    const playerBottom = playerObj.y + playerObj.displayHeight / 2;
+    const isFalling = playerObj.body.velocity.y > 0;
+    const isAbove = playerBottom < boss.y - 10;
+
+    if (isFalling && isAbove) {
+        damageBoss.call(this);
+    } else if (!activePowerUps.invincibility && !isDashing) {
+        hitEnemy.call(this);
+    } else {
+        // Invincible or dashing - still damage boss
+        damageBoss.call(this);
+    }
+}
+
+function damageBoss() {
+    const scene = this;
+    bossHP--;
+    bossInvulnerable = true;
+
+    // Bounce player up
+    player.setVelocityY(-350);
+
+    // Visual feedback
+    spawnParticles(scene, bossSprite.x, bossSprite.y, 0xff00ff, 12, 60);
+    shakeCamera(scene, 35, 200);
+    showScorePopup(scene, bossSprite.x, bossSprite.y - 40, 'HIT! ' + bossHP + ' HP', '#ff00ff');
+    playSound('bossHit');
+
+    // Flash boss white during invulnerability
+    if (bossRect) bossRect.setFillStyle(0xffffff);
+    scene.time.delayedCall(500, () => {
+        bossInvulnerable = false;
+        if (bossRect) bossRect.setFillStyle(bossPhase === 2 ? 0x660033 : 0x440066);
+    });
+
+    // Update HP bar
+    if (bossHPBar) {
+        const hpPct = bossHP / 9;
+        bossHPBar.setScale(hpPct, 1);
+        if (hpPct <= 0.33) bossHPBar.setFillStyle(0xff0000);
+        else if (hpPct <= 0.66) bossHPBar.setFillStyle(0xff8800);
+        else bossHPBar.setFillStyle(0x00ff00);
+    }
+
+    // Phase transitions
+    if (bossHP === 6 && bossPhase === 0) {
+        bossPhase = 1;
+        bossAttackTimer = 1500;
+        shakeCamera(scene, 50, 300);
+        spawnParticles(scene, bossSprite.x, bossSprite.y, 0xff8800, 20, 80);
+        const phaseText = scene.add.text(400, 250, 'PHASE 2', {
+            fontSize: '36px', fill: '#ff8800', fontStyle: 'bold',
+            stroke: '#000', strokeThickness: 4
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(200);
+        scene.tweens.add({
+            targets: phaseText, alpha: 0, y: 220,
+            duration: 1500, onComplete: () => phaseText.destroy()
+        });
+        if (bossRect) bossRect.setStrokeStyle(3, 0xff8800);
+    }
+
+    if (bossHP === 3 && bossPhase === 1) {
+        bossPhase = 2;
+        bossAttackTimer = 1000;
+        bossSprite.body.setAllowGravity(false);
+        bossSprite.startY = 300;
+        shakeCamera(scene, 60, 400);
+        spawnParticles(scene, bossSprite.x, bossSprite.y, 0xff0000, 25, 100);
+        const phaseText = scene.add.text(400, 250, 'FINAL PHASE', {
+            fontSize: '36px', fill: '#ff0000', fontStyle: 'bold',
+            stroke: '#000', strokeThickness: 4
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(200);
+        scene.tweens.add({
+            targets: phaseText, alpha: 0, y: 220,
+            duration: 1500, onComplete: () => phaseText.destroy()
+        });
+        if (bossRect) {
+            bossRect.setStrokeStyle(3, 0xff0000);
+            bossRect.setFillStyle(0x660033);
+        }
+    }
+
+    if (bossHP <= 0) {
+        defeatBoss.call(scene);
+    }
+}
+
+function updateBoss() {
+    const scene = this;
+    if (!bossActive || !bossSprite || !bossSprite.active) return;
+
+    const arena = currentLevel.bossArena;
+    const arenaLeft = arena.x + 30;
+    const arenaRight = arena.x + arena.width - 30;
+    const deltaMs = scene.game.loop.delta;
+
+    // Update visual positions
+    if (bossRect) bossRect.setPosition(bossSprite.x, bossSprite.y);
+    if (bossCoreRect) {
+        bossCoreRect.setPosition(bossSprite.x, bossSprite.y);
+        const pulse = 1 + Math.sin(scene.time.now * 0.008) * 0.3;
+        bossCoreRect.setScale(pulse);
+        if (bossHP <= 3) {
+            bossCoreRect.setFillStyle(scene.time.now % 200 < 100 ? 0xff0000 : 0xff4400);
+        }
+    }
+
+    bossAttackTimer -= deltaMs;
+
+    if (bossPhase === 0) {
+        // Phase 1: Walk back and forth, periodic shockwave
+        if (bossSprite.x <= arenaLeft) bossSprite.setVelocityX(80);
+        else if (bossSprite.x >= arenaRight) bossSprite.setVelocityX(-80);
+
+        if (bossAttackTimer <= 0) {
+            bossAttackTimer = 3000;
+            bossSprite.setVelocityY(-300);
+            scene.time.delayedCall(600, () => {
+                if (!bossActive) return;
+                createBossShockwave.call(scene);
+            });
+        }
+    } else if (bossPhase === 1) {
+        // Phase 2: Faster movement, dash attacks, projectiles
+        if (!bossDashing) {
+            const speed = 140;
+            if (bossSprite.x <= arenaLeft) bossSprite.setVelocityX(speed);
+            else if (bossSprite.x >= arenaRight) bossSprite.setVelocityX(-speed);
+        }
+
+        if (bossDashing) {
+            bossDashTimer -= deltaMs;
+            if (bossDashTimer <= 0) {
+                bossDashing = false;
+                bossSprite.setVelocityX(player.x < bossSprite.x ? -140 : 140);
+            }
+        }
+
+        if (bossAttackTimer <= 0) {
+            bossAttackTimer = 2500;
+            if (Math.random() > 0.4) {
+                bossDashing = true;
+                bossDashTimer = 200;
+                const dashDir = player.x < bossSprite.x ? -1 : 1;
+                bossSprite.setVelocityX(350 * dashDir);
+                spawnParticles(scene, bossSprite.x, bossSprite.y, 0xff8800, 6, 30);
+                playSound('dash');
+            } else {
+                shootBossProjectile.call(scene, bossSprite.x, bossSprite.y, player.x < bossSprite.x ? -1 : 1);
+                if (Math.random() > 0.5) {
+                    scene.time.delayedCall(300, () => {
+                        if (!bossActive) return;
+                        shootBossProjectile.call(scene, bossSprite.x, bossSprite.y, player.x < bossSprite.x ? -1 : 1);
+                    });
+                }
+            }
+        }
+    } else if (bossPhase === 2) {
+        // Phase 3: Flying sine-wave, rains projectiles
+        const flySpeed = 100;
+        if (bossSprite.x <= arenaLeft) bossSprite.setVelocityX(flySpeed);
+        else if (bossSprite.x >= arenaRight) bossSprite.setVelocityX(-flySpeed);
+
+        bossSprite.y = 300 + Math.sin(scene.time.now / 600) * 60;
+        bossSprite.body.y = bossSprite.y - 32;
+
+        if (bossAttackTimer <= 0) {
+            bossAttackTimer = 1500;
+            for (let i = -1; i <= 1; i++) {
+                shootBossProjectileDown.call(scene, bossSprite.x + i * 40, bossSprite.y + 32, i * 50);
+            }
+            spawnParticles(scene, bossSprite.x, bossSprite.y + 32, 0xff4400, 4, 20);
+        }
+    }
+
+    // Update boss projectile visuals
+    bossProjectiles.forEach(p => {
+        if (p.body && p.body.active) {
+            p.rect.setPosition(p.body.x + 5, p.body.y + 5);
+        }
+    });
+    bossProjectiles = bossProjectiles.filter(p => p.body && p.body.active);
+}
+
+function createBossShockwave() {
+    const scene = this;
+    if (!bossActive) return;
+    const arena = currentLevel.bossArena;
+
+    const swX = arena.x + arena.width / 2;
+    const swY = 565;
+    const sw = scene.physics.add.sprite(swX, swY, null).setDisplaySize(arena.width - 40, 20);
+    sw.body.setImmovable(true);
+    sw.body.setAllowGravity(false);
+
+    const swRect = scene.add.rectangle(swX, swY, arena.width - 40, 20, 0xff4400, 0.8);
+    swRect.setStrokeStyle(2, 0xff8800);
+
+    scene.tweens.add({
+        targets: swRect,
+        alpha: 0, scaleY: 0.3,
+        duration: 400, ease: 'Power2'
+    });
+
+    const overlap = scene.physics.add.overlap(player, sw, () => {
+        if (!activePowerUps.invincibility && !isDashing) {
+            hitEnemy.call(scene);
+        }
+        overlap.destroy();
+    });
+
+    shakeCamera(scene, 20, 150);
+    playSound('stomp');
+
+    scene.time.delayedCall(400, () => {
+        sw.destroy();
+        swRect.destroy();
+        if (overlap && overlap.active !== false) overlap.destroy();
+    });
+}
+
+function shootBossProjectile(x, y, direction) {
+    const scene = this;
+    if (!bossActive) return;
+
+    const proj = projectiles.create(x + direction * 35, y, null).setDisplaySize(10, 10);
+    proj.setVelocityX(direction * 220);
+    proj.body.setAllowGravity(false);
+
+    const projRect = scene.add.rectangle(x + direction * 35, y, 10, 10, 0xff4400);
+    projRect.setStrokeStyle(1, 0xff8800);
+    bossProjectiles.push({ rect: projRect, body: proj });
+
+    scene.time.delayedCall(3000, () => {
+        const idx = bossProjectiles.findIndex(p => p.body === proj);
+        if (idx !== -1) {
+            bossProjectiles[idx].rect.destroy();
+            bossProjectiles.splice(idx, 1);
+        }
+        if (proj.active) proj.destroy();
+    });
+}
+
+function shootBossProjectileDown(x, y, offsetX) {
+    const scene = this;
+    if (!bossActive) return;
+
+    const proj = projectiles.create(x, y, null).setDisplaySize(10, 10);
+    proj.setVelocityX(offsetX);
+    proj.setVelocityY(250);
+    proj.body.setAllowGravity(false);
+
+    const projRect = scene.add.rectangle(x, y, 10, 10, 0xff2200);
+    projRect.setStrokeStyle(1, 0xff6600);
+    bossProjectiles.push({ rect: projRect, body: proj });
+
+    scene.time.delayedCall(3000, () => {
+        const idx = bossProjectiles.findIndex(p => p.body === proj);
+        if (idx !== -1) {
+            bossProjectiles[idx].rect.destroy();
+            bossProjectiles.splice(idx, 1);
+        }
+        if (proj.active) proj.destroy();
+    });
+}
+
+function defeatBoss() {
+    const scene = this;
+    bossActive = false;
+
+    if (bossSprite) {
+        bossSprite.body.setAllowGravity(false);
+        bossSprite.setVelocity(0, 0);
+    }
+
+    shakeCamera(scene, 80, 800);
+
+    let flashCount = 0;
+    const savedBossX = bossSprite ? bossSprite.x : (currentLevel.bossArena.x + currentLevel.bossArena.width / 2);
+    const savedBossY = bossSprite ? bossSprite.y : 400;
+    scene.time.addEvent({
+        delay: 100,
+        repeat: 14,
+        callback: () => {
+            flashCount++;
+            if (bossRect) {
+                bossRect.setFillStyle(flashCount % 2 === 0 ? 0xffffff : 0xff0000);
+            }
+            spawnParticles(scene, savedBossX + (Math.random() - 0.5) * 40,
+                savedBossY + (Math.random() - 0.5) * 40,
+                [0xff0000, 0xff8800, 0xffff00, 0xff00ff][flashCount % 4], 5, 60);
+        }
+    });
+
+    playSound('bossDefeat');
+
+    scene.time.delayedCall(1500, () => {
+        if (bossRect) {
+            scene.tweens.add({
+                targets: [bossRect, bossCoreRect],
+                alpha: 0, scaleX: 2, scaleY: 2,
+                duration: 500,
+                onComplete: () => {
+                    if (bossRect) bossRect.destroy();
+                    if (bossCoreRect) bossCoreRect.destroy();
+                    bossRect = null;
+                    bossCoreRect = null;
+                }
+            });
+        }
+        if (bossSprite) bossSprite.disableBody(true, true);
+
+        if (bossArenaWall) { bossArenaWall.destroy(); bossArenaWall = null; }
+        if (bossArenaWallRect) { bossArenaWallRect.destroy(); bossArenaWallRect = null; }
+        if (bossHPBar) bossHPBar.destroy();
+        if (bossHPBarBg) bossHPBarBg.destroy();
+        if (bossHPText) bossHPText.destroy();
+
+        // Big explosion of particles
+        for (let i = 0; i < 5; i++) {
+            scene.time.delayedCall(i * 100, () => {
+                spawnParticles(scene, savedBossX + (Math.random() - 0.5) * 80,
+                    savedBossY + (Math.random() - 0.5) * 80, 0xff00ff, 15, 100);
+            });
+        }
+
+        score += 2000;
+        const highScore = highScores['level' + currentLevelIndex] || 0;
+        scoreText.setText('Score: ' + score + ' | Best: ' + highScore);
+        showScorePopup(scene, savedBossX, savedBossY - 50, '+2000', '#ff00ff');
+
+        // Reveal the flag
+        scene.time.delayedCall(500, () => {
+            if (endFlag) {
+                endFlag.setAlpha(1);
+                endFlag.body.enable = true;
+                bossFlagHidden = false;
+                spawnParticles(scene, currentLevel.flagPosition.x, currentLevel.flagPosition.y, 0xffff00, 15, 60);
+                shakeCamera(scene, 20, 200);
+                showScorePopup(scene, currentLevel.flagPosition.x, currentLevel.flagPosition.y - 40, 'FLAG UNLOCKED!', '#ffff00');
+                playSound('levelComplete');
+            }
+        });
+
+        bossProjectiles.forEach(p => {
+            if (p.rect) p.rect.destroy();
+            if (p.body && p.body.active) p.body.destroy();
+        });
+        bossProjectiles = [];
+    });
+}
+
+// ========================
 // Visual Juice Functions
 // ========================
 
@@ -1402,6 +2599,13 @@ function showScorePopup(scene, x, y, text, color) {
 
 function shakeCamera(scene, intensity, duration) {
     scene.cameras.main.shake(duration, intensity / 1000);
+}
+
+function restartWithTransition(scene) {
+    scene.cameras.main.fadeOut(300, 0, 0, 0);
+    scene.time.delayedCall(300, () => {
+        scene.scene.restart();
+    });
 }
 
 function formatTime(ms) {

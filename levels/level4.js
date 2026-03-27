@@ -166,6 +166,21 @@ const level4 = {
         { x: 3500, y: 280, width: 40, height: 40, contains: 'highJump' }
     ],
 
+    // Secret area: hidden upper path above Section 4 tower climb
+    // Invisible platforms leading to the very top of the screen with secret coins
+    invisiblePlatforms: [
+        { x: 2500, y: 160, width: 80, height: 20 },
+        { x: 2650, y: 100, width: 80, height: 20 },
+        { x: 2800, y: 60, width: 80, height: 20 }
+    ],
+    secretCoins: [
+        { x: 2500, y: 130, revealTrigger: { x: 2500, y: 160, radius: 40 } },
+        { x: 2650, y: 70, revealTrigger: { x: 2650, y: 100, radius: 40 } },
+        { x: 2800, y: 30, revealTrigger: { x: 2800, y: 60, radius: 40 } },
+        { x: 2730, y: 30, revealTrigger: { x: 2800, y: 60, radius: 40 } },
+        { x: 2870, y: 30, revealTrigger: { x: 2800, y: 60, radius: 40 } }
+    ],
+
     playerStart: { x: 120, y: 470 },
     flagPosition: { x: 3900, y: 455 }
 };

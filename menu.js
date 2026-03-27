@@ -107,14 +107,53 @@ function showMainMenu(scene) {
         showLevelSelect(scene);
     });
 
+    // Endless Mode + Daily Challenge (side by side)
+    const endlessBtn = createMenuButton(scene, 260, 420, 'ENDLESS', '#830', '#a50', () => {
+        clearMenuObjects();
+        showingMenu = false;
+        if (typeof endlessMode !== 'undefined') endlessMode = true;
+        currentLevelIndex = 0;
+        scene.scene.restart();
+    });
+    endlessBtn.setStyle({ fontSize: '16px', padding: { x: 16, y: 8 } });
+
+    const dailyBtn = createMenuButton(scene, 540, 420, 'DAILY', '#063', '#085', () => {
+        clearMenuObjects();
+        if (typeof showDailyChallengeScreen === 'function') showDailyChallengeScreen(scene);
+        else showMainMenu(scene);
+    });
+    dailyBtn.setStyle({ fontSize: '16px', padding: { x: 16, y: 8 } });
+    // Show daily streak
+    const ds = typeof dailyStreak !== 'undefined' && dailyStreak > 0 ? dailyStreak : 0;
+    if (ds > 0) {
+        const streakText = scene.add.text(540, 448, `Streak: ${ds} days`, {
+            fontSize: '10px', fill: '#0fa'
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
+        menuObjects.push(streakText);
+    }
+
+    // Bottom row: Achievements, Cosmetics, Modifiers
+    const achBtn = createMenuButton(scene, 200, 475, 'ACHIEVEMENTS', '#553', '#775', () => {
+        clearMenuObjects();
+        if (typeof showAchievementGallery === 'function') showAchievementGallery(scene);
+    });
+    achBtn.setStyle({ fontSize: '12px', padding: { x: 10, y: 5 } });
+
+    const cosBtn = createMenuButton(scene, 400, 475, 'COSMETICS', '#335', '#557', () => {
+        clearMenuObjects();
+        if (typeof showCosmeticScreen === 'function') showCosmeticScreen(scene);
+    });
+    cosBtn.setStyle({ fontSize: '12px', padding: { x: 10, y: 5 } });
+
+    const modBtn = createMenuButton(scene, 600, 475, 'MODIFIERS', '#530', '#750', () => {
+        clearMenuObjects();
+        if (typeof showModifierScreen === 'function') showModifierScreen(scene);
+    });
+    modBtn.setStyle({ fontSize: '12px', padding: { x: 10, y: 5 } });
+
     // Controls info
-    const controls = scene.add.text(400, 470, [
-        'Controls:',
-        'Arrow Keys - Move    |    Space - Jump',
-        'Shift - Dash    |    Wall Jump - Jump off walls',
-        'ESC - Pause'
-    ].join('\n'), {
-        fontSize: '13px', fill: '#888', align: 'center'
+    const controls = scene.add.text(400, 520, 'Arrows:Move | Space:Jump | Shift:Dash | ESC:Pause', {
+        fontSize: '10px', fill: '#666'
     }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
     menuObjects.push(controls);
 }
@@ -218,6 +257,42 @@ function createMenuButton(scene, x, y, text, bgColor, hoverColor, callback) {
     btn.on('pointerup', callback);
     menuObjects.push(btn);
     return btn;
+}
+
+// ========================
+// Local Leaderboard System
+// ========================
+
+let leaderboardData = JSON.parse(localStorage.getItem('jqLeaderboard')) || {};
+
+function saveLeaderboardEntry(levelIndex, score, time) {
+    const key = 'level' + levelIndex;
+    if (!leaderboardData[key]) {
+        leaderboardData[key] = { scores: [], times: [] };
+    }
+    const lb = leaderboardData[key];
+
+    // Add score entry
+    lb.scores.push({ score: score, date: Date.now() });
+    lb.scores.sort((a, b) => b.score - a.score);
+    lb.scores = lb.scores.slice(0, 5);
+
+    // Add time entry
+    lb.times.push({ time: time, date: Date.now() });
+    lb.times.sort((a, b) => a.time - b.time);
+    lb.times = lb.times.slice(0, 5);
+
+    localStorage.setItem('jqLeaderboard', JSON.stringify(leaderboardData));
+
+    // Return ranks (1-based, 0 = not in top 5)
+    const scoreRank = lb.scores.findIndex(e => e.score === score && e.date === lb.scores.find(s => s.score === score)?.date) + 1;
+    const timeRank = lb.times.findIndex(e => e.time === time && e.date === lb.times.find(s => s.time === time)?.date) + 1;
+    return { scoreRank: scoreRank || 0, timeRank: timeRank || 0 };
+}
+
+function getLeaderboard(levelIndex) {
+    const key = 'level' + levelIndex;
+    return leaderboardData[key] || { scores: [], times: [] };
 }
 
 function clearMenuObjects() {
