@@ -1882,6 +1882,8 @@ function togglePause() {
             cleanupPauseMenu();
             isPaused = false;
             scene.physics.resume();
+            if (typeof endlessMode !== 'undefined') endlessMode = false;
+            if (typeof dailyChallengeMode !== 'undefined') dailyChallengeMode = false;
             showingLevelSelect = true;
             scene.scene.restart();
         });
@@ -1899,6 +1901,8 @@ function togglePause() {
             cleanupPauseMenu();
             isPaused = false;
             scene.physics.resume();
+            if (typeof endlessMode !== 'undefined') endlessMode = false;
+            if (typeof dailyChallengeMode !== 'undefined') dailyChallengeMode = false;
             showingMenu = true;
             scene.scene.restart();
         });
