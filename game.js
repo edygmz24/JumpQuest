@@ -774,6 +774,22 @@ function loadLevel(levelIndex) {
         fontSize: '10px', fill: '#00ccff'
     }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(100);
 
+    // Sound toggle button (always visible, bottom-right corner)
+    const muteLabel = (typeof audioMuted !== 'undefined' && audioMuted) ? '[ SFX OFF ]' : '[ SFX ON ]';
+    const muteBtn = this.add.text(784, 584, muteLabel, {
+        fontSize: '11px', fill: '#aaa',
+        fontFamily: 'monospace',
+        padding: { x: 4, y: 3 }
+    });
+    muteBtn.setOrigin(1, 1).setScrollFactor(0).setDepth(2100).setAlpha(0.45);
+    muteBtn.setInteractive({ useHandCursor: true });
+    muteBtn.on('pointerover', () => muteBtn.setAlpha(0.85));
+    muteBtn.on('pointerout', () => muteBtn.setAlpha(0.45));
+    muteBtn.on('pointerup', () => {
+        if (typeof toggleMute === 'function') toggleMute();
+        muteBtn.setText((typeof audioMuted !== 'undefined' && audioMuted) ? '[ SFX OFF ]' : '[ SFX ON ]');
+    });
+
     // Pause button
     pauseButton = this.add.text(750, 16, 'PAUSE', {
         fontSize: '16px',
@@ -783,7 +799,7 @@ function loadLevel(levelIndex) {
     });
     pauseButton.setOrigin(1, 0);
     pauseButton.setScrollFactor(0);
-    pauseButton.setDepth(100);
+    pauseButton.setDepth(2100);
     pauseButton.setInteractive({ useHandCursor: true });
     pauseButton.on('pointerover', () => {
         pauseButton.setStyle({ backgroundColor: '#888' });
@@ -1811,9 +1827,9 @@ function togglePause() {
 
         const scene = this;
 
-        // Dark overlay
+        // Dark overlay (interactive to block clicks to game objects behind)
         const bg = scene.add.rectangle(400, 300, 800, 600, 0x000000, 0.8);
-        bg.setScrollFactor(0).setDepth(1500);
+        bg.setScrollFactor(0).setDepth(1500).setInteractive();
         pauseMenuObjects.push(bg);
 
         // Title

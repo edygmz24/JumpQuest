@@ -62,9 +62,9 @@ function showMainMenu(scene) {
     showingLevelSelect = false;
     clearMenuObjects();
 
-    // Darken background
+    // Darken background (interactive to block clicks to objects behind)
     const bg = scene.add.rectangle(400, 300, 800, 600, 0x000000, 0.85);
-    bg.setScrollFactor(0).setDepth(2000);
+    bg.setScrollFactor(0).setDepth(2000).setInteractive();
     menuObjects.push(bg);
 
     // Title
@@ -164,7 +164,7 @@ function showLevelSelect(scene) {
     clearMenuObjects();
 
     const bg = scene.add.rectangle(400, 300, 800, 600, 0x000000, 0.9);
-    bg.setScrollFactor(0).setDepth(2000);
+    bg.setScrollFactor(0).setDepth(2000).setInteractive();
     menuObjects.push(bg);
 
     const title = scene.add.text(400, 40, 'SELECT LEVEL', {

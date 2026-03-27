@@ -304,7 +304,7 @@ function endEndlessMode(scene) {
 
     // Overlay background
     const bg = scene.add.rectangle(400, 300, 800, 600, 0x000000, 0.85);
-    bg.setScrollFactor(0).setDepth(2000);
+    bg.setScrollFactor(0).setDepth(2000).setInteractive();
 
     // Title
     const title = scene.add.text(400, 120, 'ENDLESS MODE OVER', {

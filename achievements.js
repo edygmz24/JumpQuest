@@ -442,7 +442,7 @@ function showAchievementGallery(scene) {
 
     // Dark background
     var bg = scene.add.rectangle(400, 300, 800, 600, 0x000000, 0.92);
-    bg.setScrollFactor(0).setDepth(2000);
+    bg.setScrollFactor(0).setDepth(2000).setInteractive();
     menuObjects.push(bg);
 
     // Title
