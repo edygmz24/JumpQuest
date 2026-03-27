@@ -4,7 +4,7 @@
 // ========================
 
 let audioCtx = null;
-let audioMuted = false;
+let audioMuted = false;  // mutes background music only
 const masterVolume = 0.3;
 
 function getAudioContext() {
@@ -25,7 +25,7 @@ function createGain(ctx, volume) {
 }
 
 function playSound(name) {
-    if (audioMuted) return;
+    // Sound effects always play; only background music is affected by audioMuted
     try {
         const sounds = {
             jump: playJumpSound,
@@ -50,6 +50,14 @@ function playSound(name) {
 
 function toggleMute() {
     audioMuted = !audioMuted;
+    if (audioMuted) {
+        stopBackgroundMusic();
+    } else {
+        // Restart music if it should be playing
+        if (typeof currentLevelIndex !== 'undefined') {
+            startBackgroundMusic(currentLevelIndex);
+        }
+    }
     return audioMuted;
 }
 

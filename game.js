@@ -775,7 +775,7 @@ function loadLevel(levelIndex) {
     }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(100);
 
     // Sound toggle button (always visible, bottom-right corner)
-    const muteLabel = (typeof audioMuted !== 'undefined' && audioMuted) ? '[ SFX OFF ]' : '[ SFX ON ]';
+    const muteLabel = (typeof audioMuted !== 'undefined' && audioMuted) ? '[ MUSIC OFF ]' : '[ MUSIC ON ]';
     const muteBtn = this.add.text(784, 584, muteLabel, {
         fontSize: '11px', fill: '#aaa',
         fontFamily: 'monospace',
@@ -787,7 +787,7 @@ function loadLevel(levelIndex) {
     muteBtn.on('pointerout', () => muteBtn.setAlpha(0.45));
     muteBtn.on('pointerup', () => {
         if (typeof toggleMute === 'function') toggleMute();
-        muteBtn.setText((typeof audioMuted !== 'undefined' && audioMuted) ? '[ SFX OFF ]' : '[ SFX ON ]');
+        muteBtn.setText((typeof audioMuted !== 'undefined' && audioMuted) ? '[ MUSIC OFF ]' : '[ MUSIC ON ]');
     });
 
     // Pause button
@@ -1867,7 +1867,7 @@ function togglePause() {
         pauseMenuObjects.push(restartBtn);
 
         // Sound toggle button
-        const soundLabel = audioMuted ? 'SOUND: OFF' : 'SOUND: ON';
+        const soundLabel = audioMuted ? 'MUSIC: OFF' : 'MUSIC: ON';
         const soundColor = audioMuted ? '#800' : '#068';
         const soundHover = audioMuted ? '#a00' : '#08a';
         const soundBtn = scene.add.text(400, 350, soundLabel, {
@@ -1879,7 +1879,7 @@ function togglePause() {
         soundBtn.on('pointerout', () => soundBtn.setStyle({ backgroundColor: soundColor }));
         soundBtn.on('pointerup', () => {
             if (typeof toggleMute === 'function') toggleMute();
-            const newLabel = audioMuted ? 'SOUND: OFF' : 'SOUND: ON';
+            const newLabel = audioMuted ? 'MUSIC: OFF' : 'MUSIC: ON';
             const newColor = audioMuted ? '#800' : '#068';
             soundBtn.setText(newLabel);
             soundBtn.setStyle({ backgroundColor: newColor });
