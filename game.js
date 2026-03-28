@@ -52,7 +52,7 @@ let coins;
 let coinRects = [];
 let score = 0;
 let scoreText;
-let highScores = JSON.parse(localStorage.getItem('marioHighScores')) || {};
+let highScores = JSON.parse(localStorage.getItem('jqHighScores') || localStorage.getItem('marioHighScores')) || {};
 
 // Checkpoints
 let checkpoints;
@@ -62,7 +62,7 @@ let lastCheckpoint = null;
 // Timer & Best Times
 let levelTimer = 0;
 let timerText;
-let bestTimes = JSON.parse(localStorage.getItem('marioBestTimes')) || {};
+let bestTimes = JSON.parse(localStorage.getItem('jqBestTimes') || localStorage.getItem('marioBestTimes')) || {};
 
 // Lives System
 let lives = 3;
@@ -189,6 +189,10 @@ let bestDeaths = JSON.parse(localStorage.getItem('jqBestDeaths')) || {};
 let dashCooldownBar;
 let dashCooldownBarBg;
 let dashReadyPulse = 0;
+let dashBufferTimer = 0;
+
+// Accessibility
+let colorblindMode = localStorage.getItem('jqColorblind') === 'true';
 
 // Ghost Racing
 let ghostData = [];          // recording: array of {x, y, sx, sy} per frame
@@ -225,6 +229,20 @@ function preload() {
 }
 
 function create() {
+    // One-time migration of old localStorage keys
+    if (localStorage.getItem('marioHighScores') && !localStorage.getItem('jqHighScores')) {
+        localStorage.setItem('jqHighScores', localStorage.getItem('marioHighScores'));
+    }
+    if (localStorage.getItem('marioBestTimes') && !localStorage.getItem('jqBestTimes')) {
+        localStorage.setItem('jqBestTimes', localStorage.getItem('marioBestTimes'));
+    }
+    localStorage.removeItem('marioHighScores');
+    localStorage.removeItem('marioBestTimes');
+
+    // Remove splash screen
+    const splash = document.getElementById('splash-screen');
+    if (splash) splash.remove();
+
     // Clean up moving platforms from previous session
     if (movingPlatforms && movingPlatforms.length > 0) {
         movingPlatforms.forEach(mp => {
@@ -280,6 +298,7 @@ function create() {
     maxCombo = 0;
     deathCount = 0;
     dashReadyPulse = 0;
+    dashBufferTimer = 0;
     bossActive = false;
     bossPhase = 0;
     bossHP = 9;
@@ -493,6 +512,44 @@ function loadLevel(levelIndex) {
             const shieldBorder = this.add.rectangle(enemyData.x, enemyData.y, size + 6, height + 6);
             shieldBorder.setStrokeStyle(2, 0x00ffff);
             enemyRect.shieldBorder = shieldBorder;
+        }
+
+        // Colorblind mode: add shape indicators to distinguish enemy types
+        if (colorblindMode) {
+            let indicator;
+            switch (type) {
+                case 'walker':
+                    // Small feet lines at bottom
+                    indicator = this.add.text(enemyData.x, enemyData.y + height / 2 - 4, '..', {
+                        fontSize: '10px', fill: '#fff'
+                    }).setOrigin(0.5);
+                    break;
+                case 'jumper':
+                    // Arrow on top
+                    indicator = this.add.text(enemyData.x, enemyData.y - height / 2 + 2, '^', {
+                        fontSize: '12px', fill: '#fff', fontStyle: 'bold'
+                    }).setOrigin(0.5);
+                    break;
+                case 'flyer':
+                    // Wing shapes on sides
+                    indicator = this.add.text(enemyData.x, enemyData.y, '~  ~', {
+                        fontSize: '10px', fill: '#fff'
+                    }).setOrigin(0.5);
+                    break;
+                case 'shooter':
+                    // Barrel dot in front
+                    indicator = this.add.circle(enemyData.x + size / 2 + 4, enemyData.y, 3, 0xffffff);
+                    break;
+                case 'shield':
+                    // S letter
+                    indicator = this.add.text(enemyData.x, enemyData.y, 'S', {
+                        fontSize: '14px', fill: '#fff', fontStyle: 'bold'
+                    }).setOrigin(0.5);
+                    break;
+            }
+            if (indicator) {
+                enemyRect.cbIndicator = indicator;
+            }
         }
 
         enemyRects.push(enemyRect);
@@ -941,8 +998,15 @@ function update() {
         }
     }
 
-    if ((Phaser.Input.Keyboard.JustDown(dashKey) || touchDashPressed) && dashCooldown <= 0 && !isDashing) {
+    // Dash buffer: store intent when on cooldown
+    if (Phaser.Input.Keyboard.JustDown(dashKey) || touchDashPressed) {
+        dashBufferTimer = 150;
+    }
+    dashBufferTimer -= this.game.loop.delta;
+
+    if (dashBufferTimer > 0 && dashCooldown <= 0 && !isDashing) {
         touchDashPressed = false;
+        dashBufferTimer = 0;
         if (onGround || canAirDash) {
             isDashing = true;
             dashTimer = DASH_DURATION;
@@ -1126,9 +1190,24 @@ function update() {
                 break;
 
             case 'shooter':
-                if (this.time.now - enemy.lastShot > 3000) {
+                const timeSinceShot = this.time.now - enemy.lastShot;
+                if (timeSinceShot > 2600 && !enemy.telegraphing) {
+                    // Telegraph: show warning indicator
+                    enemy.telegraphing = true;
+                    const dir = player.x < enemy.x ? -1 : 1;
+                    const warn = this.add.text(enemy.x + dir * 20, enemy.y - 20, '!', {
+                        fontSize: '16px', fill: '#ff0000', fontStyle: 'bold'
+                    }).setOrigin(0.5).setDepth(50);
+                    const line = this.add.rectangle(enemy.x + dir * 30, enemy.y, 20, 2, 0xff0000, 0.6).setDepth(50);
+                    this.time.delayedCall(400, () => {
+                        warn.destroy();
+                        line.destroy();
+                    });
+                }
+                if (timeSinceShot > 3000) {
                     shootProjectile.call(this, enemy);
                     enemy.lastShot = this.time.now;
+                    enemy.telegraphing = false;
                 }
                 break;
         }
@@ -1140,8 +1219,40 @@ function update() {
             if (enemyRects[index].shieldBorder) {
                 enemyRects[index].shieldBorder.setPosition(enemy.x, enemy.y);
             }
+            // Update colorblind indicator position
+            if (enemyRects[index].cbIndicator) {
+                const ind = enemyRects[index].cbIndicator;
+                if (type === 'shooter') {
+                    const dir = player.x < enemy.x ? -1 : 1;
+                    ind.setPosition(enemy.x + dir * 20, enemy.y);
+                } else if (type === 'jumper') {
+                    ind.setPosition(enemy.x, enemy.y - 18);
+                } else if (type === 'walker') {
+                    ind.setPosition(enemy.x, enemy.y + 12);
+                } else {
+                    ind.setPosition(enemy.x, enemy.y);
+                }
+            }
         }
     });
+
+    // Close-call detection (near-miss with enemies)
+    if (!activePowerUps.invincibility && !isDashing && !this._closeCallCooldown) {
+        enemies.children.entries.forEach(enemy => {
+            if (!enemy.active) return;
+            const dx = Math.abs(player.x - enemy.x);
+            const dy = Math.abs(player.y - enemy.y);
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < 40 && dist > 20) {
+                showScorePopup(this, player.x, player.y - 30, 'CLOSE!', '#ffffff');
+                // Brief white flash
+                const flash = this.add.rectangle(400, 300, 800, 600, 0xffffff, 0.2).setScrollFactor(0).setDepth(998);
+                this.tweens.add({ targets: flash, alpha: 0, duration: 100, onComplete: () => flash.destroy() });
+                this._closeCallCooldown = true;
+                this.time.delayedCall(1000, () => { this._closeCallCooldown = false; });
+            }
+        });
+    }
 
     // Update projectile visuals
     projectileRects.forEach((p, i) => {
@@ -1168,6 +1279,11 @@ function update() {
     // Cosmetic trail particles
     if (typeof spawnTrailParticle === 'function' && (Math.abs(player.body.velocity.x) > 50 || Math.abs(player.body.velocity.y) > 100)) {
         spawnTrailParticle(this, player.x, player.y + 8);
+    }
+
+    // Tutorial hints
+    if (typeof checkTutorialTriggers === 'function') {
+        checkTutorialTriggers(this, player.x, currentLevelIndex);
     }
 
     // Achievement timers (play time, secret achievements)
@@ -1607,13 +1723,13 @@ function reachEnd() {
     // Save high score
     if (isNewHighScore) {
         highScores[levelKey] = score;
-        localStorage.setItem('marioHighScores', JSON.stringify(highScores));
+        localStorage.setItem('jqHighScores', JSON.stringify(highScores));
     }
 
     // Save best time
     if (isNewBestTime) {
         bestTimes[levelKey] = levelTimer;
-        localStorage.setItem('marioBestTimes', JSON.stringify(bestTimes));
+        localStorage.setItem('jqBestTimes', JSON.stringify(bestTimes));
     }
 
     // Save ghost replay on new best time
@@ -1626,6 +1742,10 @@ function reachEnd() {
         bestDeaths[levelKey] = deathCount;
         localStorage.setItem('jqBestDeaths', JSON.stringify(bestDeaths));
     }
+
+    // Check if next level will be newly unlocked (before saving)
+    const nextLevelExists = currentLevelIndex < levels.length - 1;
+    const nextWasLocked = nextLevelExists && !completedLevels['level' + currentLevelIndex];
 
     // Save completion & stars
     let earnedStars = { completion: true, coins: false, time: false };
@@ -1655,6 +1775,12 @@ function reachEnd() {
 
     const isLastLevel = currentLevelIndex >= levels.length - 1;
     const scene = this;
+
+    // Show credits screen for game completion
+    if (isLastLevel) {
+        showCreditsScreen(scene, { score, levelTimer, coinsCollected, totalLevelCoins, deathCount, earnedStars, isNewHighScore, isNewBestTime, prevHighScore, prevBestTime });
+        return;
+    }
 
     // Overlay
     const overlay = this.add.rectangle(400, 300, 800, 600, 0x000000, 0.7);
@@ -1767,9 +1893,30 @@ function reachEnd() {
         });
     }
 
+    // "Level Unlocked!" banner
+    if (nextWasLocked && nextLevelExists) {
+        const unlockY = isFlawless ? deathY + 60 : deathY + 30;
+        const unlockDelay = statsDelay + (isFlawless ? 1200 : 800);
+        const unlockText = this.add.text(400, unlockY, `LEVEL ${currentLevelIndex + 2} UNLOCKED!`, {
+            fontSize: '22px', fill: '#ffd700', fontStyle: 'bold',
+            stroke: '#000', strokeThickness: 3
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(1000).setAlpha(0).setScale(0.5);
+        this.tweens.add({
+            targets: unlockText,
+            alpha: 1, scaleX: 1, scaleY: 1,
+            duration: 400, delay: unlockDelay,
+            ease: 'Back.easeOut',
+            onStart: () => {
+                spawnParticles(scene, 400, unlockY, 0xffd700, 10, 40);
+                playSound('unlock');
+            }
+        });
+    }
+
     // Buttons (appear after all stats)
-    const buttonDelay = statsDelay + (isFlawless ? 1400 : 900);
-    let btnY = isFlawless ? deathY + 60 : deathY + 30;
+    const unlockOffset = (nextWasLocked && nextLevelExists) ? 35 : 0;
+    const buttonDelay = statsDelay + (isFlawless ? 1400 : 900) + (nextWasLocked ? 300 : 0);
+    let btnY = (isFlawless ? deathY + 60 : deathY + 30) + unlockOffset;
 
     if (!isLastLevel) {
         const nextBtn = this.add.text(400, btnY, 'NEXT LEVEL', {
@@ -1866,28 +2013,85 @@ function togglePause() {
         });
         pauseMenuObjects.push(restartBtn);
 
-        // Sound toggle button
-        const soundLabel = audioMuted ? 'MUSIC: OFF' : 'MUSIC: ON';
-        const soundColor = audioMuted ? '#800' : '#068';
-        const soundHover = audioMuted ? '#a00' : '#08a';
-        const soundBtn = scene.add.text(400, 350, soundLabel, {
-            fontSize: '22px', fill: '#fff', fontStyle: 'bold',
-            backgroundColor: soundColor, padding: { x: 30, y: 10 }
-        }).setOrigin(0.5).setScrollFactor(0).setDepth(1501);
-        soundBtn.setInteractive({ useHandCursor: true });
-        soundBtn.on('pointerover', () => soundBtn.setStyle({ backgroundColor: soundHover }));
-        soundBtn.on('pointerout', () => soundBtn.setStyle({ backgroundColor: soundColor }));
-        soundBtn.on('pointerup', () => {
-            if (typeof toggleMute === 'function') toggleMute();
-            const newLabel = audioMuted ? 'MUSIC: OFF' : 'MUSIC: ON';
-            const newColor = audioMuted ? '#800' : '#068';
-            soundBtn.setText(newLabel);
-            soundBtn.setStyle({ backgroundColor: newColor });
+        // Music volume slider
+        const musicLabel = scene.add.text(280, 340, 'Music', {
+            fontSize: '16px', fill: '#aaa'
+        }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(1501);
+        pauseMenuObjects.push(musicLabel);
+
+        const musicSliderBg = scene.add.rectangle(440, 340, 160, 10, 0x444444).setScrollFactor(0).setDepth(1501);
+        pauseMenuObjects.push(musicSliderBg);
+        const musicSliderFill = scene.add.rectangle(440 - 80 + 80 * musicVolume, 340, 160 * musicVolume, 10, 0x08a).setOrigin(0, 0.5).setScrollFactor(0).setDepth(1502);
+        musicSliderFill.x = 440 - 80;
+        musicSliderFill.setDisplaySize(160 * musicVolume, 10);
+        pauseMenuObjects.push(musicSliderFill);
+        const musicHandle = scene.add.circle(440 - 80 + 160 * musicVolume, 340, 10, 0xffffff).setScrollFactor(0).setDepth(1503);
+        musicHandle.setInteractive({ useHandCursor: true, draggable: true });
+        scene.input.setDraggable(musicHandle);
+        musicHandle.on('drag', (pointer, dragX) => {
+            const clampedX = Phaser.Math.Clamp(dragX, 440 - 80, 440 + 80);
+            musicHandle.x = clampedX;
+            const val = (clampedX - (440 - 80)) / 160;
+            musicSliderFill.setDisplaySize(160 * val, 10);
+            if (typeof setMusicVolume === 'function') setMusicVolume(val);
         });
-        pauseMenuObjects.push(soundBtn);
+        pauseMenuObjects.push(musicHandle);
+
+        // SFX volume slider
+        const sfxLabel = scene.add.text(280, 380, 'SFX', {
+            fontSize: '16px', fill: '#aaa'
+        }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(1501);
+        pauseMenuObjects.push(sfxLabel);
+
+        const sfxSliderBg = scene.add.rectangle(440, 380, 160, 10, 0x444444).setScrollFactor(0).setDepth(1501);
+        pauseMenuObjects.push(sfxSliderBg);
+        const sfxSliderFill = scene.add.rectangle(440 - 80, 380, 160 * sfxVolume, 10, 0x068).setOrigin(0, 0.5).setScrollFactor(0).setDepth(1502);
+        pauseMenuObjects.push(sfxSliderFill);
+        const sfxHandle = scene.add.circle(440 - 80 + 160 * sfxVolume, 380, 10, 0xffffff).setScrollFactor(0).setDepth(1503);
+        sfxHandle.setInteractive({ useHandCursor: true, draggable: true });
+        scene.input.setDraggable(sfxHandle);
+        sfxHandle.on('drag', (pointer, dragX) => {
+            const clampedX = Phaser.Math.Clamp(dragX, 440 - 80, 440 + 80);
+            sfxHandle.x = clampedX;
+            const val = (clampedX - (440 - 80)) / 160;
+            sfxSliderFill.setDisplaySize(160 * val, 10);
+            if (typeof setSfxVolume === 'function') setSfxVolume(val);
+        });
+        pauseMenuObjects.push(sfxHandle);
+
+        // Mute All toggle
+        const muteAllLabel = (sfxMuted && audioMuted) ? 'UNMUTE ALL' : 'MUTE ALL';
+        const muteAllColor = (sfxMuted && audioMuted) ? '#800' : '#555';
+        const muteBtn = scene.add.text(400, 420, muteAllLabel, {
+            fontSize: '16px', fill: '#fff', fontStyle: 'bold',
+            backgroundColor: muteAllColor, padding: { x: 20, y: 6 }
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(1501);
+        muteBtn.setInteractive({ useHandCursor: true });
+        muteBtn.on('pointerup', () => {
+            if (typeof toggleMuteAll === 'function') toggleMuteAll();
+            muteBtn.setText((sfxMuted && audioMuted) ? 'UNMUTE ALL' : 'MUTE ALL');
+            muteBtn.setStyle({ backgroundColor: (sfxMuted && audioMuted) ? '#800' : '#555' });
+        });
+        pauseMenuObjects.push(muteBtn);
+
+        // Colorblind mode toggle
+        const cbLabel = colorblindMode ? 'COLORBLIND: ON' : 'COLORBLIND: OFF';
+        const cbColor = colorblindMode ? '#068' : '#444';
+        const cbBtn = scene.add.text(400, 448, cbLabel, {
+            fontSize: '14px', fill: '#fff',
+            backgroundColor: cbColor, padding: { x: 16, y: 5 }
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(1501);
+        cbBtn.setInteractive({ useHandCursor: true });
+        cbBtn.on('pointerup', () => {
+            colorblindMode = !colorblindMode;
+            localStorage.setItem('jqColorblind', colorblindMode);
+            cbBtn.setText(colorblindMode ? 'COLORBLIND: ON' : 'COLORBLIND: OFF');
+            cbBtn.setStyle({ backgroundColor: colorblindMode ? '#068' : '#444' });
+        });
+        pauseMenuObjects.push(cbBtn);
 
         // Level Select button
-        const levelBtn = scene.add.text(400, 405, 'LEVEL SELECT', {
+        const levelBtn = scene.add.text(400, 480, 'LEVEL SELECT', {
             fontSize: '22px', fill: '#fff', fontStyle: 'bold',
             backgroundColor: '#06a', padding: { x: 30, y: 10 }
         }).setOrigin(0.5).setScrollFactor(0).setDepth(1501);
@@ -1901,12 +2105,12 @@ function togglePause() {
             if (typeof endlessMode !== 'undefined') endlessMode = false;
             if (typeof dailyChallengeMode !== 'undefined') dailyChallengeMode = false;
             showingLevelSelect = true;
-            scene.scene.restart();
+            restartWithTransition(scene);
         });
         pauseMenuObjects.push(levelBtn);
 
         // Quit to Menu button
-        const quitBtn = scene.add.text(400, 460, 'QUIT TO MENU', {
+        const quitBtn = scene.add.text(400, 535, 'QUIT TO MENU', {
             fontSize: '22px', fill: '#fff', fontStyle: 'bold',
             backgroundColor: '#600', padding: { x: 30, y: 10 }
         }).setOrigin(0.5).setScrollFactor(0).setDepth(1501);
@@ -1920,7 +2124,7 @@ function togglePause() {
             if (typeof endlessMode !== 'undefined') endlessMode = false;
             if (typeof dailyChallengeMode !== 'undefined') dailyChallengeMode = false;
             showingMenu = true;
-            scene.scene.restart();
+            restartWithTransition(scene);
         });
         pauseMenuObjects.push(quitBtn);
 
@@ -2580,10 +2784,20 @@ function defeatBoss() {
 // Visual Juice Functions
 // ========================
 
+const particlePool = [];
+const PARTICLE_POOL_MAX = 200;
+
 function spawnParticles(scene, x, y, color, count, speed) {
     for (let i = 0; i < count; i++) {
-        const size = 3 + Math.random() * 5;
-        const particle = scene.add.rectangle(x, y, size, size, color);
+        let particle;
+        if (particlePool.length > 0) {
+            particle = particlePool.pop();
+            particle.setPosition(x, y).setAlpha(1).setScale(1).setVisible(true).setActive(true);
+            particle.setFillStyle(color);
+        } else {
+            const size = 3 + Math.random() * 5;
+            particle = scene.add.rectangle(x, y, size, size, color);
+        }
         const angle = Math.random() * Math.PI * 2;
         const vel = speed * (0.5 + Math.random() * 0.5);
         scene.tweens.add({
@@ -2595,7 +2809,14 @@ function spawnParticles(scene, x, y, color, count, speed) {
             scaleY: 0,
             duration: 300 + Math.random() * 200,
             ease: 'Power2',
-            onComplete: () => particle.destroy()
+            onComplete: () => {
+                particle.setVisible(false).setActive(false);
+                if (particlePool.length < PARTICLE_POOL_MAX) {
+                    particlePool.push(particle);
+                } else {
+                    particle.destroy();
+                }
+            }
         });
     }
 }
@@ -2619,6 +2840,109 @@ function showScorePopup(scene, x, y, text, color) {
 
 function shakeCamera(scene, intensity, duration) {
     scene.cameras.main.shake(duration, intensity / 1000);
+}
+
+function showCreditsScreen(scene, stats) {
+    const overlay = scene.add.rectangle(400, 300, 800, 600, 0x000000, 0.9);
+    overlay.setScrollFactor(0).setDepth(999);
+
+    // Title
+    const title = scene.add.text(400, 60, 'CONGRATULATIONS!', {
+        fontSize: '42px', fill: '#ffd700', fontStyle: 'bold',
+        stroke: '#000', strokeThickness: 4
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(1000).setAlpha(0);
+    scene.tweens.add({ targets: title, alpha: 1, duration: 600, ease: 'Power2' });
+
+    // Subtitle
+    const sub = scene.add.text(400, 110, 'You conquered the tower and defeated The Guardian!', {
+        fontSize: '16px', fill: '#aaa', fontStyle: 'italic'
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(1000).setAlpha(0);
+    scene.tweens.add({ targets: sub, alpha: 1, duration: 400, delay: 500 });
+
+    // Fireworks effect (repeating)
+    const fireworkColors = [0xffd700, 0xff4444, 0x44ff44, 0x4488ff, 0xff44ff, 0x44ffff];
+    let fireworkTimer = scene.time.addEvent({
+        delay: 400,
+        callback: () => {
+            const fx = 100 + Math.random() * 600;
+            const fy = 50 + Math.random() * 150;
+            const color = fireworkColors[Math.floor(Math.random() * fireworkColors.length)];
+            spawnParticles(scene, fx, fy, color, 8, 50);
+        },
+        loop: true
+    });
+
+    // Total stats across all levels
+    const totalStars = typeof getTotalStars === 'function' ? getTotalStars() : 0;
+    let totalCoins = 0, totalDeaths = 0;
+    if (typeof jqStats !== 'undefined') {
+        totalCoins = jqStats.totalCoins || 0;
+        totalDeaths = jqStats.totalDeaths || 0;
+    }
+
+    const statsLines = [
+        { text: `Total Stars: ${totalStars}/30`, color: '#ffd700', delay: 1000 },
+        { text: `Total Coins Collected: ${totalCoins}`, color: '#ffd700', delay: 1200 },
+        { text: `Total Deaths: ${totalDeaths}`, color: '#ff6666', delay: 1400 },
+        { text: `Final Level Score: ${stats.score}`, color: '#00ff00', delay: 1600 },
+        { text: `Final Level Time: ${formatTime(stats.levelTimer)}`, color: '#00ffff', delay: 1800 },
+    ];
+
+    statsLines.forEach((line, i) => {
+        const t = scene.add.text(400, 160 + i * 28, line.text, {
+            fontSize: '15px', fill: line.color
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(1000).setAlpha(0);
+        scene.tweens.add({ targets: t, alpha: 1, duration: 300, delay: line.delay });
+    });
+
+    // Credits section
+    const creditsY = 320;
+    const creditLines = [
+        { text: '--- CREDITS ---', color: '#888', size: '14px' },
+        { text: 'JUMP QUEST', color: '#ffd700', size: '20px' },
+        { text: 'A Platformer Adventure', color: '#aaa', size: '13px' },
+        { text: '', color: '#000', size: '8px' },
+        { text: 'Built with Phaser 3', color: '#888', size: '12px' },
+        { text: 'Audio: Web Audio API + Top Floor Dash', color: '#888', size: '12px' },
+        { text: 'Thank you for playing!', color: '#fff', size: '16px' },
+    ];
+
+    creditLines.forEach((line, i) => {
+        const t = scene.add.text(400, creditsY + i * 22, line.text, {
+            fontSize: line.size, fill: line.color, fontStyle: i === 1 ? 'bold' : ''
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(1000).setAlpha(0);
+        scene.tweens.add({ targets: t, alpha: 1, duration: 300, delay: 2200 + i * 200 });
+    });
+
+    // Buttons
+    const btnDelay = 3800;
+    const playAgainBtn = scene.add.text(300, 520, 'PLAY AGAIN', {
+        fontSize: '20px', fill: '#fff', fontStyle: 'bold',
+        backgroundColor: '#0a0', padding: { x: 20, y: 8 }
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(1000).setAlpha(0);
+    scene.tweens.add({ targets: playAgainBtn, alpha: 1, duration: 300, delay: btnDelay });
+    playAgainBtn.setInteractive({ useHandCursor: true });
+    playAgainBtn.on('pointerover', () => playAgainBtn.setStyle({ backgroundColor: '#0c0' }));
+    playAgainBtn.on('pointerout', () => playAgainBtn.setStyle({ backgroundColor: '#0a0' }));
+    playAgainBtn.on('pointerup', () => {
+        fireworkTimer.remove();
+        currentLevelIndex = 0;
+        restartWithTransition(scene);
+    });
+
+    const menuBtn = scene.add.text(500, 520, 'MAIN MENU', {
+        fontSize: '20px', fill: '#fff', fontStyle: 'bold',
+        backgroundColor: '#06a', padding: { x: 20, y: 8 }
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(1000).setAlpha(0);
+    scene.tweens.add({ targets: menuBtn, alpha: 1, duration: 300, delay: btnDelay + 100 });
+    menuBtn.setInteractive({ useHandCursor: true });
+    menuBtn.on('pointerover', () => menuBtn.setStyle({ backgroundColor: '#08c' }));
+    menuBtn.on('pointerout', () => menuBtn.setStyle({ backgroundColor: '#06a' }));
+    menuBtn.on('pointerup', () => {
+        fireworkTimer.remove();
+        showingMenu = true;
+        restartWithTransition(scene);
+    });
 }
 
 function restartWithTransition(scene) {

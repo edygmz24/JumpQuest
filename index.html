@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>JumpQuest - A Platformer Adventure</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%23ffdd00'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-family='Arial,sans-serif' font-weight='bold' font-size='18' fill='%23222'%3EJQ%3C/text%3E%3C/svg%3E">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#1a1a2e">
     <style>
         body {
             margin: 0;
@@ -12,11 +15,64 @@
             justify-content: center;
             align-items: center;
             min-height: 100vh;
-            background-color: #87CEEB;
+            background-color: #1a1a2e;
             font-family: Arial, sans-serif;
         }
         #game-container {
             box-shadow: 0 0 20px rgba(0,0,0,0.3);
+        }
+
+        /* Splash screen */
+        #splash-screen {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: #1a1a2e;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+        #splash-screen h1 {
+            font-size: 56px;
+            color: #ffdd00;
+            text-shadow: 0 0 20px rgba(255,221,0,0.4), 0 3px 0 #b8860b;
+            margin: 0;
+            animation: splashPulse 1.5s ease-in-out infinite;
+        }
+        #splash-screen p {
+            color: #aaa;
+            font-size: 16px;
+            margin-top: 16px;
+            animation: splashDots 1.2s steps(4) infinite;
+        }
+        @keyframes splashPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.04); }
+        }
+        @keyframes splashDots {
+            0% { content: ''; }
+            100% { opacity: 0.5; }
+        }
+
+        /* Landscape detection overlay */
+        #rotate-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: #1a1a2e;
+            z-index: 10000;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 20px;
+            text-align: center;
+            padding: 20px;
+        }
+        #rotate-overlay .rotate-icon {
+            font-size: 60px;
+            margin-bottom: 20px;
         }
 
         /* Touch controls overlay */
@@ -54,17 +110,30 @@
     </style>
 </head>
 <body>
+    <!-- Splash screen (removed by game.js create()) -->
+    <div id="splash-screen">
+        <h1>JUMP QUEST</h1>
+        <p>Loading...</p>
+    </div>
+
+    <!-- Landscape rotation prompt for mobile portrait -->
+    <div id="rotate-overlay">
+        <div class="rotate-icon">&#128241;&#8635;</div>
+        <div>Please rotate your device<br>to landscape mode</div>
+    </div>
+
     <div id="game-container"></div>
 
     <!-- Touch control buttons (shown only on touch devices via JS below) -->
     <div id="touch-controls">
-        <div class="touch-btn" id="btn-left">◀</div>
-        <div class="touch-btn" id="btn-right">▶</div>
-        <div class="touch-btn" id="btn-dash">💨</div>
-        <div class="touch-btn" id="btn-jump">▲</div>
+        <div class="touch-btn" id="btn-left">&#9664;</div>
+        <div class="touch-btn" id="btn-right">&#9654;</div>
+        <div class="touch-btn" id="btn-dash">&#128168;</div>
+        <div class="touch-btn" id="btn-jump">&#9650;</div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.90.0/dist/phaser.min.js"></script>
+    <script>window.Phaser || document.write('<script src="node_modules/phaser/dist/phaser.min.js"><\/script>')</script>
     <!-- Load level files first -->
     <script src="levels/level1.js"></script>
     <script src="levels/level2.js"></script>
@@ -85,27 +154,45 @@
     <script src="modifiers.js"></script>
     <script src="daily.js"></script>
     <script src="story.js"></script>
+    <script src="tutorial.js"></script>
     <!-- Load main game file last -->
     <script src="game.js"></script>
 
-    <!-- Touch controls wiring (runs after game.js so globals are defined) -->
+    <!-- Touch controls + landscape detection wiring -->
     <script>
     (function() {
-        if (navigator.maxTouchPoints <= 0) return;
+        var isTouchDevice = navigator.maxTouchPoints > 0;
 
-        document.getElementById('touch-controls').classList.add('visible');
+        if (isTouchDevice) {
+            document.getElementById('touch-controls').classList.add('visible');
 
-        function bindBtn(id, onStart, onEnd) {
-            var el = document.getElementById(id);
-            el.addEventListener('touchstart',  function(e) { e.preventDefault(); onStart(); }, { passive: false });
-            el.addEventListener('touchend',    function(e) { e.preventDefault(); onEnd();   }, { passive: false });
-            el.addEventListener('touchcancel', function(e) { e.preventDefault(); onEnd();   }, { passive: false });
+            function bindBtn(id, onStart, onEnd) {
+                var el = document.getElementById(id);
+                el.addEventListener('touchstart',  function(e) { e.preventDefault(); onStart(); }, { passive: false });
+                el.addEventListener('touchend',    function(e) { e.preventDefault(); onEnd();   }, { passive: false });
+                el.addEventListener('touchcancel', function(e) { e.preventDefault(); onEnd();   }, { passive: false });
+            }
+
+            bindBtn('btn-left',  function() { touchLeft  = true;  }, function() { touchLeft  = false; });
+            bindBtn('btn-right', function() { touchRight = true;  }, function() { touchRight = false; });
+            bindBtn('btn-jump',  function() { touchJump  = true;  }, function() { touchJump  = false; });
+            bindBtn('btn-dash',  function() { touchDashPressed = true; }, function() {});
+
+            // Landscape detection
+            var rotateOverlay = document.getElementById('rotate-overlay');
+            function checkOrientation() {
+                if (window.innerHeight > window.innerWidth) {
+                    rotateOverlay.style.display = 'flex';
+                } else {
+                    rotateOverlay.style.display = 'none';
+                }
+            }
+            window.addEventListener('resize', checkOrientation);
+            window.addEventListener('orientationchange', function() {
+                setTimeout(checkOrientation, 100);
+            });
+            checkOrientation();
         }
-
-        bindBtn('btn-left',  function() { touchLeft  = true;  }, function() { touchLeft  = false; });
-        bindBtn('btn-right', function() { touchRight = true;  }, function() { touchRight = false; });
-        bindBtn('btn-jump',  function() { touchJump  = true;  }, function() { touchJump  = false; });
-        bindBtn('btn-dash',  function() { touchDashPressed = true; }, function() {});
     })();
     </script>
 </body>

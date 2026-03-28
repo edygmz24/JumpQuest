@@ -62,98 +62,131 @@ function showMainMenu(scene) {
     showingLevelSelect = false;
     clearMenuObjects();
 
-    // Darken background (interactive to block clicks to objects behind)
+    // Darken background
     const bg = scene.add.rectangle(400, 300, 800, 600, 0x000000, 0.85);
     bg.setScrollFactor(0).setDepth(2000).setInteractive();
     menuObjects.push(bg);
 
-    // Title
-    const title = scene.add.text(400, 100, 'JUMP QUEST', {
+    // ---- HERO AREA: Title + Stars + Play ----
+    const title = scene.add.text(400, 80, 'JUMP QUEST', {
         fontSize: '56px', fill: '#ffdd00', fontStyle: 'bold',
         stroke: '#000', strokeThickness: 4
     }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
     menuObjects.push(title);
 
-    // Subtitle
-    const sub = scene.add.text(400, 160, 'A Platformer Adventure', {
-        fontSize: '18px', fill: '#aaa'
+    const sub = scene.add.text(400, 138, 'A Platformer Adventure', {
+        fontSize: '16px', fill: '#888'
     }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
     menuObjects.push(sub);
 
-    // Total stars
+    // Star display with visual star icons
     const totalStars = getTotalStars();
-    const starText = scene.add.text(400, 200, `Total Stars: ${totalStars}/30`, {
-        fontSize: '16px', fill: '#ffd700'
+    const starStr = '';
+    let starDisplay = '';
+    for (let i = 0; i < 30; i++) {
+        starDisplay += i < totalStars ? '\u2605' : '\u2606';
+        if (i === 9 || i === 19) starDisplay += '  ';
+    }
+    const starText = scene.add.text(400, 170, `${starDisplay}`, {
+        fontSize: '10px', fill: totalStars > 0 ? '#ffd700' : '#555', letterSpacing: 2
     }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
     menuObjects.push(starText);
 
-    // Play button
-    const playBtn = createMenuButton(scene, 400, 290, 'PLAY', '#0a0', '#0c0', () => {
+    const starCount = scene.add.text(400, 190, `${totalStars} / 30 Stars`, {
+        fontSize: '13px', fill: '#ffd700'
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
+    menuObjects.push(starCount);
+
+    // Big PLAY button — the hero action
+    const playBtn = createMenuButton(scene, 400, 245, '\u25B6  PLAY', '#0a0', '#0c0', () => {
         clearMenuObjects();
         showingMenu = false;
-        // Start from first unlocked incomplete level
         let startLevel = 0;
         for (let i = 0; i < levels.length; i++) {
             if (!completedLevels['level' + i]) { startLevel = i; break; }
             startLevel = i;
         }
         currentLevelIndex = startLevel;
-        scene.scene.restart();
+        if (typeof restartWithTransition === 'function') restartWithTransition(scene);
+        else scene.scene.restart();
     });
+    playBtn.setStyle({ fontSize: '28px', padding: { x: 40, y: 12 } });
 
-    // Level Select button
-    const selectBtn = createMenuButton(scene, 400, 370, 'LEVEL SELECT', '#06a', '#08c', () => {
+    // ---- SECONDARY: Thin divider + game modes ----
+    const divider1 = scene.add.rectangle(400, 290, 300, 1, 0x444444);
+    divider1.setScrollFactor(0).setDepth(2001);
+    menuObjects.push(divider1);
+
+    const modeLabel = scene.add.text(400, 304, 'GAME MODES', {
+        fontSize: '10px', fill: '#666', letterSpacing: 3
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
+    menuObjects.push(modeLabel);
+
+    // Level Select + Endless + Daily in a balanced row
+    const selectBtn = createMenuButton(scene, 250, 340, 'LEVELS', '#06a', '#08c', () => {
         clearMenuObjects();
         showLevelSelect(scene);
     });
+    selectBtn.setStyle({ fontSize: '16px', padding: { x: 20, y: 8 } });
 
-    // Endless Mode + Daily Challenge (side by side)
-    const endlessBtn = createMenuButton(scene, 260, 420, 'ENDLESS', '#830', '#a50', () => {
+    const endlessBtn = createMenuButton(scene, 400, 340, 'ENDLESS', '#830', '#a50', () => {
         clearMenuObjects();
         showingMenu = false;
         if (typeof endlessMode !== 'undefined') endlessMode = true;
         currentLevelIndex = 0;
-        scene.scene.restart();
+        if (typeof restartWithTransition === 'function') restartWithTransition(scene);
+        else scene.scene.restart();
     });
-    endlessBtn.setStyle({ fontSize: '16px', padding: { x: 16, y: 8 } });
+    endlessBtn.setStyle({ fontSize: '16px', padding: { x: 20, y: 8 } });
 
-    const dailyBtn = createMenuButton(scene, 540, 420, 'DAILY', '#063', '#085', () => {
+    const dailyBtn = createMenuButton(scene, 550, 340, 'DAILY', '#063', '#085', () => {
         clearMenuObjects();
         if (typeof showDailyChallengeScreen === 'function') showDailyChallengeScreen(scene);
         else showMainMenu(scene);
     });
-    dailyBtn.setStyle({ fontSize: '16px', padding: { x: 16, y: 8 } });
-    // Show daily streak
+    dailyBtn.setStyle({ fontSize: '16px', padding: { x: 20, y: 8 } });
+
+    // Daily streak badge
     const ds = typeof dailyStreak !== 'undefined' && dailyStreak > 0 ? dailyStreak : 0;
     if (ds > 0) {
-        const streakText = scene.add.text(540, 448, `Streak: ${ds} days`, {
-            fontSize: '10px', fill: '#0fa'
+        const streakText = scene.add.text(550, 365, `${ds} day streak`, {
+            fontSize: '9px', fill: '#0fa'
         }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
         menuObjects.push(streakText);
     }
 
-    // Bottom row: Achievements, Cosmetics, Modifiers
-    const achBtn = createMenuButton(scene, 200, 475, 'ACHIEVEMENTS', '#553', '#775', () => {
+    // ---- TERTIARY: Extras section ----
+    const divider2 = scene.add.rectangle(400, 385, 300, 1, 0x333333);
+    divider2.setScrollFactor(0).setDepth(2001);
+    menuObjects.push(divider2);
+
+    const extrasLabel = scene.add.text(400, 399, 'EXTRAS', {
+        fontSize: '10px', fill: '#555', letterSpacing: 3
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
+    menuObjects.push(extrasLabel);
+
+    // Extras row — smaller, uniform style with icons
+    const achBtn = createMenuButton(scene, 210, 435, '\uD83C\uDFC6 Achievements', '#3a3a3a', '#4a4a4a', () => {
         clearMenuObjects();
         if (typeof showAchievementGallery === 'function') showAchievementGallery(scene);
     });
-    achBtn.setStyle({ fontSize: '12px', padding: { x: 10, y: 5 } });
+    achBtn.setStyle({ fontSize: '13px', padding: { x: 12, y: 6 } });
 
-    const cosBtn = createMenuButton(scene, 400, 475, 'COSMETICS', '#335', '#557', () => {
+    const cosBtn = createMenuButton(scene, 400, 435, '\uD83C\uDFA8 Cosmetics', '#3a3a3a', '#4a4a4a', () => {
         clearMenuObjects();
         if (typeof showCosmeticScreen === 'function') showCosmeticScreen(scene);
     });
-    cosBtn.setStyle({ fontSize: '12px', padding: { x: 10, y: 5 } });
+    cosBtn.setStyle({ fontSize: '13px', padding: { x: 12, y: 6 } });
 
-    const modBtn = createMenuButton(scene, 600, 475, 'MODIFIERS', '#530', '#750', () => {
+    const modBtn = createMenuButton(scene, 590, 435, '\u2699 Modifiers', '#3a3a3a', '#4a4a4a', () => {
         clearMenuObjects();
         if (typeof showModifierScreen === 'function') showModifierScreen(scene);
     });
-    modBtn.setStyle({ fontSize: '12px', padding: { x: 10, y: 5 } });
+    modBtn.setStyle({ fontSize: '13px', padding: { x: 12, y: 6 } });
 
-    // Controls info
-    const controls = scene.add.text(400, 520, 'Arrows:Move | Space:Jump | Shift:Dash | ESC:Pause', {
-        fontSize: '10px', fill: '#666'
+    // ---- FOOTER: Controls ----
+    const controls = scene.add.text(400, 480, 'Arrows: Move  |  Space: Jump  |  Shift: Dash  |  ESC: Pause', {
+        fontSize: '10px', fill: '#444'
     }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
     menuObjects.push(controls);
 }
@@ -234,7 +267,8 @@ function showLevelSelect(scene) {
                 currentLevelIndex = i;
                 clearMenuObjects();
                 showingLevelSelect = false;
-                scene.scene.restart();
+                if (typeof restartWithTransition === 'function') restartWithTransition(scene);
+                else scene.scene.restart();
             });
         }
     }
@@ -252,9 +286,9 @@ function createMenuButton(scene, x, y, text, bgColor, hoverColor, callback) {
         backgroundColor: bgColor, padding: { x: 30, y: 12 }
     }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
     btn.setInteractive({ useHandCursor: true });
-    btn.on('pointerover', () => btn.setStyle({ backgroundColor: hoverColor }));
+    btn.on('pointerover', () => { btn.setStyle({ backgroundColor: hoverColor }); if (typeof playSound === 'function') playSound('menuHover'); });
     btn.on('pointerout', () => btn.setStyle({ backgroundColor: bgColor }));
-    btn.on('pointerup', callback);
+    btn.on('pointerup', () => { if (typeof playSound === 'function') playSound('menuClick'); callback(); });
     menuObjects.push(btn);
     return btn;
 }
