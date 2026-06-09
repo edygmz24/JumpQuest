@@ -1045,6 +1045,15 @@ function loadLevel(levelIndex) {
         padding: { x: 10, y: 5 }
     });
     instructions.setScrollFactor(0);
+    // Fade the controls reminder out after a few seconds so it doesn't clutter the level view
+    this.tweens.add({
+        targets: instructions,
+        alpha: 0,
+        duration: 600,
+        delay: 6000,
+        ease: 'Power2',
+        onComplete: () => instructions.destroy()
+    });
 
     // Level counter
     const levelCounter = this.add.text(16, 84, `Level ${currentLevelIndex + 1} of ${levels.length}`, {
@@ -1199,7 +1208,7 @@ function update() {
     }
 
     // --- Dash Cooldown Bar ---
-    const dashPct = Math.max(0, 1 - dashCooldown / DASH_COOLDOWN);
+    const dashPct = Phaser.Math.Clamp(1 - dashCooldown / DASH_COOLDOWN, 0, 1);
     dashCooldownBar.setScale(dashPct, 1);
     if (dashPct >= 1) {
         dashReadyPulse += this.game.loop.delta * 0.004;
