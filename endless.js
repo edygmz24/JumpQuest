@@ -92,8 +92,10 @@ function generateEndlessGround(scene, fromX, toX) {
     const endSection = Math.ceil(toX / 400);
     for (let i = startSection; i < endSection; i++) {
         const gx = 200 + i * 400;
-        const gBody = platforms.create(gx, 580, null).setDisplaySize(400, 40).refreshBody();
-        const gRect = scene.add.rectangle(gx, 580, 400, 40, 0x555555);
+        const gBody = platforms.create(gx, 580, null).setDisplaySize(400, 40).setVisible(false).refreshBody();
+        const gRect = (typeof drawTerrainBlock === 'function')
+            ? drawTerrainBlock(scene, gx, 580, 400, 40, 0x555555, true)
+            : scene.add.rectangle(gx, 580, 400, 40, 0x555555);
         endlessPlatformRects.push({ body: gBody, rect: gRect, x: gx });
     }
 }
@@ -119,8 +121,10 @@ function generateEndlessChunk(scene, startX) {
         const pw = platformWidth + endlessRandomRange(-20, 30);
         const ph = endlessRandomRange(16, 24);
 
-        const pBody = platforms.create(px, py, null).setDisplaySize(pw, ph).refreshBody();
-        const pRect = scene.add.rectangle(px, py, pw, ph, 0x7a5230);
+        const pBody = platforms.create(px, py, null).setDisplaySize(pw, ph).setVisible(false).refreshBody();
+        const pRect = (typeof drawTerrainBlock === 'function')
+            ? drawTerrainBlock(scene, px, py, pw, ph, 0x7a5230, false)
+            : scene.add.rectangle(px, py, pw, ph, 0x7a5230);
         endlessPlatformRects.push({ body: pBody, rect: pRect, x: px });
     }
 
@@ -130,8 +134,10 @@ function generateEndlessChunk(scene, startX) {
         const cx = startX + endlessRandomRange(30, 370);
         const cy = endlessRandomRange(280, 540);
 
-        const coin = coins.create(cx, cy, null).setDisplaySize(20, 20).refreshBody();
-        const coinRect = scene.add.rectangle(cx, cy, 20, 20, 0xffd700);
+        const coin = coins.create(cx, cy, null).setDisplaySize(20, 20).setVisible(false).refreshBody();
+        const coinRect = scene.textures.exists('tex_coin')
+            ? scene.add.image(cx, cy, 'tex_coin')
+            : scene.add.rectangle(cx, cy, 20, 20, 0xffd700);
         coinRects.push({ rect: coinRect, body: coin });
         endlessObjects.push({ body: coin, rect: coinRect, type: 'coin', x: cx });
     }
@@ -163,8 +169,10 @@ function generateEndlessChunk(scene, startX) {
         const size = 28;
         const height = enemyType === 'jumper' ? 40 : size;
 
-        const enemy = enemies.create(ex, ey, null).setDisplaySize(size, height);
-        const enemyRect = scene.add.rectangle(ex, ey, size, height, config.color);
+        const enemy = enemies.create(ex, ey, null).setDisplaySize(size, height).setVisible(false);
+        const enemyRect = scene.textures.exists('tex_enemy_' + enemyType)
+            ? scene.add.sprite(ex, ey, 'tex_enemy_' + enemyType).setDisplaySize(size, height)
+            : scene.add.rectangle(ex, ey, size, height, config.color);
 
         enemy.setBounce(0);
         enemy.setCollideWorldBounds(false);
@@ -184,8 +192,10 @@ function generateEndlessChunk(scene, startX) {
         const ox = startX + endlessRandomRange(80, 320);
         const oy = 560; // on top of ground
 
-        const spike = obstacles.create(ox, oy, null).setDisplaySize(30, 30).refreshBody();
-        const spikeRect = scene.add.rectangle(ox, oy, 30, 30, 0xff0000);
+        const spike = obstacles.create(ox, oy, null).setDisplaySize(30, 30).setVisible(false).refreshBody();
+        const spikeRect = scene.textures.exists('tex_spike')
+            ? scene.add.image(ox, oy, 'tex_spike')
+            : scene.add.rectangle(ox, oy, 30, 30, 0xff0000);
         endlessObjects.push({ body: spike, rect: spikeRect, type: 'obstacle', x: ox });
     }
 
@@ -197,10 +207,15 @@ function generateEndlessChunk(scene, startX) {
         const pux = startX + endlessRandomRange(80, 320);
         const puy = endlessRandomRange(300, 480);
 
-        const pu = powerUps.create(pux, puy, null).setDisplaySize(25, 25).refreshBody();
+        const pu = powerUps.create(pux, puy, null).setDisplaySize(25, 25).setVisible(false).refreshBody();
         pu.powerUpType = puType;
-        const puRect = scene.add.rectangle(pux, puy, 25, 25, puConfig.color);
-        puRect.setStrokeStyle(2, 0xffffff);
+        let puRect;
+        if (scene.textures.exists('tex_gem')) {
+            puRect = scene.add.image(pux, puy, 'tex_gem').setTint(puConfig.color);
+        } else {
+            puRect = scene.add.rectangle(pux, puy, 25, 25, puConfig.color);
+            puRect.setStrokeStyle(2, 0xffffff);
+        }
         powerUpRects.push({ rect: puRect, body: pu });
         endlessObjects.push({ body: pu, rect: puRect, type: 'powerup', x: pux });
     }
@@ -278,7 +293,11 @@ function cleanupEndlessObjects(thresholdX) {
         const p = endlessPlatformRects[i];
         if (p.x < thresholdX) {
             if (p.body && p.body.active !== false) p.body.destroy();
-            if (p.rect && p.rect.active !== false) p.rect.destroy();
+            if (Array.isArray(p.rect)) {
+                p.rect.forEach(r => { if (r && r.active !== false) r.destroy(); });
+            } else if (p.rect && p.rect.active !== false) {
+                p.rect.destroy();
+            }
             endlessPlatformRects.splice(i, 1);
         }
     }
