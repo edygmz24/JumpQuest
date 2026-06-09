@@ -116,17 +116,19 @@ function applyPlayerColor(rect, time) {
     if (!rect) return;
 
     const colorId = cosmeticData.equipped.color;
+    let color = null;
     if (colorId === 'rainbow') {
         // Cycle through rainbow colors based on time
         const t = time || Date.now();
-        const idx = Math.floor(t / 150) % RAINBOW_COLORS.length;
-        rect.fillColor = RAINBOW_COLORS[idx];
+        color = RAINBOW_COLORS[Math.floor(t / 150) % RAINBOW_COLORS.length];
     } else {
         const item = COSMETIC_ITEMS.colors[colorId];
-        if (item) {
-            rect.fillColor = item.color;
-        }
+        if (item) color = item.color;
     }
+    if (color === null) return;
+    // Player visual may be a tinted sprite (textured) or a plain rectangle
+    if (rect.setTint) rect.setTint(color);
+    else rect.fillColor = color;
 }
 
 // ========================

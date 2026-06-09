@@ -71,11 +71,20 @@ let livesText;
 // Moving Platforms
 let movingPlatforms = [];
 
+// Ambient floating background particles
+let ambientParticles = [];
+
+// Coin Magnet
+const MAGNET_RADIUS = 90;
+const MAGNET_PULL = 420; // max pull speed in px/s
+
 // Physics Constants
-const GROUND_ACCEL = 600;
-const GROUND_DECEL = 800;
-const AIR_ACCEL = 400;
-const AIR_DECEL = 200;
+// High accel/decel = snappy, grounded feel (player stops in ~4 frames instead of sliding)
+const GROUND_ACCEL = 2600;
+const GROUND_DECEL = 3400;
+const AIR_ACCEL = 1600;
+const AIR_DECEL = 800;
+const TURN_BOOST = 2;       // extra accel multiplier when reversing direction
 const MAX_SPEED = 220;
 const JUMP_VELOCITY = -420;
 const FAST_FALL_MULTIPLIER = 1.5;
@@ -91,6 +100,7 @@ let jumpHeld = false;
 let wasJumpPressed = false;
 let landingSquash = false;
 let cameraOffsetX = 0;
+let playerBaseScale = 1; // raised by the 'bigPlayer' daily modifier
 
 // Power-up System
 const POWERUP_TYPES = {
@@ -225,7 +235,212 @@ let isTestMode = false;
 })();
 
 function preload() {
-    // We'll use simple shapes instead of sprites for now
+    // All art is generated procedurally in generateGameTextures()
+}
+
+// ========================
+// Procedural Pixel Art
+// ========================
+
+function shadeColor(color, percent) {
+    // percent > 0 lightens, < 0 darkens
+    const c = Phaser.Display.Color.ValueToColor(color);
+    const t = percent > 0 ? 255 : 0;
+    const p = Math.abs(percent);
+    const r = Math.round((t - c.red) * p) + c.red;
+    const g = Math.round((t - c.green) * p) + c.green;
+    const b = Math.round((t - c.blue) * p) + c.blue;
+    return Phaser.Display.Color.GetColor(r, g, b);
+}
+
+function colorLuminance(color) {
+    const c = Phaser.Display.Color.ValueToColor(color);
+    return 0.299 * c.red + 0.587 * c.green + 0.114 * c.blue;
+}
+
+function generateGameTextures(scene) {
+    const make = (key, w, h, draw) => {
+        if (scene.textures.exists(key)) return;
+        const g = scene.add.graphics();
+        draw(g);
+        g.generateTexture(key, w, h);
+        g.destroy();
+    };
+
+    // --- Player: white base (tinted by cosmetic color), dark face details ---
+    make('tex_player', 32, 32, g => {
+        g.fillStyle(0xb0b0b0); g.fillRoundedRect(0, 0, 32, 32, 7);          // outline
+        g.fillStyle(0xffffff); g.fillRoundedRect(2, 2, 28, 28, 6);          // body
+        g.fillStyle(0xd5d5d5); g.fillRoundedRect(2, 20, 28, 10, { tl: 0, tr: 0, bl: 6, br: 6 }); // belly shade
+        g.fillStyle(0x1a1a2e);                                              // eyes (face right)
+        g.fillRect(15, 9, 5, 8); g.fillRect(24, 9, 5, 8);
+        g.fillStyle(0xffffff);                                              // eye shine
+        g.fillRect(17, 10, 2, 3); g.fillRect(26, 10, 2, 3);
+        g.fillStyle(0x1a1a2e); g.fillRect(20, 21, 6, 2);                    // mouth
+    });
+
+    // --- Enemies ---
+    make('tex_enemy_walker', 32, 32, g => {
+        g.fillStyle(0xaa0000); g.fillRoundedRect(0, 4, 32, 26, 9);          // dark rim
+        g.fillStyle(0xee2222); g.fillRoundedRect(2, 6, 28, 22, 8);          // body
+        g.fillStyle(0xff6655); g.fillRoundedRect(5, 8, 22, 6, 3);           // top highlight
+        g.fillStyle(0xffffff); g.fillRect(8, 14, 7, 6); g.fillRect(18, 14, 7, 6); // sclera
+        g.fillStyle(0x220000); g.fillRect(12, 16, 3, 4); g.fillRect(19, 16, 3, 4); // pupils
+        g.fillStyle(0x660000);                                              // angry brows
+        g.fillRect(7, 12, 8, 2); g.fillRect(18, 12, 8, 2);
+        g.fillStyle(0x770000); g.fillRect(6, 28, 8, 4); g.fillRect(18, 28, 8, 4); // feet
+    });
+    make('tex_enemy_jumper', 32, 40, g => {
+        g.fillStyle(0xcc6600); g.fillRoundedRect(1, 0, 30, 28, 8);
+        g.fillStyle(0xff8800); g.fillRoundedRect(3, 2, 26, 24, 7);
+        g.fillStyle(0xffbb55); g.fillRoundedRect(6, 4, 20, 5, 2);
+        g.fillStyle(0xffffff); g.fillRect(8, 10, 6, 7); g.fillRect(18, 10, 6, 7);
+        g.fillStyle(0x331100); g.fillRect(10, 13, 3, 4); g.fillRect(20, 13, 3, 4);
+        g.fillStyle(0x884400);                                              // spring legs
+        g.fillRect(6, 28, 20, 2); g.fillRect(9, 31, 14, 2); g.fillRect(6, 34, 20, 2);
+        g.fillRect(8, 37, 6, 3); g.fillRect(18, 37, 6, 3);
+    });
+    make('tex_enemy_flyer', 28, 28, g => {
+        g.fillStyle(0xddddff, 0.85);                                        // wings
+        g.fillTriangle(0, 14, 9, 6, 9, 20);
+        g.fillTriangle(28, 14, 19, 6, 19, 20);
+        g.fillStyle(0x550099); g.fillCircle(14, 14, 11);
+        g.fillStyle(0x8822dd); g.fillCircle(14, 14, 9);
+        g.fillStyle(0xbb66ff); g.fillCircle(11, 10, 3);                     // highlight
+        g.fillStyle(0xffffff); g.fillRect(8, 11, 5, 6); g.fillRect(16, 11, 5, 6);
+        g.fillStyle(0x220033); g.fillRect(10, 13, 3, 4); g.fillRect(17, 13, 3, 4);
+    });
+    make('tex_enemy_shooter', 32, 32, g => {
+        g.fillStyle(0x550000); g.fillRect(2, 22, 28, 10);                   // base
+        g.fillStyle(0x330000); g.fillRect(2, 22, 28, 3);
+        g.fillStyle(0x880000);                                              // dome
+        g.fillRoundedRect(4, 6, 24, 20, { tl: 12, tr: 12, bl: 0, br: 0 });
+        g.fillStyle(0xbb2222); g.fillRoundedRect(7, 9, 12, 6, 3);           // highlight
+        g.fillStyle(0xffdd00); g.fillCircle(16, 16, 5);                     // eye/cannon
+        g.fillStyle(0x000000); g.fillCircle(16, 16, 2.5);
+    });
+    make('tex_enemy_shield', 32, 32, g => {
+        g.fillStyle(0x005555); g.fillRoundedRect(0, 4, 32, 26, 8);
+        g.fillStyle(0x00aaaa); g.fillRoundedRect(2, 6, 28, 22, 7);
+        g.fillStyle(0x66dddd); g.fillRect(2, 11, 28, 5);                    // armor band
+        g.fillStyle(0xeeeeee);                                              // rivets
+        g.fillRect(5, 12, 3, 3); g.fillRect(14, 12, 3, 3); g.fillRect(24, 12, 3, 3);
+        g.fillStyle(0xffffff); g.fillRect(8, 18, 6, 6); g.fillRect(18, 18, 6, 6);
+        g.fillStyle(0x002222); g.fillRect(11, 20, 3, 4); g.fillRect(21, 20, 3, 4);
+        g.fillStyle(0x003333); g.fillRect(6, 28, 8, 4); g.fillRect(18, 28, 8, 4);
+    });
+
+    // --- Coin: gold disc with rim + shine ---
+    make('tex_coin', 20, 20, g => {
+        g.fillStyle(0xb8860b); g.fillCircle(10, 10, 10);
+        g.fillStyle(0xffd700); g.fillCircle(10, 10, 8);
+        g.fillStyle(0xdaa520); g.fillCircle(10, 10, 5);
+        g.fillStyle(0xfff3a8); g.fillRect(5, 4, 3, 3);                      // shine
+    });
+
+    // --- Spikes: two steel spikes on a dark base ---
+    make('tex_spike', 30, 30, g => {
+        g.fillStyle(0x441111); g.fillRect(0, 26, 30, 4);
+        g.fillStyle(0x884444);
+        g.fillTriangle(1, 27, 8, 2, 15, 27);
+        g.fillTriangle(15, 27, 22, 2, 29, 27);
+        g.fillStyle(0xcc8888);                                              // lit edge
+        g.fillTriangle(1, 27, 8, 2, 8, 27);
+        g.fillTriangle(15, 27, 22, 2, 22, 27);
+        g.fillStyle(0xffeeee); g.fillRect(7, 2, 2, 5); g.fillRect(21, 2, 2, 5); // tips
+    });
+
+    // --- End flag: pole + golden pennant ---
+    make('tex_flag', 40, 60, g => {
+        g.fillStyle(0x555555); g.fillRect(3, 0, 5, 56);                     // pole
+        g.fillStyle(0x999999); g.fillRect(3, 0, 2, 56);
+        g.fillStyle(0xcccccc); g.fillCircle(5, 3, 4);                       // finial
+        g.fillStyle(0xcc9900); g.fillTriangle(8, 4, 38, 13, 8, 24);         // pennant shadow
+        g.fillStyle(0xffd700); g.fillTriangle(8, 4, 35, 12, 8, 21);
+        g.fillStyle(0xfff3a8); g.fillTriangle(8, 6, 22, 10, 8, 14);         // highlight
+        g.fillStyle(0x333333); g.fillRect(0, 56, 14, 4);                    // base
+    });
+
+    // --- Checkpoint flag: white base (tinted gray/green) ---
+    make('tex_checkpoint', 20, 50, g => {
+        g.fillStyle(0xbbbbbb); g.fillRect(2, 0, 4, 50);                     // pole
+        g.fillStyle(0xeeeeee); g.fillRect(2, 0, 2, 50);
+        g.fillStyle(0xffffff); g.fillTriangle(6, 2, 19, 8, 6, 15);          // flag
+        g.fillStyle(0xcccccc); g.fillCircle(4, 2, 3);
+    });
+
+    // --- Power-up gem: white faceted diamond (tinted per type) ---
+    make('tex_gem', 26, 26, g => {
+        g.fillStyle(0x888888);
+        g.fillTriangle(13, 0, 26, 13, 13, 26); g.fillTriangle(13, 0, 0, 13, 13, 26);
+        g.fillStyle(0xffffff);
+        g.fillTriangle(13, 2, 24, 13, 13, 24); g.fillTriangle(13, 2, 2, 13, 13, 24);
+        g.fillStyle(0xcccccc); g.fillTriangle(13, 2, 24, 13, 13, 13);       // facet
+        g.fillStyle(0xeeeeee); g.fillTriangle(13, 13, 13, 24, 2, 13);       // facet
+        g.fillStyle(0xffffff, 0.9); g.fillRect(9, 6, 3, 3);                 // sparkle
+    });
+
+    // --- Crate (breakable block) ---
+    make('tex_crate', 40, 40, g => {
+        g.fillStyle(0x8a6a3a); g.fillRect(0, 0, 40, 40);
+        g.fillStyle(0xc4a060); g.fillRect(2, 2, 36, 36);
+        g.fillStyle(0xb08a4a);                                              // plank seams
+        g.fillRect(2, 12, 36, 2); g.fillRect(2, 26, 36, 2);
+        g.lineStyle(4, 0x8B6914, 1);                                        // X brace
+        g.beginPath(); g.moveTo(4, 4); g.lineTo(36, 36); g.strokePath();
+        g.beginPath(); g.moveTo(36, 4); g.lineTo(4, 36); g.strokePath();
+        g.fillStyle(0x5a4420);                                              // corner bolts
+        g.fillRect(3, 3, 4, 4); g.fillRect(33, 3, 4, 4); g.fillRect(3, 33, 4, 4); g.fillRect(33, 33, 4, 4);
+    });
+
+    // --- Moving platform plank ---
+    make('tex_plank', 60, 20, g => {
+        g.fillStyle(0x6e5236); g.fillRect(0, 0, 60, 20);
+        g.fillStyle(0x9B7653); g.fillRect(1, 1, 58, 18);
+        g.fillStyle(0xb98e66); g.fillRect(1, 1, 58, 4);                     // top light
+        g.fillStyle(0x7d5f42); g.fillRect(19, 1, 2, 18); g.fillRect(39, 1, 2, 18); // seams
+        g.fillStyle(0x4a3a24);                                              // bolts
+        g.fillRect(4, 8, 3, 3); g.fillRect(53, 8, 3, 3);
+    });
+
+    // --- Cloud (parallax) ---
+    make('tex_cloud', 110, 44, g => {
+        g.fillStyle(0xffffff);
+        g.fillCircle(25, 30, 14); g.fillCircle(50, 22, 19); g.fillCircle(78, 28, 15);
+        g.fillCircle(95, 33, 10); g.fillRect(20, 28, 80, 14);
+        g.fillStyle(0xe8eef4);
+        g.fillRect(20, 38, 80, 4);
+    });
+}
+
+// Draws a platform/ground block with top highlight and shaded sides.
+// Returns the created game objects (so callers can fade/destroy them together).
+function drawTerrainBlock(scene, x, y, w, h, color, isGround) {
+    const parts = [];
+    parts.push(scene.add.rectangle(x, y, w, h, color));
+    // darker bottom edge
+    const bottomH = Math.min(6, h * 0.3);
+    parts.push(scene.add.rectangle(x, y + h / 2 - bottomH / 2, w, bottomH, shadeColor(color, -0.35)));
+    // bright top lip (grass / surface)
+    const topH = Math.min(6, h * 0.3);
+    parts.push(scene.add.rectangle(x, y - h / 2 + topH / 2, w, topH, shadeColor(color, 0.35)));
+    // side shading
+    if (w > 24) {
+        parts.push(scene.add.rectangle(x + w / 2 - 2, y, 4, h, shadeColor(color, -0.2)));
+    }
+    // grass tufts / speckles along the top of ground sections
+    if (isGround) {
+        const tuftColor = shadeColor(color, 0.45);
+        for (let tx = x - w / 2 + 10; tx < x + w / 2 - 10; tx += 28 + Math.random() * 30) {
+            parts.push(scene.add.rectangle(tx, y - h / 2 - 2, 3, 5, tuftColor));
+        }
+        // embedded "rocks"
+        const rockColor = shadeColor(color, -0.3);
+        for (let rx = x - w / 2 + 25; rx < x + w / 2 - 15; rx += 60 + Math.random() * 70) {
+            parts.push(scene.add.rectangle(rx, y + 4 + Math.random() * (h / 2 - 8), 6, 4, rockColor));
+        }
+    }
+    return parts;
 }
 
 function create() {
@@ -269,6 +484,8 @@ function create() {
     wasJumpPressed = false;
     landingSquash = false;
     cameraOffsetX = 0;
+    playerBaseScale = 1;
+    ambientParticles = [];
     powerUpRects = [];
     activePowerUps = { speed: false, doubleJump: false, invincibility: false, highJump: false };
     hasDoubleJumped = false;
@@ -409,29 +626,89 @@ function loadLevel(levelIndex) {
     const bgColor1 = theme.bgColor1 ?? 0x16213e;
     const bgColor2 = theme.bgColor2 ?? 0x0f3460;
 
-    // Sky background
-    this.add.rectangle(currentLevel.worldWidth / 2, currentLevel.worldHeight / 2,
-        currentLevel.worldWidth, currentLevel.worldHeight, skyColor).setDepth(-10);
+    // Generate all procedural textures (no-op if already created)
+    generateGameTextures(this);
 
-    // Parallax background layers
-    const bgWidth = currentLevel.worldWidth;
-    for (let i = 0; i < 6; i++) {
-        const w = 200 + Math.random() * 300;
-        const h = 80 + Math.random() * 120;
-        const x = Math.random() * bgWidth;
-        const y = 200 + Math.random() * 250;
-        const bg = this.add.rectangle(x, y, w, h, bgColor1, 0.3);
-        bg.setScrollFactor(0.1);
-        bg.setDepth(-9);
+    // Sky: vertical gradient (theme color fading toward a lighter horizon)
+    const skyKey = 'sky_' + skyColor.toString(16);
+    if (!this.textures.exists(skyKey)) {
+        const g = this.add.graphics();
+        const bands = 16;
+        const top = Phaser.Display.Color.ValueToColor(skyColor);
+        const bottom = Phaser.Display.Color.ValueToColor(shadeColor(skyColor, 0.35));
+        for (let i = 0; i < bands; i++) {
+            const c = Phaser.Display.Color.Interpolate.ColorWithColor(top, bottom, bands - 1, i);
+            g.fillStyle(Phaser.Display.Color.GetColor(c.r, c.g, c.b));
+            g.fillRect(0, i * (256 / bands), 32, 256 / bands + 1);
+        }
+        g.generateTexture(skyKey, 32, 256);
+        g.destroy();
     }
-    for (let i = 0; i < 8; i++) {
-        const w = 100 + Math.random() * 200;
-        const h = 60 + Math.random() * 80;
-        const x = Math.random() * bgWidth;
-        const y = 250 + Math.random() * 200;
-        const bg = this.add.rectangle(x, y, w, h, bgColor2, 0.25);
-        bg.setScrollFactor(0.3);
-        bg.setDepth(-8);
+    this.add.image(0, 0, skyKey).setOrigin(0, 0)
+        .setDisplaySize(currentLevel.worldWidth, currentLevel.worldHeight).setDepth(-12);
+
+    // Parallax decorations depend on how dark the sky is
+    const bgWidth = currentLevel.worldWidth;
+    const isNight = colorLuminance(skyColor) < 100;
+    if (isNight) {
+        // Stars + moon
+        for (let i = 0; i < 50; i++) {
+            const star = this.add.circle(Math.random() * bgWidth, 20 + Math.random() * 320,
+                Math.random() < 0.2 ? 2 : 1, 0xffffff, 0.4 + Math.random() * 0.6);
+            star.setScrollFactor(0.05).setDepth(-11);
+            this.tweens.add({
+                targets: star, alpha: 0.15, duration: 800 + Math.random() * 1800,
+                yoyo: true, repeat: -1, delay: Math.random() * 2000
+            });
+        }
+        this.add.circle(620, 90, 26, 0xf4f1de).setScrollFactor(0.03).setDepth(-11);
+        this.add.circle(612, 82, 6, shadeColor(0xf4f1de, -0.15)).setScrollFactor(0.03).setDepth(-10.5);
+        this.add.circle(630, 98, 4, shadeColor(0xf4f1de, -0.15)).setScrollFactor(0.03).setDepth(-10.5);
+    } else {
+        // Sun + drifting clouds
+        const sun = this.add.circle(660, 80, 30, 0xfff3b0, 0.95).setScrollFactor(0.03).setDepth(-11);
+        this.add.circle(660, 80, 42, 0xfff3b0, 0.25).setScrollFactor(0.03).setDepth(-11);
+        const cloudCount = Math.max(5, Math.floor(bgWidth / 450));
+        for (let i = 0; i < cloudCount; i++) {
+            const cx = Math.random() * bgWidth;
+            const cy = 50 + Math.random() * 180;
+            const scale = 0.6 + Math.random() * 0.9;
+            const cloud = this.add.image(cx, cy, 'tex_cloud')
+                .setScale(scale).setAlpha(0.55 + Math.random() * 0.3)
+                .setScrollFactor(0.1 + Math.random() * 0.15).setDepth(-10);
+            this.tweens.add({
+                targets: cloud, x: cx + 40 + Math.random() * 50,
+                duration: 9000 + Math.random() * 8000, yoyo: true, repeat: -1,
+                ease: 'Sine.easeInOut'
+            });
+        }
+    }
+
+    // Distant rolling hills (two parallax layers, built from overlapping ellipses)
+    for (let x = -100; x < bgWidth + 300; x += 260 + Math.random() * 160) {
+        const w = 420 + Math.random() * 280;
+        const h = 160 + Math.random() * 120;
+        this.add.ellipse(x, 612, w, h, bgColor1, 0.55).setScrollFactor(0.15).setDepth(-9);
+    }
+    for (let x = -50; x < bgWidth + 300; x += 200 + Math.random() * 140) {
+        const w = 300 + Math.random() * 220;
+        const h = 110 + Math.random() * 90;
+        this.add.ellipse(x, 616, w, h, bgColor2, 0.75).setScrollFactor(0.35).setDepth(-8);
+    }
+
+    // Ambient floating particles (fireflies at night, dust motes by day)
+    ambientParticles = [];
+    const ambColor = isNight ? 0xffe28a : 0xffffff;
+    for (let i = 0; i < 14; i++) {
+        const p = this.add.circle(Math.random() * 800, Math.random() * 500,
+            isNight ? 2 : 1.5, ambColor, isNight ? 0.7 : 0.35);
+        p.setDepth(-5);
+        ambientParticles.push({
+            obj: p,
+            vx: (Math.random() - 0.5) * 18,
+            vy: (Math.random() - 0.5) * 12,
+            phase: Math.random() * Math.PI * 2
+        });
     }
 
     // Create platform group
@@ -440,21 +717,21 @@ function loadLevel(levelIndex) {
     // Extended ground
     const groundSections = Math.ceil(currentLevel.worldWidth / 400);
     for (let i = 0; i < groundSections; i++) {
-        platforms.create(200 + i * 400, 580, null).setDisplaySize(400, 40).refreshBody();
-        this.add.rectangle(200 + i * 400, 580, 400, 40, groundColor);
+        platforms.create(200 + i * 400, 580, null).setDisplaySize(400, 40).setVisible(false).refreshBody();
+        drawTerrainBlock(this, 200 + i * 400, 580, 400, 40, groundColor, true);
     }
 
     // Create platforms from level data
     currentLevel.platforms.forEach(platform => {
-        platforms.create(platform.x, platform.y, null).setDisplaySize(platform.width, platform.height).refreshBody();
-        this.add.rectangle(platform.x, platform.y, platform.width, platform.height, platformColor);
+        platforms.create(platform.x, platform.y, null).setDisplaySize(platform.width, platform.height).setVisible(false).refreshBody();
+        drawTerrainBlock(this, platform.x, platform.y, platform.width, platform.height, platformColor, false);
     });
 
     // Obstacles (spikes) from level data
     obstacles = this.physics.add.staticGroup();
     currentLevel.obstacles.forEach(obstacle => {
-        obstacles.create(obstacle.x, obstacle.y, null).setDisplaySize(30, 30).refreshBody();
-        this.add.rectangle(obstacle.x, obstacle.y, 30, 30, 0xff0000);
+        obstacles.create(obstacle.x, obstacle.y, null).setDisplaySize(30, 30).setVisible(false).refreshBody();
+        this.add.image(obstacle.x, obstacle.y, 'tex_spike');
     });
 
     // Coins from level data
@@ -462,8 +739,8 @@ function loadLevel(levelIndex) {
     totalLevelCoins = (currentLevel.coins ? currentLevel.coins.length : 0);
     if (currentLevel.coins) {
         currentLevel.coins.forEach(coinData => {
-            const coin = coins.create(coinData.x, coinData.y, null).setDisplaySize(20, 20).refreshBody();
-            const coinRect = this.add.rectangle(coinData.x, coinData.y, 20, 20, 0xffd700); // Gold color
+            const coin = coins.create(coinData.x, coinData.y, null).setDisplaySize(20, 20).setVisible(false).refreshBody();
+            const coinRect = this.add.image(coinData.x, coinData.y, 'tex_coin');
             coinRects.push({ rect: coinRect, body: coin });
         });
     }
@@ -472,19 +749,20 @@ function loadLevel(levelIndex) {
     checkpoints = this.physics.add.staticGroup();
     if (currentLevel.checkpoints) {
         currentLevel.checkpoints.forEach(cpData => {
-            const checkpoint = checkpoints.create(cpData.x, cpData.y, null).setDisplaySize(20, 50).refreshBody();
-            const cpRect = this.add.rectangle(cpData.x, cpData.y, 20, 50, 0x888888); // Gray = inactive
+            const checkpoint = checkpoints.create(cpData.x, cpData.y, null).setDisplaySize(20, 50).setVisible(false).refreshBody();
+            const cpRect = this.add.image(cpData.x, cpData.y, 'tex_checkpoint').setTint(0x999999); // Gray = inactive
             checkpointRects.push({ rect: cpRect, body: checkpoint, activated: false });
         });
     }
 
     // Player
-    player = this.physics.add.sprite(currentLevel.playerStart.x, currentLevel.playerStart.y, null).setDisplaySize(32, 32);
-    playerRect = this.add.rectangle(currentLevel.playerStart.x, currentLevel.playerStart.y, 32, 32, 0x0000ff);
+    player = this.physics.add.sprite(currentLevel.playerStart.x, currentLevel.playerStart.y, null).setDisplaySize(32, 32).setVisible(false);
+    playerRect = this.add.sprite(currentLevel.playerStart.x, currentLevel.playerStart.y, 'tex_player');
+    playerRect.setDepth(10);
 
-    // Ghost sprite (translucent white rectangle showing best-time replay)
+    // Ghost sprite (translucent player copy showing best-time replay)
     if (ghostReplay && ghostEnabled) {
-        ghostSprite = this.add.rectangle(ghostReplay[0]?.x || 100, ghostReplay[0]?.y || 500, 32, 32, 0xffffff, 0.25);
+        ghostSprite = this.add.image(ghostReplay[0]?.x || 100, ghostReplay[0]?.y || 500, 'tex_player').setAlpha(0.25);
         ghostSprite.setDepth(50);
     }
 
@@ -504,8 +782,9 @@ function loadLevel(levelIndex) {
         const size = type === 'flyer' ? 28 : (type === 'jumper' ? 32 : 32);
         const height = type === 'jumper' ? 40 : size;
 
-        const enemy = enemies.create(enemyData.x, enemyData.y, null).setDisplaySize(size, height);
-        const enemyRect = this.add.rectangle(enemyData.x, enemyData.y, size, height, config.color);
+        const enemy = enemies.create(enemyData.x, enemyData.y, null).setDisplaySize(size, height).setVisible(false);
+        const enemyTexKey = this.textures.exists('tex_enemy_' + type) ? 'tex_enemy_' + type : 'tex_enemy_walker';
+        const enemyRect = this.add.sprite(enemyData.x, enemyData.y, enemyTexKey);
 
         // Shield enemies get a visible border
         if (type === 'shield') {
@@ -585,10 +864,9 @@ function loadLevel(levelIndex) {
         currentLevel.powerUps.forEach(puData => {
             const config = POWERUP_TYPES[puData.type];
             if (!config) return;
-            const pu = powerUps.create(puData.x, puData.y, null).setDisplaySize(25, 25).refreshBody();
+            const pu = powerUps.create(puData.x, puData.y, null).setDisplaySize(25, 25).setVisible(false).refreshBody();
             pu.powerUpType = puData.type;
-            const puRect = this.add.rectangle(puData.x, puData.y, 25, 25, config.color);
-            puRect.setStrokeStyle(2, 0xffffff);
+            const puRect = this.add.image(puData.x, puData.y, 'tex_gem').setTint(config.color);
             powerUpRects.push({ rect: puRect, body: pu });
         });
     }
@@ -599,14 +877,10 @@ function loadLevel(levelIndex) {
         currentLevel.breakableBlocks.forEach(bbData => {
             const w = bbData.width || 40;
             const h = bbData.height || 40;
-            const bb = breakableBlocks.create(bbData.x, bbData.y, null).setDisplaySize(w, h).refreshBody();
+            const bb = breakableBlocks.create(bbData.x, bbData.y, null).setDisplaySize(w, h).setVisible(false).refreshBody();
             bb.contains = bbData.contains || null;
-            const bbRect = this.add.rectangle(bbData.x, bbData.y, w, h, 0xc4a060);
-            // Draw X pattern
-            const lineSize = Math.min(w, h) * 0.3;
-            const x1 = this.add.rectangle(bbData.x, bbData.y, lineSize * 2, 3, 0x8B6914).setAngle(45);
-            const x2 = this.add.rectangle(bbData.x, bbData.y, lineSize * 2, 3, 0x8B6914).setAngle(-45);
-            breakableBlockRects.push({ rect: bbRect, body: bb, x1, x2 });
+            const bbRect = this.add.image(bbData.x, bbData.y, 'tex_crate').setDisplaySize(w, h);
+            breakableBlockRects.push({ rect: bbRect, body: bb, x1: null, x2: null });
         });
     }
 
@@ -618,10 +892,11 @@ function loadLevel(levelIndex) {
     const fakeWallGroup = this.physics.add.staticGroup();
     if (currentLevel.fakeWalls) {
         currentLevel.fakeWalls.forEach(fwData => {
-            const fw = fakeWallGroup.create(fwData.x, fwData.y, null).setDisplaySize(fwData.width, fwData.height).refreshBody();
-            const fwRect = this.add.rectangle(fwData.x, fwData.y, fwData.width, fwData.height, platformColor);
-            fakeWalls.push({ body: fw, rect: fwRect, x: fwData.x, y: fwData.y, width: fwData.width, height: fwData.height, broken: false });
-            fakeWallRects.push(fwRect);
+            const fw = fakeWallGroup.create(fwData.x, fwData.y, null).setDisplaySize(fwData.width, fwData.height).setVisible(false).refreshBody();
+            // Must look identical to a real platform so the secret stays hidden
+            const fwParts = drawTerrainBlock(this, fwData.x, fwData.y, fwData.width, fwData.height, platformColor, false);
+            fakeWalls.push({ body: fw, rect: fwParts, x: fwData.x, y: fwData.y, width: fwData.width, height: fwData.height, broken: false });
+            fakeWallRects.push(fwParts);
         });
         // Fake walls collide with player but can be broken by dashing
         this.physics.add.collider(player, fakeWallGroup, function(player, wall) {
@@ -634,8 +909,8 @@ function loadLevel(levelIndex) {
     // Secret Platforms: additional platforms for secret areas (like wall-jump shafts)
     if (currentLevel.secretPlatforms) {
         currentLevel.secretPlatforms.forEach(sp => {
-            platforms.create(sp.x, sp.y, null).setDisplaySize(sp.width, sp.height).refreshBody();
-            this.add.rectangle(sp.x, sp.y, sp.width, sp.height, platformColor);
+            platforms.create(sp.x, sp.y, null).setDisplaySize(sp.width, sp.height).setVisible(false).refreshBody();
+            drawTerrainBlock(this, sp.x, sp.y, sp.width, sp.height, platformColor, false);
         });
     }
 
@@ -645,7 +920,7 @@ function loadLevel(levelIndex) {
     const invisPlatGroup = this.physics.add.staticGroup();
     if (currentLevel.invisiblePlatforms) {
         currentLevel.invisiblePlatforms.forEach(ipData => {
-            const ip = invisPlatGroup.create(ipData.x, ipData.y, null).setDisplaySize(ipData.width, ipData.height).refreshBody();
+            const ip = invisPlatGroup.create(ipData.x, ipData.y, null).setDisplaySize(ipData.width, ipData.height).setVisible(false).refreshBody();
             const ipRect = this.add.rectangle(ipData.x, ipData.y, ipData.width, ipData.height, platformColor);
             ipRect.setAlpha(0.05);
             invisiblePlatforms.push({ body: ip, rect: ipRect, x: ipData.x, y: ipData.y, width: ipData.width, height: ipData.height, revealed: false });
@@ -660,10 +935,10 @@ function loadLevel(levelIndex) {
     if (currentLevel.secretCoins) {
         totalLevelCoins += currentLevel.secretCoins.length;
         currentLevel.secretCoins.forEach(scData => {
-            const sc = coins.create(scData.x, scData.y, null).setDisplaySize(20, 20).refreshBody();
+            const sc = coins.create(scData.x, scData.y, null).setDisplaySize(20, 20).setVisible(false).refreshBody();
             sc.setAlpha(0);
             sc.body.enable = false;
-            const scRect = this.add.rectangle(scData.x, scData.y, 20, 20, 0xffd700);
+            const scRect = this.add.image(scData.x, scData.y, 'tex_coin');
             scRect.setAlpha(0);
             coinRects.push({ rect: scRect, body: sc });
             secretCoinRects.push({ rect: scRect, body: sc, trigger: scData.revealTrigger, revealed: false });
@@ -677,12 +952,11 @@ function loadLevel(levelIndex) {
         currentLevel.secretPowerUps.forEach(spuData => {
             const puConfig = POWERUP_TYPES[spuData.type];
             if (!puConfig) return;
-            const spu = powerUps.create(spuData.x, spuData.y, null).setDisplaySize(25, 25).refreshBody();
+            const spu = powerUps.create(spuData.x, spuData.y, null).setDisplaySize(25, 25).setVisible(false).refreshBody();
             spu.powerUpType = spuData.type;
             spu.setAlpha(0);
             spu.body.enable = false;
-            const spuRect = this.add.rectangle(spuData.x, spuData.y, 25, 25, puConfig.color);
-            spuRect.setStrokeStyle(2, 0xffffff);
+            const spuRect = this.add.image(spuData.x, spuData.y, 'tex_gem').setTint(puConfig.color);
             spuRect.setAlpha(0);
             powerUpRects.push({ rect: spuRect, body: spu });
             secretPowerUpRects.push({ rect: spuRect, body: spu, trigger: spuData.revealTrigger, revealed: false });
@@ -690,8 +964,13 @@ function loadLevel(levelIndex) {
     }
 
     // End flag at the position from level data
-    endFlag = this.add.rectangle(currentLevel.flagPosition.x, currentLevel.flagPosition.y, 40, 60, 0xffff00);
+    endFlag = this.add.image(currentLevel.flagPosition.x, currentLevel.flagPosition.y, 'tex_flag');
     this.physics.add.existing(endFlag, true);
+    // Gentle waving animation
+    this.tweens.add({
+        targets: endFlag, angle: { from: -2, to: 2 }, duration: 900,
+        yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
+    });
 
     // Hide the flag on boss levels until boss is defeated
     if (currentLevel.bossArena) {
@@ -718,11 +997,11 @@ function loadLevel(levelIndex) {
     // Moving Platforms from level data
     if (currentLevel.movingPlatforms) {
         currentLevel.movingPlatforms.forEach(mp => {
-            const platform = this.physics.add.sprite(mp.x, mp.y, null).setDisplaySize(mp.width, mp.height);
+            const platform = this.physics.add.sprite(mp.x, mp.y, null).setDisplaySize(mp.width, mp.height).setVisible(false);
             platform.body.setImmovable(true);
             platform.body.setAllowGravity(false);
 
-            const rect = this.add.rectangle(mp.x, mp.y, mp.width, mp.height, 0x9B7653);
+            const rect = this.add.image(mp.x, mp.y, 'tex_plank').setDisplaySize(mp.width, mp.height);
 
             movingPlatforms.push({
                 sprite: platform,
@@ -766,6 +1045,15 @@ function loadLevel(levelIndex) {
         padding: { x: 10, y: 5 }
     });
     instructions.setScrollFactor(0);
+    // Fade the controls reminder out after a few seconds so it doesn't clutter the level view
+    this.tweens.add({
+        targets: instructions,
+        alpha: 0,
+        duration: 600,
+        delay: 6000,
+        ease: 'Power2',
+        onComplete: () => instructions.destroy()
+    });
 
     // Level counter
     const levelCounter = this.add.text(16, 84, `Level ${currentLevelIndex + 1} of ${levels.length}`, {
@@ -920,7 +1208,7 @@ function update() {
     }
 
     // --- Dash Cooldown Bar ---
-    const dashPct = Math.max(0, 1 - dashCooldown / DASH_COOLDOWN);
+    const dashPct = Phaser.Math.Clamp(1 - dashCooldown / DASH_COOLDOWN, 0, 1);
     dashCooldownBar.setScale(dashPct, 1);
     if (dashPct >= 1) {
         dashReadyPulse += this.game.loop.delta * 0.004;
@@ -995,6 +1283,13 @@ function update() {
             player.setVelocityY(0);
             // Dash trail particles
             spawnParticles(this, player.x - dashDirection * 10, player.y, 0x00ccff, 1, 10);
+            // Afterimage trail
+            const after = this.add.image(player.x, player.y, 'tex_player')
+                .setAlpha(0.35).setTint(0x66e0ff).setFlipX(playerRect.flipX).setDepth(9);
+            this.tweens.add({
+                targets: after, alpha: 0, duration: 180,
+                onComplete: () => after.destroy()
+            });
         }
     }
 
@@ -1037,15 +1332,15 @@ function update() {
     // --- Acceleration-based Movement (skip during dash) ---
     if (!isDashing) {
         const maxSpeed = activePowerUps.speed ? 330 : MAX_SPEED;
-        const accel = onGround ? (activePowerUps.speed ? 900 : GROUND_ACCEL) : AIR_ACCEL;
+        const accel = onGround ? (activePowerUps.speed ? 3000 : GROUND_ACCEL) : AIR_ACCEL;
         const decel = onGround ? GROUND_DECEL : AIR_DECEL;
         let vx = player.body.velocity.x;
 
         if (cursors.left.isDown || touchLeft) {
-            vx -= accel * deltaS;
+            vx -= accel * (vx > 0 ? TURN_BOOST : 1) * deltaS;
             if (vx < -maxSpeed) vx = -maxSpeed;
         } else if (cursors.right.isDown || touchRight) {
-            vx += accel * deltaS;
+            vx += accel * (vx < 0 ? TURN_BOOST : 1) * deltaS;
             if (vx > maxSpeed) vx = maxSpeed;
         } else {
             if (vx > 0) {
@@ -1107,31 +1402,45 @@ function update() {
 
     wasJumpPressed = jumpPressed;
 
+    // --- Facing, run wobble & dash lean ---
+    playerRect.setFlipX(lastFacingDir === -1);
+    if (isDashing) {
+        playerRect.rotation = dashDirection * 0.2;
+    } else if (onGround && Math.abs(player.body.velocity.x) > 30) {
+        playerRect.rotation = Math.sin(this.time.now * 0.025) * 0.07;
+        // Occasional running dust kicked up behind the player
+        if (Math.random() < 0.1) {
+            spawnParticles(this, player.x - lastFacingDir * 12, player.y + 14, 0xbbbbbb, 1, 12);
+        }
+    } else {
+        playerRect.rotation = 0;
+    }
+
     // --- Squash & Stretch ---
     const vy = player.body.velocity.y;
     if (!onGround) {
         if (vy < -50) {
             // Rising - stretch vertically
-            playerRect.setScale(0.85, 1.15);
+            playerRect.setScale(0.85 * playerBaseScale, 1.15 * playerBaseScale);
         } else if (vy > 50) {
             // Falling - stretch vertically
-            playerRect.setScale(0.8, 1.2);
+            playerRect.setScale(0.8 * playerBaseScale, 1.2 * playerBaseScale);
         } else {
-            playerRect.setScale(1, 1);
+            playerRect.setScale(playerBaseScale, playerBaseScale);
         }
     } else if (!landingSquash) {
-        playerRect.setScale(1, 1);
+        playerRect.setScale(playerBaseScale, playerBaseScale);
     }
 
     // --- Landing Detection ---
     if (onGround && !wasOnGround) {
         // Just landed
         landingSquash = true;
-        playerRect.setScale(1.3, 0.7);
+        playerRect.setScale(1.3 * playerBaseScale, 0.7 * playerBaseScale);
         this.tweens.add({
             targets: playerRect,
-            scaleX: 1,
-            scaleY: 1,
+            scaleX: playerBaseScale,
+            scaleY: playerBaseScale,
             duration: 120,
             ease: 'Bounce.easeOut',
             onComplete: () => { landingSquash = false; }
@@ -1154,12 +1463,47 @@ function update() {
     cameraOffsetX += (targetOffsetX - cameraOffsetX) * 0.05;
     this.cameras.main.setFollowOffset(cameraOffsetX, -30);
 
-    // --- Coin Hover Animation ---
+    // --- Coin Magnet: pull nearby coins toward the player ---
+    coinRects.forEach(coinData => {
+        const c = coinData.body;
+        if (!c || !c.active || !c.body || !c.body.enable) return;
+        const dx = player.x - c.x;
+        const dy = player.y - c.y;
+        const distSq = dx * dx + dy * dy;
+        if (distSq < MAGNET_RADIUS * MAGNET_RADIUS && distSq > 4) {
+            const dist = Math.sqrt(distSq);
+            // Pull harder the closer the coin gets
+            const pull = 140 + MAGNET_PULL * (1 - dist / MAGNET_RADIUS);
+            c.x += (dx / dist) * pull * deltaS;
+            c.y += (dy / dist) * pull * deltaS;
+            c.refreshBody();
+            // Sparkle trail while being pulled
+            if (Math.random() < 0.2) {
+                spawnParticles(this, c.x, c.y, 0xffd700, 1, 8);
+            }
+        }
+    });
+
+    // --- Coin Hover & Spin Animation ---
     const time = this.time.now;
     coinRects.forEach((coinData, i) => {
         if (coinData.rect && coinData.body) {
+            coinData.rect.x = coinData.body.x;
             coinData.rect.y = coinData.body.y + Math.sin(time * 0.004 + i) * 3;
+            // Fake 3D spin by oscillating horizontal scale
+            coinData.rect.scaleX = 0.25 + Math.abs(Math.sin(time * 0.003 + i * 0.7)) * 0.75;
         }
+    });
+
+    // --- Ambient floating particles (drift and wrap around the camera view) ---
+    const cam = this.cameras.main.worldView;
+    ambientParticles.forEach(ap => {
+        ap.obj.x += ap.vx * deltaS;
+        ap.obj.y += (ap.vy + Math.sin(time * 0.001 + ap.phase) * 8) * deltaS;
+        if (ap.obj.x < cam.x - 20) ap.obj.x = cam.x + cam.width + 10;
+        if (ap.obj.x > cam.x + cam.width + 20) ap.obj.x = cam.x - 10;
+        if (ap.obj.y < cam.y - 20) ap.obj.y = cam.y + cam.height + 10;
+        if (ap.obj.y > cam.y + cam.height + 20) ap.obj.y = cam.y - 10;
     });
 
     // Enemy behavior by type and update visual rectangles
@@ -1215,6 +1559,10 @@ function update() {
         // Update enemy rectangle position
         if (enemyRects[index]) {
             enemyRects[index].setPosition(enemy.x, enemy.y);
+            // Face direction of travel
+            if (enemyRects[index].setFlipX && Math.abs(enemy.body.velocity.x) > 5) {
+                enemyRects[index].setFlipX(enemy.body.velocity.x < 0);
+            }
             // Update shield border position
             if (enemyRects[index].shieldBorder) {
                 enemyRects[index].shieldBorder.setPosition(enemy.x, enemy.y);
@@ -1271,7 +1619,7 @@ function update() {
 
     // Invincibility flash effect
     if (activePowerUps.invincibility) {
-        playerRect.setFillStyle(Math.floor(this.time.now / 100) % 2 === 0 ? 0xffffff : 0x0000ff);
+        playerRect.setTint(Math.floor(this.time.now / 100) % 2 === 0 ? 0xffffff : 0x88ccff);
     } else if (typeof applyPlayerColor === 'function') {
         applyPlayerColor(playerRect, this.time.now);
     }
@@ -1295,7 +1643,7 @@ function update() {
     checkpointRects.forEach((cpData) => {
         if (!cpData.activated && player.x >= cpData.body.x) {
             cpData.activated = true;
-            cpData.rect.setFillStyle(0x00ff00); // Green = activated
+            cpData.rect.setTint(0x44ff44); // Green = activated
             lastCheckpoint = { x: cpData.body.x, y: cpData.body.y - 30 };
 
             // Visual feedback - brief scale animation + particles
@@ -1495,6 +1843,17 @@ function collectCoin(player, coin) {
     showScorePopup(this, cx, cy - 10, popupText, popupColor);
     playCoinSound(comboCount);
 
+    // All coins collected: big bonus celebration
+    if (totalLevelCoins > 0 && coinsCollected === totalLevelCoins) {
+        score += 500;
+        scoreText.setText(`Score: ${score} | Best: ${highScore}`);
+        showScorePopup(this, player.x, player.y - 50, 'ALL COINS! +500', '#ffd700');
+        spawnParticles(this, player.x, player.y, 0xffd700, 16, 70);
+        spawnParticles(this, player.x, player.y - 20, 0xffffff, 8, 50);
+        shakeCamera(this, 12, 100);
+        playSound('unlock');
+    }
+
     // Achievement tracking
     if (typeof incrementStat === 'function') {
         incrementStat('totalCoins', 1);
@@ -1565,6 +1924,7 @@ function stompEnemy(enemy) {
     // Animate the visual rectangle
     if (enemyRect) {
         if (enemyRect.shieldBorder) enemyRect.shieldBorder.destroy();
+        if (enemyRect.setTintFill) enemyRect.setTintFill(0xffffff); // white hit flash
         this.tweens.add({
             targets: enemyRect,
             scaleY: 0.2,
@@ -1639,7 +1999,7 @@ function hitEnemy() {
         gameOver = true;
         this.physics.pause();
         if (typeof stopBackgroundMusic === 'function') stopBackgroundMusic();
-        player.setTint(0xff0000);
+        playerRect.setTint(0xff0000);
 
         const gameOverText = this.add.text(this.cameras.main.centerX, 300, 'GAME OVER!', {
             fontSize: '48px',
@@ -2179,7 +2539,8 @@ function collectPowerUp(player, powerUp) {
     powerUpTimers[type] = this.time.delayedCall(config.duration, () => {
         activePowerUps[type] = false;
         if (type === 'invincibility') {
-            playerRect.setFillStyle(0x0000ff);
+            if (typeof applyPlayerColor === 'function') applyPlayerColor(playerRect, Date.now());
+            else playerRect.setTint(0x0000ff);
         }
     });
 
@@ -2196,7 +2557,7 @@ function collectPowerUp(player, powerUp) {
 
 function shootProjectile(enemy) {
     const direction = player.x < enemy.x ? -1 : 1;
-    const projectile = projectiles.create(enemy.x + direction * 20, enemy.y, null).setDisplaySize(8, 8);
+    const projectile = projectiles.create(enemy.x + direction * 20, enemy.y, null).setDisplaySize(8, 8).setVisible(false);
     projectile.setVelocityX(direction * 200);
     projectile.body.setAllowGravity(false);
 
@@ -2318,8 +2679,8 @@ function breakBlock(block) {
     if (idx !== -1) {
         const bbr = breakableBlockRects[idx];
         bbr.rect.destroy();
-        bbr.x1.destroy();
-        bbr.x2.destroy();
+        if (bbr.x1) bbr.x1.destroy();
+        if (bbr.x2) bbr.x2.destroy();
         breakableBlockRects.splice(idx, 1);
     }
 
@@ -2331,14 +2692,13 @@ function breakBlock(block) {
 
     // Spawn contents
     if (contains === 'coin') {
-        const coin = coins.create(bx, by - 30, null).setDisplaySize(20, 20).refreshBody();
-        const coinRect = this.add.rectangle(bx, by - 30, 20, 20, 0xffd700);
+        const coin = coins.create(bx, by - 30, null).setDisplaySize(20, 20).setVisible(false).refreshBody();
+        const coinRect = this.add.image(bx, by - 30, 'tex_coin');
         coinRects.push({ rect: coinRect, body: coin });
     } else if (contains && POWERUP_TYPES[contains]) {
-        const pu = powerUps.create(bx, by - 30, null).setDisplaySize(25, 25).refreshBody();
+        const pu = powerUps.create(bx, by - 30, null).setDisplaySize(25, 25).setVisible(false).refreshBody();
         pu.powerUpType = contains;
-        const puRect = this.add.rectangle(bx, by - 30, 25, 25, POWERUP_TYPES[contains].color);
-        puRect.setStrokeStyle(2, 0xffffff);
+        const puRect = this.add.image(bx, by - 30, 'tex_gem').setTint(POWERUP_TYPES[contains].color);
         powerUpRects.push({ rect: puRect, body: pu });
     }
 }
@@ -2366,7 +2726,7 @@ function triggerBoss() {
     // Create boss physics sprite at center-right of arena
     const bossX = arena.x + arena.width * 0.65;
     const bossY = 500;
-    bossSprite = scene.physics.add.sprite(bossX, bossY, null).setDisplaySize(64, 64);
+    bossSprite = scene.physics.add.sprite(bossX, bossY, null).setDisplaySize(64, 64).setVisible(false);
     bossSprite.setBounce(0);
     bossSprite.setCollideWorldBounds(true);
     bossSprite.body.setMaxVelocityY(600);
@@ -2619,7 +2979,7 @@ function createBossShockwave() {
 
     const swX = arena.x + arena.width / 2;
     const swY = 565;
-    const sw = scene.physics.add.sprite(swX, swY, null).setDisplaySize(arena.width - 40, 20);
+    const sw = scene.physics.add.sprite(swX, swY, null).setDisplaySize(arena.width - 40, 20).setVisible(false);
     sw.body.setImmovable(true);
     sw.body.setAllowGravity(false);
 
@@ -2653,7 +3013,7 @@ function shootBossProjectile(x, y, direction) {
     const scene = this;
     if (!bossActive) return;
 
-    const proj = projectiles.create(x + direction * 35, y, null).setDisplaySize(10, 10);
+    const proj = projectiles.create(x + direction * 35, y, null).setDisplaySize(10, 10).setVisible(false);
     proj.setVelocityX(direction * 220);
     proj.body.setAllowGravity(false);
 
@@ -2675,7 +3035,7 @@ function shootBossProjectileDown(x, y, offsetX) {
     const scene = this;
     if (!bossActive) return;
 
-    const proj = projectiles.create(x, y, null).setDisplaySize(10, 10);
+    const proj = projectiles.create(x, y, null).setDisplaySize(10, 10).setVisible(false);
     proj.setVelocityX(offsetX);
     proj.setVelocityY(250);
     proj.body.setAllowGravity(false);

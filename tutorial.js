@@ -37,7 +37,8 @@ function checkTutorialTriggers(scene, playerX, levelIndex) {
 }
 
 function showTutorialHint(scene, text) {
-    const hint = scene.add.text(400, 80, text, {
+    // Positioned below the top HUD bars and right of the left HUD column so it never overlaps them
+    const hint = scene.add.text(480, 140, text, {
         fontSize: '18px', fill: '#fff', fontStyle: 'bold',
         backgroundColor: 'rgba(0,0,0,0.7)', padding: { x: 16, y: 10 },
         stroke: '#ffd700', strokeThickness: 1

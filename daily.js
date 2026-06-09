@@ -223,8 +223,11 @@ function applyDailyModifiers(scene) {
                     player.setDisplaySize(48, 48); // 32 * 1.5 = 48
                     player.refreshBody();
                 }
+                if (typeof playerBaseScale !== 'undefined') {
+                    playerBaseScale = 1.5;
+                }
                 if (typeof playerRect !== 'undefined' && playerRect) {
-                    playerRect.setSize(48, 48);
+                    playerRect.setScale(1.5);
                 }
                 break;
         }

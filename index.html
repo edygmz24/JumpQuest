@@ -55,24 +55,28 @@
             100% { opacity: 0.5; }
         }
 
-        /* Landscape detection overlay */
-        #rotate-overlay {
+        /* Non-blocking landscape suggestion toast */
+        #rotate-toast {
             display: none;
             position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: #1a1a2e;
-            z-index: 10000;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
+            top: 12px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(26, 26, 46, 0.92);
+            border: 1px solid #ffdd00;
+            border-radius: 8px;
             color: #fff;
-            font-size: 20px;
+            font-size: 14px;
+            padding: 10px 16px;
+            z-index: 10000;
             text-align: center;
-            padding: 20px;
+            max-width: 85vw;
+            opacity: 0;
+            transition: opacity 0.4s;
         }
-        #rotate-overlay .rotate-icon {
-            font-size: 60px;
-            margin-bottom: 20px;
+        #rotate-toast.visible {
+            display: block;
+            opacity: 1;
         }
 
         /* Touch controls overlay */
@@ -116,11 +120,8 @@
         <p>Loading...</p>
     </div>
 
-    <!-- Landscape rotation prompt for mobile portrait -->
-    <div id="rotate-overlay">
-        <div class="rotate-icon">&#128241;&#8635;</div>
-        <div>Please rotate your device<br>to landscape mode</div>
-    </div>
+    <!-- Landscape suggestion toast for mobile portrait (non-blocking, auto-hides) -->
+    <div id="rotate-toast">&#128241;&#8635; Tip: rotate to landscape for a bigger view</div>
 
     <div id="game-container"></div>
 
@@ -178,15 +179,30 @@
             bindBtn('btn-jump',  function() { touchJump  = true;  }, function() { touchJump  = false; });
             bindBtn('btn-dash',  function() { touchDashPressed = true; }, function() {});
 
-            // Landscape detection
-            var rotateOverlay = document.getElementById('rotate-overlay');
-            function checkOrientation() {
-                if (window.innerHeight > window.innerWidth) {
-                    rotateOverlay.style.display = 'flex';
-                } else {
-                    rotateOverlay.style.display = 'none';
-                }
+            // Landscape suggestion: brief toast in portrait, never blocks play
+            var rotateToast = document.getElementById('rotate-toast');
+            var toastTimer = null;
+            var wasPortrait = false;
+            function hideToast() {
+                rotateToast.classList.remove('visible');
             }
+            function checkOrientation() {
+                var isPortrait = window.innerHeight > window.innerWidth;
+                if (isPortrait && !wasPortrait) {
+                    rotateToast.classList.add('visible');
+                    clearTimeout(toastTimer);
+                    toastTimer = setTimeout(hideToast, 4000);
+                } else if (!isPortrait) {
+                    clearTimeout(toastTimer);
+                    hideToast();
+                }
+                wasPortrait = isPortrait;
+            }
+            rotateToast.addEventListener('touchstart', function(e) {
+                e.preventDefault();
+                clearTimeout(toastTimer);
+                hideToast();
+            }, { passive: false });
             window.addEventListener('resize', checkOrientation);
             window.addEventListener('orientationchange', function() {
                 setTimeout(checkOrientation, 100);
