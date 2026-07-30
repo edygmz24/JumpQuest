@@ -3,6 +3,8 @@ const level9 = {
     worldWidth: 5000,
     worldHeight: 600,
     theme: {
+        biome: 'canyon',
+        propStyle: 'mountains',
         skyColor: 0x0a0a0a,
         groundColor: 0x1a1a1a,
         platformColor: 0x333333,

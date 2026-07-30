@@ -3,6 +3,9 @@ const level8 = {
     worldWidth: 3600,
     worldHeight: 600,
     theme: {
+        biome: 'jungle',
+        propStyle: 'trees',
+        weather: 'leaves',
         skyColor: 0x2D5F2D,
         groundColor: 0x1B4D1B,
         platformColor: 0x4A7A3D,

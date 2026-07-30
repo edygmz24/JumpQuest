@@ -3,6 +3,9 @@ const level6 = {
     worldWidth: 3800,
     worldHeight: 600,
     theme: {
+        biome: 'sky',
+        propStyle: 'mountains',
+        weather: 'snow',
         skyColor: 0xADD8E6,
         groundColor: 0xCCCCCC,
         platformColor: 0xE8E8E8,

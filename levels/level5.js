@@ -3,6 +3,8 @@ const level5 = {
     worldWidth: 4500,
     worldHeight: 600,
     theme: {
+        biome: 'castle',
+        propStyle: 'towers',
         skyColor: 0x0d0221,
         groundColor: 0x1a0533,
         platformColor: 0x3d1f6d,

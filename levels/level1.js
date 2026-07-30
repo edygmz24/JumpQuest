@@ -4,6 +4,9 @@ const level1 = {
     worldHeight: 600,
 
     theme: {
+        biome: 'meadow',
+        propStyle: 'mountains',
+        weather: 'leaves',
         skyColor: 0x87CEEB,
         groundColor: 0x228B22,
         platformColor: 0x8B4513,

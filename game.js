@@ -311,6 +311,56 @@ function generateGameTextures(scene) {
         g.fillStyle(0x1a1a2e); g.fillRect(20, 21, 6, 2);                    // mouth
     });
 
+    // --- Player animation frames ---
+    // Same silhouette as tex_player, varied by pose. The squash/stretch tweens
+    // work on scale, so they compose with these rather than fighting them.
+    const drawPlayerBody = (g, opts) => {
+        const o = opts || {};
+        const lean = o.lean || 0;
+        g.fillStyle(0xb0b0b0); g.fillRoundedRect(0, 0, 32, 32, 7);
+        g.fillStyle(0xffffff); g.fillRoundedRect(2, 2, 28, 28, 6);
+        g.fillStyle(0xd5d5d5);
+        g.fillRoundedRect(2, 20, 28, 10, { tl: 0, tr: 0, bl: 6, br: 6 });
+        // Eyes — squinting when blinking, wide when airborne
+        g.fillStyle(0x1a1a2e);
+        if (o.blink) {
+            g.fillRect(15 + lean, 13, 5, 2); g.fillRect(24 + lean, 13, 5, 2);
+        } else {
+            const eh = o.wideEyes ? 10 : 8;
+            g.fillRect(15 + lean, 9, 5, eh); g.fillRect(24 + lean, 9, 5, eh);
+            g.fillStyle(0xffffff);
+            g.fillRect(17 + lean, 10, 2, 3); g.fillRect(26 + lean, 10, 2, 3);
+            g.fillStyle(0x1a1a2e);
+        }
+        // Mouth
+        if (o.mouth === 'open') {
+            g.fillRect(20 + lean, 20, 7, 5);
+        } else if (o.mouth === 'grit') {
+            g.fillRect(19 + lean, 21, 9, 2);
+        } else {
+            g.fillRect(20 + lean, 21, 6, 2);
+        }
+        // Feet, kept inside 32px so every frame matches tex_player's footprint
+        g.fillStyle(0x9a9a9a);
+        if (o.feet === 'run0') { g.fillRect(3, 28, 9, 4); g.fillRect(20, 26, 9, 4); }
+        else if (o.feet === 'run1') { g.fillRect(7, 28, 9, 4); g.fillRect(17, 28, 9, 4); }
+        else if (o.feet === 'run2') { g.fillRect(3, 26, 9, 4); g.fillRect(21, 28, 9, 4); }
+        else if (o.feet === 'run3') { g.fillRect(7, 28, 9, 4); g.fillRect(17, 28, 9, 4); }
+        else if (o.feet === 'tuck') { g.fillRect(8, 25, 7, 4); g.fillRect(18, 25, 7, 4); }
+        else if (o.feet === 'spread') { g.fillRect(1, 28, 8, 4); g.fillRect(24, 28, 8, 4); }
+        else { g.fillRect(6, 28, 8, 4); g.fillRect(19, 28, 8, 4); }
+    };
+
+    make('tex_player_blink', 32, 32, g => drawPlayerBody(g, { blink: true }));
+    make('tex_player_run0', 32, 32, g => drawPlayerBody(g, { feet: 'run0', lean: 1 }));
+    make('tex_player_run1', 32, 32, g => drawPlayerBody(g, { feet: 'run1', lean: 1 }));
+    make('tex_player_run2', 32, 32, g => drawPlayerBody(g, { feet: 'run2', lean: 1 }));
+    make('tex_player_run3', 32, 32, g => drawPlayerBody(g, { feet: 'run3', lean: 1 }));
+    make('tex_player_jump', 32, 32, g => drawPlayerBody(g, { feet: 'tuck', wideEyes: true, mouth: 'open' }));
+    make('tex_player_fall', 32, 32, g => drawPlayerBody(g, { feet: 'spread', wideEyes: true, mouth: 'open' }));
+    make('tex_player_pound', 32, 32, g => drawPlayerBody(g, { feet: 'tuck', mouth: 'grit', lean: 1 }));
+    make('tex_player_wallslide', 32, 32, g => drawPlayerBody(g, { feet: 'spread', mouth: 'grit', lean: 3 }));
+
     // --- Spring: coiled launcher ---
     make('tex_spring', 32, 24, g => {
         g.fillStyle(0x44444e); g.fillRect(1, 19, 30, 5);                     // base plate
@@ -465,32 +515,27 @@ function generateGameTextures(scene) {
     });
 }
 
-// Draws a platform/ground block with top highlight and shaded sides.
-// Returns the created game objects (so callers can fade/destroy them together).
+// Draws a platform/ground block as an extruded 2.5D solid, baked into a
+// cached texture and placed as a single image. Callers still receive an array
+// of game objects so they can fade or destroy a block as a unit.
+//
+// Falls back to the original flat rectangles if visuals.js is absent.
 function drawTerrainBlock(scene, x, y, w, h, color, isGround) {
+    if (typeof placeTerrainBlock === 'function') {
+        // A few variants per size keep repeated ground sections from looking
+        // stamped, without giving up texture caching.
+        const variant = Math.floor(Math.random() * 3);
+        return [placeTerrainBlock(scene, x, y, w, h, color, isGround, variant)];
+    }
+
     const parts = [];
     parts.push(scene.add.rectangle(x, y, w, h, color));
-    // darker bottom edge
     const bottomH = Math.min(6, h * 0.3);
     parts.push(scene.add.rectangle(x, y + h / 2 - bottomH / 2, w, bottomH, shadeColor(color, -0.35)));
-    // bright top lip (grass / surface)
     const topH = Math.min(6, h * 0.3);
     parts.push(scene.add.rectangle(x, y - h / 2 + topH / 2, w, topH, shadeColor(color, 0.35)));
-    // side shading
     if (w > 24) {
         parts.push(scene.add.rectangle(x + w / 2 - 2, y, 4, h, shadeColor(color, -0.2)));
-    }
-    // grass tufts / speckles along the top of ground sections
-    if (isGround) {
-        const tuftColor = shadeColor(color, 0.45);
-        for (let tx = x - w / 2 + 10; tx < x + w / 2 - 10; tx += 28 + Math.random() * 30) {
-            parts.push(scene.add.rectangle(tx, y - h / 2 - 2, 3, 5, tuftColor));
-        }
-        // embedded "rocks"
-        const rockColor = shadeColor(color, -0.3);
-        for (let rx = x - w / 2 + 25; rx < x + w / 2 - 15; rx += 60 + Math.random() * 70) {
-            parts.push(scene.add.rectangle(rx, y + 4 + Math.random() * (h / 2 - 8), 6, 4, rockColor));
-        }
     }
     return parts;
 }
@@ -614,6 +659,11 @@ function create() {
     if (typeof initWallet === 'function') initWallet();
     if (typeof resetEconomyLevelState === 'function') resetEconomyLevelState();
     if (typeof resetFlowState === 'function') resetFlowState();
+    if (typeof resetVisualState === 'function') {
+        resetVisualState();
+        detectLowFxMode(this);
+        ensureShadowTexture(this);
+    }
 
     // Load the current level
     loadLevel.call(this, currentLevelIndex);
@@ -709,7 +759,7 @@ function loadLevel(levelIndex) {
         g.destroy();
     }
     this.add.image(0, 0, skyKey).setOrigin(0, 0)
-        .setDisplaySize(currentLevel.worldWidth, currentLevel.worldHeight).setDepth(-12);
+        .setDisplaySize(currentLevel.worldWidth, currentLevel.worldHeight).setDepth(-40);
 
     // Parallax decorations depend on how dark the sky is
     const bgWidth = currentLevel.worldWidth;
@@ -719,19 +769,19 @@ function loadLevel(levelIndex) {
         for (let i = 0; i < 50; i++) {
             const star = this.add.circle(Math.random() * bgWidth, 20 + Math.random() * 320,
                 Math.random() < 0.2 ? 2 : 1, 0xffffff, 0.4 + Math.random() * 0.6);
-            star.setScrollFactor(0.05).setDepth(-11);
+            star.setScrollFactor(0.05).setDepth(-34);
             this.tweens.add({
                 targets: star, alpha: 0.15, duration: 800 + Math.random() * 1800,
                 yoyo: true, repeat: -1, delay: Math.random() * 2000
             });
         }
-        this.add.circle(620, 90, 26, 0xf4f1de).setScrollFactor(0.03).setDepth(-11);
-        this.add.circle(612, 82, 6, shadeColor(0xf4f1de, -0.15)).setScrollFactor(0.03).setDepth(-10.5);
-        this.add.circle(630, 98, 4, shadeColor(0xf4f1de, -0.15)).setScrollFactor(0.03).setDepth(-10.5);
+        this.add.circle(620, 90, 26, 0xf4f1de).setScrollFactor(0.03).setDepth(-34);
+        this.add.circle(612, 82, 6, shadeColor(0xf4f1de, -0.15)).setScrollFactor(0.03).setDepth(-33);
+        this.add.circle(630, 98, 4, shadeColor(0xf4f1de, -0.15)).setScrollFactor(0.03).setDepth(-33);
     } else {
         // Sun + drifting clouds
-        const sun = this.add.circle(660, 80, 30, 0xfff3b0, 0.95).setScrollFactor(0.03).setDepth(-11);
-        this.add.circle(660, 80, 42, 0xfff3b0, 0.25).setScrollFactor(0.03).setDepth(-11);
+        const sun = this.add.circle(660, 80, 30, 0xfff3b0, 0.95).setScrollFactor(0.03).setDepth(-34);
+        this.add.circle(660, 80, 42, 0xfff3b0, 0.25).setScrollFactor(0.03).setDepth(-34);
         const cloudCount = Math.max(5, Math.floor(bgWidth / 450));
         for (let i = 0; i < cloudCount; i++) {
             const cx = Math.random() * bgWidth;
@@ -739,7 +789,7 @@ function loadLevel(levelIndex) {
             const scale = 0.6 + Math.random() * 0.9;
             const cloud = this.add.image(cx, cy, 'tex_cloud')
                 .setScale(scale).setAlpha(0.55 + Math.random() * 0.3)
-                .setScrollFactor(0.1 + Math.random() * 0.15).setDepth(-10);
+                .setScrollFactor(0.1 + Math.random() * 0.15).setDepth(-32);
             this.tweens.add({
                 targets: cloud, x: cx + 40 + Math.random() * 50,
                 duration: 9000 + Math.random() * 8000, yoyo: true, repeat: -1,
@@ -748,16 +798,48 @@ function loadLevel(levelIndex) {
         }
     }
 
+    // --- Layered depth: silhouette behind hills behind props, each on its own
+    // scroll factor. The foreground strip is what puts the camera inside the
+    // world rather than in front of it.
+    const biome = theme.biome || (isNight ? 'cave' : 'meadow');
+    const propStyle = theme.propStyle || (
+        biome === 'cave' ? 'spires' :
+        biome === 'castle' ? 'towers' :
+        biome === 'jungle' ? 'trees' : 'mountains'
+    );
+
+    if (typeof buildSilhouette === 'function') {
+        buildSilhouette(this, bgWidth, shadeColor(bgColor1, -0.45), propStyle);
+    }
+
     // Distant rolling hills (two parallax layers, built from overlapping ellipses)
     for (let x = -100; x < bgWidth + 300; x += 260 + Math.random() * 160) {
         const w = 420 + Math.random() * 280;
         const h = 160 + Math.random() * 120;
-        this.add.ellipse(x, 612, w, h, bgColor1, 0.55).setScrollFactor(0.15).setDepth(-9);
+        this.add.ellipse(x, 612, w, h, bgColor1, 0.55).setScrollFactor(0.15).setDepth(-26);
     }
     for (let x = -50; x < bgWidth + 300; x += 200 + Math.random() * 140) {
         const w = 300 + Math.random() * 220;
         const h = 110 + Math.random() * 90;
-        this.add.ellipse(x, 616, w, h, bgColor2, 0.75).setScrollFactor(0.35).setDepth(-8);
+        this.add.ellipse(x, 616, w, h, bgColor2, 0.75).setScrollFactor(0.35).setDepth(-22);
+    }
+
+    if (typeof buildProps === 'function') {
+        buildProps(this, bgWidth, shadeColor(bgColor2, -0.25), propStyle);
+    }
+    if (typeof buildForeground === 'function') {
+        buildForeground(this, bgWidth, groundColor);
+    }
+    if (typeof buildWeather === 'function') {
+        buildWeather(this, theme.weather || null);
+    }
+
+    // Camera vignette. WebGL only — Phaser.AUTO can fall back to Canvas, where
+    // postFX is undefined, so every effect call stays guarded.
+    const mainCam = this.cameras.main;
+    if (mainCam.postFX && typeof lowFxMode !== 'undefined' && !lowFxMode) {
+        mainCam.postFX.clear();
+        mainCam.postFX.addVignette(0.5, 0.5, 0.9, 0.32);
     }
 
     // Ambient floating particles (fireflies at night, dust motes by day)
@@ -1430,6 +1512,15 @@ function update() {
             if (!onGround) canAirDash = false;
             playSound('dash');
             if (typeof incrementStat === 'function') incrementStat('totalDashes', 1);
+
+            // Brief lens warp on the dash — sells the speed without a shader
+            const cam = this.cameras.main;
+            if (cam.postFX && typeof lowFxMode !== 'undefined' && !lowFxMode) {
+                const barrel = cam.postFX.addBarrel(1.06);
+                this.time.delayedCall(110, () => {
+                    if (cam.postFX) cam.postFX.remove(barrel);
+                });
+            }
         }
     }
 
@@ -1608,6 +1699,12 @@ function update() {
         }
     } else {
         playerRect.rotation = 0;
+    }
+
+    // --- Animation frame ---
+    const frameKey = selectPlayerFrame(this, onGround, player.body.velocity.x, player.body.velocity.y);
+    if (frameKey && playerRect.texture.key !== frameKey) {
+        playerRect.setTexture(frameKey);
     }
 
     // --- Squash & Stretch ---
@@ -1822,6 +1919,13 @@ function update() {
     // Cosmetic trail particles
     if (typeof spawnTrailParticle === 'function' && (Math.abs(player.body.velocity.x) > 50 || Math.abs(player.body.velocity.y) > 100)) {
         spawnTrailParticle(this, player.x, player.y + 8);
+    }
+
+    // 2.5D presentation: contact shadows, weather, foreground scroll
+    if (typeof updateShadows === 'function') {
+        updateShadows(this);
+        updateWeather(this, this.game.loop.delta);
+        updateForeground(this);
     }
 
     // Flow meter: driven by how much of the speed cap is actually being used
@@ -2116,6 +2220,24 @@ function handleEnemyCollision(player, enemy) {
 // Ground pound impact: a small shockwave that clears enemies and crates in
 // range. Reuses the normal stomp and break paths so scoring, combo and
 // achievement tracking all behave exactly as they do for a regular stomp.
+// Picks the player frame for the current state. Returns tex_player if the
+// animation set was never generated, so the game still runs without it.
+function selectPlayerFrame(scene, onGround, vx, vy) {
+    if (!scene.textures.exists('tex_player_run0')) return 'tex_player';
+    if (isPounding) return 'tex_player_pound';
+    if (isWallSliding) return 'tex_player_wallslide';
+    if (isDashing) return 'tex_player_jump';
+    if (!onGround) return vy > 60 ? 'tex_player_fall' : 'tex_player_jump';
+
+    if (Math.abs(vx) > 30) {
+        // Faster running cycles the legs faster
+        const cycleMs = Phaser.Math.Clamp(150 - Math.abs(vx) * 0.32, 55, 150);
+        return 'tex_player_run' + (Math.floor(scene.time.now / cycleMs) % 4);
+    }
+    // Idle blink every few seconds
+    return (scene.time.now % 3800) < 140 ? 'tex_player_blink' : 'tex_player';
+}
+
 function groundPoundImpact() {
     const px = player.x;
     const py = player.y + 16;

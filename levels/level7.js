@@ -3,6 +3,9 @@ const level7 = {
     worldWidth: 4000,
     worldHeight: 600,
     theme: {
+        biome: 'machine',
+        propStyle: 'towers',
+        weather: 'embers',
         skyColor: 0x2C3E50,
         groundColor: 0x555555,
         platformColor: 0x7F8C8D,

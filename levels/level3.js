@@ -4,6 +4,8 @@ const level3 = {
     worldHeight: 600,
 
     theme: {
+        biome: 'cave',
+        propStyle: 'spires',
         skyColor: 0x1a1a2e,
         groundColor: 0x2d2d2d,
         platformColor: 0x555555,

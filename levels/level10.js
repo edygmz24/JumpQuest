@@ -3,6 +3,9 @@ const level10 = {
     worldWidth: 6000,
     worldHeight: 600,
     theme: {
+        biome: 'castle',
+        propStyle: 'spires',
+        weather: 'embers',
         skyColor: 0x1a0033,
         groundColor: 0x2a0944,
         platformColor: 0x4a1a7a,

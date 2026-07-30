@@ -3,6 +3,9 @@ const level4 = {
     worldWidth: 4000,
     worldHeight: 600,
     theme: {
+        biome: 'castle',
+        propStyle: 'towers',
+        weather: 'embers',
         skyColor: 0xE85D04,
         groundColor: 0x4a2800,
         platformColor: 0x5C3317,
