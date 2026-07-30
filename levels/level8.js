@@ -3,6 +3,9 @@ const level8 = {
     worldWidth: 3600,
     worldHeight: 600,
     theme: {
+        biome: 'jungle',
+        propStyle: 'trees',
+        weather: 'leaves',
         skyColor: 0x2D5F2D,
         groundColor: 0x1B4D1B,
         platformColor: 0x4A7A3D,
@@ -57,6 +60,9 @@ const level8 = {
     movingPlatforms: [],
 
     enemies: [
+        // Jungle: canopy predators
+        { x: 1500, y: 300, type: 'diver' },
+        { x: 2900, y: 280, type: 'diver' },
         // Walkers spread across paths
         { x: 620, y: 484, type: 'walker' },
         { x: 980, y: 484, type: 'walker' },
@@ -72,6 +78,11 @@ const level8 = {
         { x: 2050, y: 244, type: 'shooter' },
         // Shield enemy near end
         { x: 3200, y: 404, type: 'shield' }
+    ],
+
+    // Wind through the canopy
+    windZones: [
+        { x: 2400, y: 400, width: 320, height: 320, fx: -120, fy: 0 }
     ],
 
     obstacles: [

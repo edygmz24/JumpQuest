@@ -4,6 +4,8 @@ const level3 = {
     worldHeight: 600,
 
     theme: {
+        biome: 'cave',
+        propStyle: 'spires',
         skyColor: 0x1a1a2e,
         groundColor: 0x2d2d2d,
         platformColor: 0x555555,
@@ -78,6 +80,13 @@ const level3 = {
 
         // Section 5: Flyer in vertical ascent
         { x: 3080, y: 300, type: 'flyer' }
+    ],
+
+    // Crumbling ledges — the cave is coming apart
+    crumblingPlatforms: [
+        { x: 1150, y: 430, width: 90, height: 20 },
+        { x: 1900, y: 380, width: 90, height: 20 },
+        { x: 2750, y: 420, width: 90, height: 20 }
     ],
 
     obstacles: [

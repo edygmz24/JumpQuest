@@ -3,6 +3,8 @@ const level9 = {
     worldWidth: 5000,
     worldHeight: 600,
     theme: {
+        biome: 'canyon',
+        propStyle: 'mountains',
         skyColor: 0x0a0a0a,
         groundColor: 0x1a1a1a,
         platformColor: 0x333333,
@@ -45,6 +47,9 @@ const level9 = {
     movingPlatforms: [],
 
     enemies: [
+        // Speed alley: punishes blind sprinting
+        { x: 2500, y: 300, type: 'diver' },
+        { x: 4300, y: 464, type: 'charger' },
         // Chain stomp group 1 - walkers on first long platform
         { x: 430, y: 464, type: 'walker' },
         { x: 500, y: 464, type: 'walker' },
@@ -63,6 +68,12 @@ const level9 = {
         // Flyers to dodge while running
         { x: 1200, y: 400, type: 'flyer' },
         { x: 3300, y: 380, type: 'flyer' }
+    ],
+
+    // Speed level: springs keep momentum going without stopping to climb
+    springs: [
+        { x: 1500, y: 550 },
+        { x: 3100, y: 550 }
     ],
 
     obstacles: [

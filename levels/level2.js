@@ -4,6 +4,8 @@ const level2 = {
     worldHeight: 600,
 
     theme: {
+        biome: 'canyon',
+        propStyle: 'mountains',
         skyColor: 0xE8A87C,
         groundColor: 0xCD853F,
         platformColor: 0x8B6914,

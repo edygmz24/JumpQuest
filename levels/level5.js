@@ -1,8 +1,10 @@
 const level5 = {
     name: "Level 5 - The Final Trial",
-    worldWidth: 4500,
+    worldWidth: 5200,
     worldHeight: 600,
     theme: {
+        biome: 'castle',
+        propStyle: 'towers',
         skyColor: 0x0d0221,
         groundColor: 0x1a0533,
         platformColor: 0x3d1f6d,
@@ -227,5 +229,18 @@ const level5 = {
     ],
 
     playerStart: { x: 100, y: 470 },
-    flagPosition: { x: 4420, y: 455 }
+    flagPosition: { x: 5120, y: 530 },
+
+    // Mid-boss arena, appended past the existing level so the fight has room.
+    // "The Final Trial" of the lower tower now actually ends in a trial.
+    bossArena: { x: 4560, width: 480 },
+    boss: {
+        name: 'THE WARDEN',
+        hp: 3,
+        phases: 1,
+        color: 0x1a4a6a,
+        strokeColor: 0x44aadd,
+        coreColor: 0x88ddff,
+        score: 750
+    }
 };

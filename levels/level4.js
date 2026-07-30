@@ -3,6 +3,9 @@ const level4 = {
     worldWidth: 4000,
     worldHeight: 600,
     theme: {
+        biome: 'castle',
+        propStyle: 'towers',
+        weather: 'embers',
         skyColor: 0xE85D04,
         groundColor: 0x4a2800,
         platformColor: 0x5C3317,
@@ -97,6 +100,14 @@ const level4 = {
         { x: 3650, y: 464, type: 'shield' },
         { x: 3500, y: 304, type: 'shooter' },
         { x: 3750, y: 380, type: 'flyer' }
+    ],
+
+    // Locked gate near the end, with its key held back up the level
+    keys: [
+        { x: 2150, y: 300, opens: 'fortress' }
+    ],
+    timedGates: [
+        { id: 'fortress', x: 3250, y: 500, height: 130 }
     ],
 
     obstacles: [

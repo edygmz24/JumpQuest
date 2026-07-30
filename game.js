@@ -25,6 +25,9 @@ const game = new Phaser.Game(config);
 
 let player;
 let playerRect;
+let playerHatObjects = [];    // equipped cosmetic hat, drawn by cosmetics.js
+let ghostHatObjects = [];     // same hat worn by the ghost replay
+let walletText;               // HUD coin wallet counter
 let platforms;
 let cursors;
 
@@ -32,6 +35,7 @@ let cursors;
 let touchLeft = false;
 let touchRight = false;
 let touchJump = false;
+let touchDown = false;
 let touchDashPressed = false;
 let enemies;
 let enemyRects = [];
@@ -121,12 +125,25 @@ const ENEMY_TYPES = {
     jumper: { color: 0xff8800, speed: 60 },
     flyer: { color: 0x8800ff, speed: 80 },
     shooter: { color: 0x880000, speed: 0 },
-    shield: { color: 0x008888, speed: 80 }
+    shield: { color: 0x008888, speed: 80 },
+    diver: { color: 0xdd44aa, speed: 70 },
+    charger: { color: 0xcc5511, speed: 90 }
 };
+
+// Diver: drifts until the player is below, telegraphs, then swoops
+const DIVER_TRIGGER_X = 150;
+const DIVER_TELEGRAPH = 450;
+const DIVER_SPEED = 420;
+// Charger: winds up when the player shares its Y band, then rushes
+const CHARGER_SIGHT = 260;
+const CHARGER_WINDUP = 500;
+const CHARGER_SPEED = 300;
 let projectiles;
 let projectileRects = [];
 
-// Boss System
+// Boss System — configured from level data so any level can host one
+let bossConfig = null;
+let bossMaxHP = 9;
 let bossActive = false;
 let bossPhase = 0;
 let bossHP = 9;
@@ -151,6 +168,7 @@ let bossFlagHidden = false;
 // Wall Slide / Wall Jump
 let isWallSliding = false;
 let wallSlideDir = 0; // -1 left, 1 right
+let wallSlideSoundTimer = 0; // throttles the scrape sound while sliding
 
 // Dash
 let dashKey;
@@ -163,6 +181,41 @@ const DASH_COOLDOWN = 1000;
 let dashTimer = 0;
 let dashDirection = 1;
 let lastFacingDir = 1;
+
+// Dash-jump momentum chaining ("wavedash"): jumping out of a dash carries the
+// dash's speed past the normal cap, which then bleeds off instead of snapping.
+// Normal play is untouched — this only fires on the dash+jump overlap.
+const DASH_JUMP_WINDOW = 120;  // ms after a dash ends where the carry applies
+const DASH_JUMP_CARRY = 0.9;   // fraction of DASH_SPEED carried into the jump
+const OVERSPEED_DECAY = 260;   // px/s^2 — gentle on purpose: at AIR_DECEL the
+                               // carry evaporates in ~175ms and buys no ground
+let dashEndTime = -9999;
+let isOverspeed = false;
+
+// Ground Pound
+const POUND_SPEED = 700;
+const POUND_PAUSE = 80;   // ms hang before the plunge, so the input reads
+const POUND_RADIUS = 60;  // impact radius for enemies and crates
+let isPounding = false;
+let poundPauseTimer = 0;
+
+// Hazards
+const CRUMBLE_DELAY = 420;    // ms of shaking before a platform drops
+const CRUMBLE_RESPAWN = 3000; // ms until it reforms
+let crumblingPlatforms = [];
+let windZones = [];
+let levelKeys = [];
+let timedGates = [];
+
+// Springs
+const SPRING_VELOCITY = -650;
+const SPRING_POUND_VELOCITY = -850; // pounding onto a spring launches higher
+let springs;
+let springRects = [];
+// Set while riding a launch the player didn't trigger with the jump button.
+// Without it the variable-jump-height cut multiplies the launch by 0.85 every
+// frame and eats ~55% of the height before the player leaves the pad.
+let springLaunch = false;
 
 // Breakable Blocks
 let breakableBlocks;
@@ -277,6 +330,118 @@ function generateGameTextures(scene) {
         g.fillStyle(0xffffff);                                              // eye shine
         g.fillRect(17, 10, 2, 3); g.fillRect(26, 10, 2, 3);
         g.fillStyle(0x1a1a2e); g.fillRect(20, 21, 6, 2);                    // mouth
+    });
+
+    // --- Player animation frames ---
+    // Same silhouette as tex_player, varied by pose. The squash/stretch tweens
+    // work on scale, so they compose with these rather than fighting them.
+    const drawPlayerBody = (g, opts) => {
+        const o = opts || {};
+        const lean = o.lean || 0;
+        g.fillStyle(0xb0b0b0); g.fillRoundedRect(0, 0, 32, 32, 7);
+        g.fillStyle(0xffffff); g.fillRoundedRect(2, 2, 28, 28, 6);
+        g.fillStyle(0xd5d5d5);
+        g.fillRoundedRect(2, 20, 28, 10, { tl: 0, tr: 0, bl: 6, br: 6 });
+        // Eyes — squinting when blinking, wide when airborne
+        g.fillStyle(0x1a1a2e);
+        if (o.blink) {
+            g.fillRect(15 + lean, 13, 5, 2); g.fillRect(24 + lean, 13, 5, 2);
+        } else {
+            const eh = o.wideEyes ? 10 : 8;
+            g.fillRect(15 + lean, 9, 5, eh); g.fillRect(24 + lean, 9, 5, eh);
+            g.fillStyle(0xffffff);
+            g.fillRect(17 + lean, 10, 2, 3); g.fillRect(26 + lean, 10, 2, 3);
+            g.fillStyle(0x1a1a2e);
+        }
+        // Mouth
+        if (o.mouth === 'open') {
+            g.fillRect(20 + lean, 20, 7, 5);
+        } else if (o.mouth === 'grit') {
+            g.fillRect(19 + lean, 21, 9, 2);
+        } else {
+            g.fillRect(20 + lean, 21, 6, 2);
+        }
+        // Feet, kept inside 32px so every frame matches tex_player's footprint
+        g.fillStyle(0x9a9a9a);
+        if (o.feet === 'run0') { g.fillRect(3, 28, 9, 4); g.fillRect(20, 26, 9, 4); }
+        else if (o.feet === 'run1') { g.fillRect(7, 28, 9, 4); g.fillRect(17, 28, 9, 4); }
+        else if (o.feet === 'run2') { g.fillRect(3, 26, 9, 4); g.fillRect(21, 28, 9, 4); }
+        else if (o.feet === 'run3') { g.fillRect(7, 28, 9, 4); g.fillRect(17, 28, 9, 4); }
+        else if (o.feet === 'tuck') { g.fillRect(8, 25, 7, 4); g.fillRect(18, 25, 7, 4); }
+        else if (o.feet === 'spread') { g.fillRect(1, 28, 8, 4); g.fillRect(24, 28, 8, 4); }
+        else { g.fillRect(6, 28, 8, 4); g.fillRect(19, 28, 8, 4); }
+    };
+
+    make('tex_player_blink', 32, 32, g => drawPlayerBody(g, { blink: true }));
+    make('tex_player_run0', 32, 32, g => drawPlayerBody(g, { feet: 'run0', lean: 1 }));
+    make('tex_player_run1', 32, 32, g => drawPlayerBody(g, { feet: 'run1', lean: 1 }));
+    make('tex_player_run2', 32, 32, g => drawPlayerBody(g, { feet: 'run2', lean: 1 }));
+    make('tex_player_run3', 32, 32, g => drawPlayerBody(g, { feet: 'run3', lean: 1 }));
+    make('tex_player_jump', 32, 32, g => drawPlayerBody(g, { feet: 'tuck', wideEyes: true, mouth: 'open' }));
+    make('tex_player_fall', 32, 32, g => drawPlayerBody(g, { feet: 'spread', wideEyes: true, mouth: 'open' }));
+    make('tex_player_pound', 32, 32, g => drawPlayerBody(g, { feet: 'tuck', mouth: 'grit', lean: 1 }));
+    make('tex_player_wallslide', 32, 32, g => drawPlayerBody(g, { feet: 'spread', mouth: 'grit', lean: 3 }));
+
+    // --- Key & gate ---
+    make('tex_key', 22, 22, g => {
+        g.fillStyle(0xffcc33); g.fillCircle(7, 8, 6);
+        g.fillStyle(0x000000, 0); g.fillCircle(7, 8, 2);
+        g.fillStyle(0xb88a1c); g.fillCircle(7, 8, 2.5);
+        g.fillStyle(0xffcc33); g.fillRect(10, 6, 11, 4);
+        g.fillRect(16, 10, 3, 4); g.fillRect(20, 10, 2, 3);
+        g.fillStyle(0xfff0a0); g.fillRect(10, 6, 11, 1.5);
+    });
+    make('tex_gate', 30, 90, g => {
+        g.fillStyle(0x5a4a30); g.fillRect(0, 0, 30, 90);
+        g.fillStyle(0x7a6440); g.fillRect(2, 2, 26, 86);
+        g.fillStyle(0x4a3a24);
+        for (let i = 0; i < 5; i++) g.fillRect(3, 6 + i * 18, 24, 3);
+        g.fillStyle(0xffcc33); g.fillCircle(15, 45, 5);
+        g.fillStyle(0x5a4a30); g.fillCircle(15, 45, 2);
+    });
+
+    // --- Diver: winged, swoops from above ---
+    make('tex_enemy_diver', 30, 26, g => {
+        g.fillStyle(0x99226e); g.fillTriangle(1, 6, 29, 6, 15, 25);          // dark underside
+        g.fillStyle(0xdd44aa); g.fillTriangle(3, 4, 27, 4, 15, 22);          // body
+        g.fillStyle(0xff88cc);                                               // wings
+        g.fillTriangle(0, 5, 11, 3, 3, 12);
+        g.fillTriangle(30, 5, 19, 3, 27, 12);
+        g.fillStyle(0xffffff); g.fillRect(10, 7, 4, 4); g.fillRect(16, 7, 4, 4);
+        g.fillStyle(0x330022); g.fillRect(11, 8, 2, 3); g.fillRect(17, 8, 2, 3);
+    });
+
+    // --- Charger: heavy, horned, rushes in a straight line ---
+    make('tex_enemy_charger', 34, 30, g => {
+        g.fillStyle(0x8a3608); g.fillRoundedRect(0, 4, 34, 26, 6);
+        g.fillStyle(0xcc5511); g.fillRoundedRect(2, 6, 30, 21, 5);
+        g.fillStyle(0xee8844); g.fillRoundedRect(5, 8, 24, 5, 2);
+        g.fillStyle(0xf5e0c0);                                               // horns
+        g.fillTriangle(29, 10, 34, 3, 31, 12);
+        g.fillTriangle(5, 10, 0, 3, 3, 12);
+        g.fillStyle(0xffffff); g.fillRect(11, 14, 7, 6); g.fillRect(20, 14, 7, 6);
+        g.fillStyle(0x330000); g.fillRect(14, 16, 3, 4); g.fillRect(22, 16, 3, 4);
+        g.fillStyle(0x6a2606); g.fillRect(6, 27, 8, 3); g.fillRect(20, 27, 8, 3);
+    });
+
+    // --- Spring: coiled launcher ---
+    make('tex_spring', 32, 24, g => {
+        g.fillStyle(0x44444e); g.fillRect(1, 19, 30, 5);                     // base plate
+        g.fillStyle(0x2c2c34); g.fillRect(1, 22, 30, 2);                     // base shadow
+        g.fillStyle(0xd8a63a);                                               // coils
+        g.fillRect(7, 15, 18, 3);
+        g.fillRect(7, 11, 18, 3);
+        g.fillStyle(0xf0c862);                                               // coil highlights
+        g.fillRect(7, 15, 18, 1); g.fillRect(7, 11, 18, 1);
+        g.fillStyle(0xbb3333); g.fillRect(4, 3, 24, 7);                      // top pad
+        g.fillStyle(0xff6666); g.fillRect(4, 3, 24, 2);                      // pad highlight
+    });
+    make('tex_spring_compressed', 32, 24, g => {
+        g.fillStyle(0x44444e); g.fillRect(1, 19, 30, 5);
+        g.fillStyle(0x2c2c34); g.fillRect(1, 22, 30, 2);
+        g.fillStyle(0xd8a63a); g.fillRect(7, 16, 18, 3);
+        g.fillStyle(0xbb3333); g.fillRect(4, 11, 24, 6);
+        g.fillStyle(0xff6666); g.fillRect(4, 11, 24, 2);
     });
 
     // --- Enemies ---
@@ -413,32 +578,27 @@ function generateGameTextures(scene) {
     });
 }
 
-// Draws a platform/ground block with top highlight and shaded sides.
-// Returns the created game objects (so callers can fade/destroy them together).
+// Draws a platform/ground block as an extruded 2.5D solid, baked into a
+// cached texture and placed as a single image. Callers still receive an array
+// of game objects so they can fade or destroy a block as a unit.
+//
+// Falls back to the original flat rectangles if visuals.js is absent.
 function drawTerrainBlock(scene, x, y, w, h, color, isGround) {
+    if (typeof placeTerrainBlock === 'function') {
+        // A few variants per size keep repeated ground sections from looking
+        // stamped, without giving up texture caching.
+        const variant = Math.floor(Math.random() * 3);
+        return [placeTerrainBlock(scene, x, y, w, h, color, isGround, variant)];
+    }
+
     const parts = [];
     parts.push(scene.add.rectangle(x, y, w, h, color));
-    // darker bottom edge
     const bottomH = Math.min(6, h * 0.3);
     parts.push(scene.add.rectangle(x, y + h / 2 - bottomH / 2, w, bottomH, shadeColor(color, -0.35)));
-    // bright top lip (grass / surface)
     const topH = Math.min(6, h * 0.3);
     parts.push(scene.add.rectangle(x, y - h / 2 + topH / 2, w, topH, shadeColor(color, 0.35)));
-    // side shading
     if (w > 24) {
         parts.push(scene.add.rectangle(x + w / 2 - 2, y, 4, h, shadeColor(color, -0.2)));
-    }
-    // grass tufts / speckles along the top of ground sections
-    if (isGround) {
-        const tuftColor = shadeColor(color, 0.45);
-        for (let tx = x - w / 2 + 10; tx < x + w / 2 - 10; tx += 28 + Math.random() * 30) {
-            parts.push(scene.add.rectangle(tx, y - h / 2 - 2, 3, 5, tuftColor));
-        }
-        // embedded "rocks"
-        const rockColor = shadeColor(color, -0.3);
-        for (let rx = x - w / 2 + 25; rx < x + w / 2 - 15; rx += 60 + Math.random() * 70) {
-            parts.push(scene.add.rectangle(rx, y + 4 + Math.random() * (h / 2 - 8), 6, 4, rockColor));
-        }
     }
     return parts;
 }
@@ -493,11 +653,24 @@ function create() {
     projectileRects = [];
     isWallSliding = false;
     wallSlideDir = 0;
+    wallSlideSoundTimer = 0;
+    playerHatObjects = [];
+    ghostHatObjects = [];
     isDashing = false;
     dashCooldown = 0;
     canAirDash = true;
     dashTimer = 0;
     lastFacingDir = 1;
+    dashEndTime = -9999;
+    isOverspeed = false;
+    isPounding = false;
+    poundPauseTimer = 0;
+    springRects = [];
+    springLaunch = false;
+    crumblingPlatforms = [];
+    windZones = [];
+    levelKeys = [];
+    timedGates = [];
     breakableBlockRects = [];
     fakeWalls = [];
     fakeWallRects = [];
@@ -525,6 +698,8 @@ function create() {
     bossShockwave = null;
     bossShockwaveRect = null;
     bossTriggered = false;
+    bossConfig = null;
+    bossMaxHP = 9;
     bossAttackTimer = 0;
     bossInvulnerable = false;
     bossArenaWall = null;
@@ -550,6 +725,14 @@ function create() {
     if (typeof initStats === 'function') initStats();
     if (typeof initCosmetics === 'function') initCosmetics();
     if (typeof resetLevelAchievementTrackers === 'function') resetLevelAchievementTrackers();
+    if (typeof initWallet === 'function') initWallet();
+    if (typeof resetEconomyLevelState === 'function') resetEconomyLevelState();
+    if (typeof resetFlowState === 'function') resetFlowState();
+    if (typeof resetVisualState === 'function') {
+        resetVisualState();
+        detectLowFxMode(this);
+        ensureShadowTexture(this);
+    }
 
     // Load the current level
     loadLevel.call(this, currentLevelIndex);
@@ -645,7 +828,7 @@ function loadLevel(levelIndex) {
         g.destroy();
     }
     this.add.image(0, 0, skyKey).setOrigin(0, 0)
-        .setDisplaySize(currentLevel.worldWidth, currentLevel.worldHeight).setDepth(-12);
+        .setDisplaySize(currentLevel.worldWidth, currentLevel.worldHeight).setDepth(-40);
 
     // Parallax decorations depend on how dark the sky is
     const bgWidth = currentLevel.worldWidth;
@@ -655,19 +838,19 @@ function loadLevel(levelIndex) {
         for (let i = 0; i < 50; i++) {
             const star = this.add.circle(Math.random() * bgWidth, 20 + Math.random() * 320,
                 Math.random() < 0.2 ? 2 : 1, 0xffffff, 0.4 + Math.random() * 0.6);
-            star.setScrollFactor(0.05).setDepth(-11);
+            star.setScrollFactor(0.05).setDepth(-34);
             this.tweens.add({
                 targets: star, alpha: 0.15, duration: 800 + Math.random() * 1800,
                 yoyo: true, repeat: -1, delay: Math.random() * 2000
             });
         }
-        this.add.circle(620, 90, 26, 0xf4f1de).setScrollFactor(0.03).setDepth(-11);
-        this.add.circle(612, 82, 6, shadeColor(0xf4f1de, -0.15)).setScrollFactor(0.03).setDepth(-10.5);
-        this.add.circle(630, 98, 4, shadeColor(0xf4f1de, -0.15)).setScrollFactor(0.03).setDepth(-10.5);
+        this.add.circle(620, 90, 26, 0xf4f1de).setScrollFactor(0.03).setDepth(-34);
+        this.add.circle(612, 82, 6, shadeColor(0xf4f1de, -0.15)).setScrollFactor(0.03).setDepth(-33);
+        this.add.circle(630, 98, 4, shadeColor(0xf4f1de, -0.15)).setScrollFactor(0.03).setDepth(-33);
     } else {
         // Sun + drifting clouds
-        const sun = this.add.circle(660, 80, 30, 0xfff3b0, 0.95).setScrollFactor(0.03).setDepth(-11);
-        this.add.circle(660, 80, 42, 0xfff3b0, 0.25).setScrollFactor(0.03).setDepth(-11);
+        const sun = this.add.circle(660, 80, 30, 0xfff3b0, 0.95).setScrollFactor(0.03).setDepth(-34);
+        this.add.circle(660, 80, 42, 0xfff3b0, 0.25).setScrollFactor(0.03).setDepth(-34);
         const cloudCount = Math.max(5, Math.floor(bgWidth / 450));
         for (let i = 0; i < cloudCount; i++) {
             const cx = Math.random() * bgWidth;
@@ -675,7 +858,7 @@ function loadLevel(levelIndex) {
             const scale = 0.6 + Math.random() * 0.9;
             const cloud = this.add.image(cx, cy, 'tex_cloud')
                 .setScale(scale).setAlpha(0.55 + Math.random() * 0.3)
-                .setScrollFactor(0.1 + Math.random() * 0.15).setDepth(-10);
+                .setScrollFactor(0.1 + Math.random() * 0.15).setDepth(-32);
             this.tweens.add({
                 targets: cloud, x: cx + 40 + Math.random() * 50,
                 duration: 9000 + Math.random() * 8000, yoyo: true, repeat: -1,
@@ -684,16 +867,48 @@ function loadLevel(levelIndex) {
         }
     }
 
+    // --- Layered depth: silhouette behind hills behind props, each on its own
+    // scroll factor. The foreground strip is what puts the camera inside the
+    // world rather than in front of it.
+    const biome = theme.biome || (isNight ? 'cave' : 'meadow');
+    const propStyle = theme.propStyle || (
+        biome === 'cave' ? 'spires' :
+        biome === 'castle' ? 'towers' :
+        biome === 'jungle' ? 'trees' : 'mountains'
+    );
+
+    if (typeof buildSilhouette === 'function') {
+        buildSilhouette(this, bgWidth, shadeColor(bgColor1, -0.45), propStyle);
+    }
+
     // Distant rolling hills (two parallax layers, built from overlapping ellipses)
     for (let x = -100; x < bgWidth + 300; x += 260 + Math.random() * 160) {
         const w = 420 + Math.random() * 280;
         const h = 160 + Math.random() * 120;
-        this.add.ellipse(x, 612, w, h, bgColor1, 0.55).setScrollFactor(0.15).setDepth(-9);
+        this.add.ellipse(x, 612, w, h, bgColor1, 0.55).setScrollFactor(0.15).setDepth(-26);
     }
     for (let x = -50; x < bgWidth + 300; x += 200 + Math.random() * 140) {
         const w = 300 + Math.random() * 220;
         const h = 110 + Math.random() * 90;
-        this.add.ellipse(x, 616, w, h, bgColor2, 0.75).setScrollFactor(0.35).setDepth(-8);
+        this.add.ellipse(x, 616, w, h, bgColor2, 0.75).setScrollFactor(0.35).setDepth(-22);
+    }
+
+    if (typeof buildProps === 'function') {
+        buildProps(this, bgWidth, shadeColor(bgColor2, -0.25), propStyle);
+    }
+    if (typeof buildForeground === 'function') {
+        buildForeground(this, bgWidth, groundColor);
+    }
+    if (typeof buildWeather === 'function') {
+        buildWeather(this, theme.weather || null);
+    }
+
+    // Camera vignette. WebGL only — Phaser.AUTO can fall back to Canvas, where
+    // postFX is undefined, so every effect call stays guarded.
+    const mainCam = this.cameras.main;
+    if (mainCam.postFX && typeof lowFxMode !== 'undefined' && !lowFxMode) {
+        mainCam.postFX.clear();
+        mainCam.postFX.addVignette(0.5, 0.5, 0.9, 0.32);
     }
 
     // Ambient floating particles (fireflies at night, dust motes by day)
@@ -760,10 +975,20 @@ function loadLevel(levelIndex) {
     playerRect = this.add.sprite(currentLevel.playerStart.x, currentLevel.playerStart.y, 'tex_player');
     playerRect.setDepth(10);
 
+    // Equipped cosmetic hat
+    if (typeof drawPlayerHat === 'function') {
+        playerHatObjects = drawPlayerHat(this, playerRect);
+    }
+
     // Ghost sprite (translucent player copy showing best-time replay)
     if (ghostReplay && ghostEnabled) {
         ghostSprite = this.add.image(ghostReplay[0]?.x || 100, ghostReplay[0]?.y || 500, 'tex_player').setAlpha(0.25);
         ghostSprite.setDepth(50);
+        // The ghost wears the same hat, faded to match
+        if (typeof drawPlayerHat === 'function') {
+            ghostHatObjects = drawPlayerHat(this, ghostSprite, false);
+            ghostHatObjects.forEach(o => o.setAlpha(0.25).setDepth(50));
+        }
     }
 
     player.setBounce(0);
@@ -779,8 +1004,8 @@ function loadLevel(levelIndex) {
     currentLevel.enemies.forEach(enemyData => {
         const type = enemyData.type || 'walker';
         const config = ENEMY_TYPES[type] || ENEMY_TYPES.walker;
-        const size = type === 'flyer' ? 28 : (type === 'jumper' ? 32 : 32);
-        const height = type === 'jumper' ? 40 : size;
+        const size = type === 'flyer' ? 28 : (type === 'diver' ? 30 : (type === 'charger' ? 34 : 32));
+        const height = type === 'jumper' ? 40 : (type === 'diver' ? 26 : (type === 'charger' ? 30 : size));
 
         const enemy = enemies.create(enemyData.x, enemyData.y, null).setDisplaySize(size, height).setVisible(false);
         const enemyTexKey = this.textures.exists('tex_enemy_' + type) ? 'tex_enemy_' + type : 'tex_enemy_walker';
@@ -825,6 +1050,18 @@ function loadLevel(levelIndex) {
                         fontSize: '14px', fill: '#fff', fontStyle: 'bold'
                     }).setOrigin(0.5);
                     break;
+                case 'diver':
+                    // Downward arrow — it comes at you from above
+                    indicator = this.add.text(enemyData.x, enemyData.y + height / 2 - 2, 'v', {
+                        fontSize: '12px', fill: '#fff', fontStyle: 'bold'
+                    }).setOrigin(0.5);
+                    break;
+                case 'charger':
+                    // Double chevron in the direction of travel
+                    indicator = this.add.text(enemyData.x, enemyData.y, '>>', {
+                        fontSize: '11px', fill: '#fff', fontStyle: 'bold'
+                    }).setOrigin(0.5);
+                    break;
             }
             if (indicator) {
                 enemyRect.cbIndicator = indicator;
@@ -841,6 +1078,19 @@ function loadLevel(levelIndex) {
             enemy.setVelocityX(config.speed * (Math.random() > 0.5 ? 1 : -1));
             enemy.setBounce(0);
             enemy.setCollideWorldBounds(true);
+        } else if (type === 'diver') {
+            enemy.body.setAllowGravity(false);
+            enemy.startY = enemyData.y;
+            enemy.diveState = 'idle';
+            enemy.nextDive = 0;
+            enemy.setBounce(0);
+            enemy.setCollideWorldBounds(true);
+        } else if (type === 'charger') {
+            enemy.setBounce(1);
+            enemy.setCollideWorldBounds(true);
+            enemy.chargeState = 'idle';
+            enemy.nextCharge = 0;
+            enemy.setVelocityX(config.speed * (Math.random() > 0.5 ? 1 : -1));
         } else if (type === 'shooter') {
             enemy.setBounce(0);
             enemy.setCollideWorldBounds(true);
@@ -881,6 +1131,72 @@ function loadLevel(levelIndex) {
             bb.contains = bbData.contains || null;
             const bbRect = this.add.image(bbData.x, bbData.y, 'tex_crate').setDisplaySize(w, h);
             breakableBlockRects.push({ rect: bbRect, body: bb, x1: null, x2: null });
+        });
+    }
+
+    // Springs from level data
+    springs = this.physics.add.staticGroup();
+    springRects = [];
+    if (currentLevel.springs) {
+        currentLevel.springs.forEach(sData => {
+            const s = springs.create(sData.x, sData.y, null).setDisplaySize(32, 20).setVisible(false).refreshBody();
+            s.lastBounce = 0;
+            const sRect = this.add.image(sData.x, sData.y, 'tex_spring');
+            springRects.push({ rect: sRect, body: s });
+        });
+    }
+
+    // Crumbling platforms: solid until stood on, then they shake and drop
+    crumblingPlatforms = [];
+    if (currentLevel.crumblingPlatforms) {
+        currentLevel.crumblingPlatforms.forEach(cp => {
+            const w = cp.width || 90;
+            const h = cp.height || 20;
+            const body = platforms.create(cp.x, cp.y, null).setDisplaySize(w, h).setVisible(false).refreshBody();
+            const parts = drawTerrainBlock(this, cp.x, cp.y, w, h, shadeColor(platformColor, -0.15), false);
+            crumblingPlatforms.push({
+                body: body, parts: parts, x: cp.x, y: cp.y, w: w, h: h,
+                state: 'solid', timer: 0
+            });
+        });
+    }
+
+    // Wind zones: a constant push, with drifting motes so the force is visible
+    windZones = [];
+    if (currentLevel.windZones) {
+        currentLevel.windZones.forEach(wz => {
+            const marks = [];
+            const count = Math.max(3, Math.floor(wz.width / 90));
+            for (let i = 0; i < count; i++) {
+                const m = this.add.rectangle(
+                    wz.x - wz.width / 2 + Math.random() * wz.width,
+                    wz.y - wz.height / 2 + Math.random() * wz.height,
+                    12, 2, 0xffffff, 0.3
+                ).setDepth(6);
+                marks.push(m);
+            }
+            windZones.push({
+                x: wz.x, y: wz.y, width: wz.width, height: wz.height,
+                fx: wz.fx || 0, fy: wz.fy || 0, marks: marks
+            });
+        });
+    }
+
+    // Keys and the gates they open
+    levelKeys = [];
+    timedGates = [];
+    if (currentLevel.timedGates) {
+        currentLevel.timedGates.forEach(gate => {
+            const gh = gate.height || 90;
+            const body = platforms.create(gate.x, gate.y, null).setDisplaySize(30, gh).setVisible(false).refreshBody();
+            const rect = this.add.image(gate.x, gate.y, 'tex_gate').setDisplaySize(30, gh).setDepth(5);
+            timedGates.push({ id: gate.id, body: body, rect: rect, open: false, timer: 0, x: gate.x, y: gate.y });
+        });
+    }
+    if (currentLevel.keys) {
+        currentLevel.keys.forEach(k => {
+            const rect = this.add.image(k.x, k.y, 'tex_key').setDepth(6);
+            levelKeys.push({ id: k.opens, rect: rect, x: k.x, y: k.y, taken: false, baseY: k.y });
         });
     }
 
@@ -972,8 +1288,9 @@ function loadLevel(levelIndex) {
         yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
     });
 
-    // Hide the flag on boss levels until boss is defeated
-    if (currentLevel.bossArena) {
+    // Hide the flag until the boss falls. A mid-boss sits mid-level with the
+    // flag well past it, so it opts out via boss.hidesFlag.
+    if (currentLevel.bossArena && (!currentLevel.boss || currentLevel.boss.hidesFlag !== false)) {
         endFlag.setAlpha(0);
         endFlag.body.enable = false;
         bossFlagHidden = true;
@@ -990,6 +1307,7 @@ function loadLevel(levelIndex) {
     this.physics.add.overlap(player, endFlag, reachEnd, null, this);
     this.physics.add.overlap(player, obstacles, hitEnemy, null, this);
     this.physics.add.overlap(player, coins, collectCoin, null, this);
+    this.physics.add.overlap(player, springs, hitSpring, null, this);
     this.physics.add.overlap(player, powerUps, collectPowerUp, null, this);
     this.physics.add.overlap(player, projectiles, hitByProjectile, null, this);
     // Note: Checkpoints are activated based on X position in update(), not by overlap
@@ -1038,7 +1356,7 @@ function loadLevel(levelIndex) {
     });
     levelName.setScrollFactor(0);
 
-    const instructions = this.add.text(16, 50, 'Arrows: Move | Space: Jump | Shift: Dash | Wall Jump: Jump off walls', {
+    const instructions = this.add.text(16, 50, 'Arrows: Move | Space: Jump | Shift: Dash | Down+Jump: Pound | R: Retry', {
         fontSize: '14px',
         fill: '#fff',
         backgroundColor: '#000',
@@ -1073,6 +1391,17 @@ function loadLevel(levelIndex) {
         padding: { x: 10, y: 5 }
     });
     scoreText.setScrollFactor(0);
+
+    // Coin wallet display
+    if (typeof getDisplayCoins === 'function') {
+        walletText = this.add.text(16, 250, `● ${getDisplayCoins()}`, {
+            fontSize: '14px',
+            fill: '#ffcc33',
+            backgroundColor: '#000',
+            padding: { x: 10, y: 5 }
+        });
+        walletText.setScrollFactor(0).setDepth(100);
+    }
 
     // Timer display
     const bestTime = bestTimes['level' + currentLevelIndex];
@@ -1119,6 +1448,11 @@ function loadLevel(levelIndex) {
         fontSize: '10px', fill: '#00ccff'
     }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(100);
 
+    // Flow meter, sharing the row with the dash bar
+    if (typeof createFlowHUD === 'function') {
+        createFlowHUD(this, 130, 218);
+    }
+
     // Sound toggle button (always visible, bottom-right corner)
     const muteLabel = (typeof audioMuted !== 'undefined' && audioMuted) ? '[ MUSIC OFF ]' : '[ MUSIC ON ]';
     const muteBtn = this.add.text(784, 584, muteLabel, {
@@ -1159,6 +1493,13 @@ function loadLevel(levelIndex) {
     // ESC key to pause
     this.input.keyboard.on('keydown-ESC', () => {
         togglePause.call(this);
+    });
+
+    // R key for an instant retry — the "one more run" shortcut
+    this.input.keyboard.on('keydown-R', () => {
+        if (isPaused || gameOver || levelComplete) return;
+        if (showingMenu || showingLevelSelect) return;
+        restartWithTransition(this);
     });
 }
 
@@ -1222,6 +1563,9 @@ function update() {
 
     // Update player rectangle position to follow physics sprite
     playerRect.setPosition(player.x, player.y);
+    if (typeof updateHatPosition === 'function') {
+        updateHatPosition(playerHatObjects, playerRect);
+    }
 
     // Ghost: record current frame
     if (isRecordingGhost && !gameOver && !levelComplete) {
@@ -1238,14 +1582,19 @@ function update() {
         const gf = ghostReplay[ghostFrameIndex];
         ghostSprite.setPosition(gf.x, gf.y);
         ghostSprite.setScale(gf.sx, gf.sy);
+        if (typeof updateHatPosition === 'function') {
+            updateHatPosition(ghostHatObjects, ghostSprite);
+        }
         ghostFrameIndex++;
     } else if (ghostSprite && ghostFrameIndex >= (ghostReplay?.length || 0)) {
         ghostSprite.setAlpha(0); // hide when replay ends
+        ghostHatObjects.forEach(o => o.setAlpha(0));
     }
 
     const deltaS = this.game.loop.delta / 1000;
     const onGround = player.body.touching.down || player.body.blocked.down;
     const jumpPressed = cursors.up.isDown || cursors.space.isDown || touchJump;
+    const jumpJustPressed = jumpPressed && !wasJumpPressed;
 
     // --- Coyote Time ---
     if (onGround) {
@@ -1277,6 +1626,7 @@ function update() {
         dashTimer -= this.game.loop.delta;
         if (dashTimer <= 0) {
             isDashing = false;
+            dashEndTime = this.time.now;
             player.body.setAllowGravity(true);
         } else {
             player.setVelocityX(DASH_SPEED * dashDirection);
@@ -1311,6 +1661,50 @@ function update() {
             if (!onGround) canAirDash = false;
             playSound('dash');
             if (typeof incrementStat === 'function') incrementStat('totalDashes', 1);
+
+            // Brief lens warp on the dash — sells the speed without a shader
+            const cam = this.cameras.main;
+            if (cam.postFX && typeof lowFxMode !== 'undefined' && !lowFxMode) {
+                const barrel = cam.postFX.addBarrel(1.06);
+                this.time.delayedCall(110, () => {
+                    if (cam.postFX) cam.postFX.remove(barrel);
+                });
+            }
+        }
+    }
+
+    // --- Ground Pound ---
+    // Down + Jump in mid-air: hang briefly, then plunge. The pause is what
+    // makes it read as a deliberate move rather than a dropped jump.
+    if (!isPounding && !onGround && !isDashing && (cursors.down.isDown || touchDown) && jumpJustPressed) {
+        isPounding = true;
+        poundPauseTimer = POUND_PAUSE;
+        jumpBufferTimer = 0;
+        isOverspeed = false;
+        player.setVelocity(0, 0);
+        player.body.setAllowGravity(false);
+        spawnParticles(this, player.x, player.y, 0xffffff, 6, 25);
+        playSound('dash');
+    }
+
+    if (isPounding) {
+        poundPauseTimer -= this.game.loop.delta;
+        if (poundPauseTimer <= 0) {
+            player.body.setAllowGravity(true);
+            player.setVelocityY(POUND_SPEED);
+            player.setVelocityX(0);
+            playerRect.rotation += 0.45;
+            if (Math.random() < 0.6) {
+                spawnParticles(this, player.x, player.y - 12, 0x88ccff, 1, 18);
+            }
+        }
+        // Impact. Handled here rather than in landing detection so gravity is
+        // always restored, even if the player was already grounded.
+        if (onGround) {
+            isPounding = false;
+            poundPauseTimer = 0;
+            player.body.setAllowGravity(true);
+            groundPoundImpact.call(this);
         }
     }
 
@@ -1327,28 +1721,55 @@ function update() {
         if (Math.random() < 0.15) {
             spawnParticles(this, player.x + wallSlideDir * 16, player.y, 0xaaaaaa, 1, 10);
         }
+        // Scrape sound, throttled so it reads as a continuous slide
+        wallSlideSoundTimer -= this.game.loop.delta;
+        if (wallSlideSoundTimer <= 0) {
+            playSound('wallSlide');
+            wallSlideSoundTimer = 200;
+        }
+    } else {
+        wallSlideSoundTimer = 0;
     }
 
-    // --- Acceleration-based Movement (skip during dash) ---
-    if (!isDashing) {
+    // --- Acceleration-based Movement (skip during dash and ground pound) ---
+    if (!isDashing && !isPounding) {
         const maxSpeed = activePowerUps.speed ? 330 : MAX_SPEED;
         const accel = onGround ? (activePowerUps.speed ? 3000 : GROUND_ACCEL) : AIR_ACCEL;
         const decel = onGround ? GROUND_DECEL : AIR_DECEL;
         let vx = player.body.velocity.x;
 
-        if (cursors.left.isDown || touchLeft) {
-            vx -= accel * (vx > 0 ? TURN_BOOST : 1) * deltaS;
-            if (vx < -maxSpeed) vx = -maxSpeed;
-        } else if (cursors.right.isDown || touchRight) {
-            vx += accel * (vx < 0 ? TURN_BOOST : 1) * deltaS;
-            if (vx > maxSpeed) vx = maxSpeed;
+        // Carrying dash speed out of a wavedash: bleed back down to the cap
+        // instead of snapping, so the momentum is worth chaining. Holding the
+        // travel direction can't add to it, but steering back still works.
+        if (isOverspeed && Math.abs(vx) > maxSpeed) {
+            const dir = Math.sign(vx);
+            vx = dir * Math.max(Math.abs(vx) - OVERSPEED_DECAY * deltaS, maxSpeed);
+            if (Math.abs(vx) <= maxSpeed) isOverspeed = false;
+
+            // Steering back the other way still bites, so the carry is
+            // controllable rather than a locked slide.
+            if ((cursors.left.isDown || touchLeft) && dir > 0) {
+                vx -= accel * TURN_BOOST * deltaS;
+            } else if ((cursors.right.isDown || touchRight) && dir < 0) {
+                vx += accel * TURN_BOOST * deltaS;
+            }
         } else {
-            if (vx > 0) {
-                vx -= decel * deltaS;
-                if (vx < 0) vx = 0;
-            } else if (vx < 0) {
-                vx += decel * deltaS;
-                if (vx > 0) vx = 0;
+            isOverspeed = false;
+
+            if (cursors.left.isDown || touchLeft) {
+                vx -= accel * (vx > 0 ? TURN_BOOST : 1) * deltaS;
+                if (vx < -maxSpeed) vx = -maxSpeed;
+            } else if (cursors.right.isDown || touchRight) {
+                vx += accel * (vx < 0 ? TURN_BOOST : 1) * deltaS;
+                if (vx > maxSpeed) vx = maxSpeed;
+            } else {
+                if (vx > 0) {
+                    vx -= decel * deltaS;
+                    if (vx < 0) vx = 0;
+                } else if (vx < 0) {
+                    vx += decel * deltaS;
+                    if (vx > 0) vx = 0;
+                }
             }
         }
         player.setVelocityX(vx);
@@ -1380,6 +1801,16 @@ function update() {
             jumpBufferTimer = 0;
             jumpHeld = true;
             playSound('jump');
+
+            // Wavedash: jumping during or just after a dash carries the dash's
+            // speed into the air instead of dropping back to the run cap.
+            const inDashWindow = isDashing || (this.time.now - dashEndTime) < DASH_JUMP_WINDOW;
+            if (inDashWindow) {
+                player.setVelocityX(DASH_SPEED * dashDirection * DASH_JUMP_CARRY);
+                isOverspeed = true;
+                spawnParticles(this, player.x - dashDirection * 14, player.y + 10, 0x66e0ff, 6, 40);
+                if (typeof flowAddWavedash === 'function') flowAddWavedash();
+            }
         } else if (canDoubleJump) {
             player.setVelocityY(jumpVelocity * 0.9);
             hasDoubleJumped = true;
@@ -1390,13 +1821,16 @@ function update() {
     }
 
     // --- Variable Jump Height (release to cut jump short) ---
-    if (!jumpPressed && player.body.velocity.y < 0 && !isDashing) {
+    // Skipped during a spring launch: the player never pressed jump for it, so
+    // cutting it would silently halve every launch.
+    if (springLaunch && player.body.velocity.y >= 0) springLaunch = false;
+    if (!jumpPressed && player.body.velocity.y < 0 && !isDashing && !isPounding && !springLaunch) {
         player.setVelocityY(player.body.velocity.y * 0.85);
         jumpHeld = false;
     }
 
     // --- Fast Fall (snappier descent) ---
-    if (player.body.velocity.y > 0 && !isWallSliding && !isDashing) {
+    if (player.body.velocity.y > 0 && !isWallSliding && !isDashing && !isPounding) {
         player.body.velocity.y += BASE_GRAVITY * (FAST_FALL_MULTIPLIER - 1) * deltaS;
     }
 
@@ -1414,6 +1848,12 @@ function update() {
         }
     } else {
         playerRect.rotation = 0;
+    }
+
+    // --- Animation frame ---
+    const frameKey = selectPlayerFrame(this, onGround, player.body.velocity.x, player.body.velocity.y);
+    if (frameKey && playerRect.texture.key !== frameKey) {
+        playerRect.setTexture(frameKey);
     }
 
     // --- Squash & Stretch ---
@@ -1533,6 +1973,76 @@ function update() {
                 else if (enemy.body.blocked.left) enemy.setVelocityX(ENEMY_TYPES.flyer.speed);
                 break;
 
+            case 'diver': {
+                // Hovers until the player passes underneath, telegraphs, then
+                // commits to a straight dive. Readable, and dodgeable by moving.
+                if (enemy.diveState === 'dive') {
+                    if (enemy.body.blocked.down || enemy.y > 580) {
+                        enemy.diveState = 'return';
+                        enemy.setVelocity(0, -120);
+                    }
+                } else if (enemy.diveState === 'return') {
+                    if (enemy.y <= enemy.startY) {
+                        enemy.y = enemy.startY;
+                        enemy.diveState = 'idle';
+                        enemy.setVelocity(0, 0);
+                        enemy.nextDive = this.time.now + 900;
+                    }
+                } else if (enemy.diveState === 'telegraph') {
+                    if (this.time.now >= enemy.diveAt) {
+                        enemy.diveState = 'dive';
+                        enemy.setVelocity(0, DIVER_SPEED);
+                        spawnParticles(this, enemy.x, enemy.y, 0xff88cc, 5, 30);
+                    }
+                } else {
+                    enemy.y = enemy.startY + Math.sin(this.time.now / 600) * 14;
+                    enemy.setVelocity(0, 0);
+                    const overhead = Math.abs(player.x - enemy.x) < DIVER_TRIGGER_X;
+                    if (overhead && player.y > enemy.y && this.time.now > (enemy.nextDive || 0)) {
+                        enemy.diveState = 'telegraph';
+                        enemy.diveAt = this.time.now + DIVER_TELEGRAPH;
+                        const warn = this.add.text(enemy.x, enemy.y - 22, '!', {
+                            fontSize: '16px', fill: '#ff66cc', fontStyle: 'bold'
+                        }).setOrigin(0.5).setDepth(50);
+                        this.time.delayedCall(DIVER_TELEGRAPH, () => warn.destroy());
+                    }
+                }
+                break;
+            }
+
+            case 'charger': {
+                // Patrols slowly; when the player lines up on its level it
+                // paws the ground then charges until it hits a wall.
+                if (enemy.chargeState === 'charge') {
+                    if (enemy.body.blocked.left || enemy.body.blocked.right) {
+                        enemy.chargeState = 'idle';
+                        enemy.nextCharge = this.time.now + 1200;
+                        enemy.setVelocityX(ENEMY_TYPES.charger.speed * (enemy.body.blocked.left ? 1 : -1));
+                        shakeCamera(this, 10, 80);
+                        spawnParticles(this, enemy.x, enemy.y + 12, 0xcc9966, 6, 40);
+                    }
+                } else if (enemy.chargeState === 'windup') {
+                    enemy.setVelocityX(0);
+                    if (this.time.now >= enemy.chargeAt) {
+                        enemy.chargeState = 'charge';
+                        enemy.setVelocityX(CHARGER_SPEED * enemy.chargeDir);
+                    } else if (Math.random() < 0.25) {
+                        spawnParticles(this, enemy.x - enemy.chargeDir * 16, enemy.y + 12, 0xcc9966, 1, 18);
+                    }
+                } else {
+                    if (enemy.body.blocked.right) enemy.setVelocityX(-ENEMY_TYPES.charger.speed);
+                    else if (enemy.body.blocked.left) enemy.setVelocityX(ENEMY_TYPES.charger.speed);
+                    const sameBand = Math.abs(player.y - enemy.y) < 40;
+                    const inRange = Math.abs(player.x - enemy.x) < CHARGER_SIGHT;
+                    if (sameBand && inRange && this.time.now > (enemy.nextCharge || 0)) {
+                        enemy.chargeState = 'windup';
+                        enemy.chargeAt = this.time.now + CHARGER_WINDUP;
+                        enemy.chargeDir = player.x < enemy.x ? -1 : 1;
+                    }
+                }
+                break;
+            }
+
             case 'shooter':
                 const timeSinceShot = this.time.now - enemy.lastShot;
                 if (timeSinceShot > 2600 && !enemy.telegraphing) {
@@ -1593,6 +2103,7 @@ function update() {
             const dist = Math.sqrt(dx * dx + dy * dy);
             if (dist < 40 && dist > 20) {
                 showScorePopup(this, player.x, player.y - 30, 'CLOSE!', '#ffffff');
+                if (typeof flowAddNearMiss === 'function') flowAddNearMiss();
                 // Brief white flash
                 const flash = this.add.rectangle(400, 300, 800, 600, 0xffffff, 0.2).setScrollFactor(0).setDepth(998);
                 this.tweens.add({ targets: flash, alpha: 0, duration: 100, onComplete: () => flash.destroy() });
@@ -1627,6 +2138,106 @@ function update() {
     // Cosmetic trail particles
     if (typeof spawnTrailParticle === 'function' && (Math.abs(player.body.velocity.x) > 50 || Math.abs(player.body.velocity.y) > 100)) {
         spawnTrailParticle(this, player.x, player.y + 8);
+    }
+
+    // --- Crumbling platforms ---
+    crumblingPlatforms.forEach(cp => {
+        if (cp.state === 'solid') {
+            const standing = player.body.blocked.down &&
+                Math.abs(player.x - cp.x) < cp.w / 2 + 16 &&
+                Math.abs(player.body.bottom - (cp.y - cp.h / 2)) < 10;
+            if (standing) {
+                cp.state = 'shaking';
+                cp.timer = CRUMBLE_DELAY;
+                playSound('menuHover');
+            }
+        } else if (cp.state === 'shaking') {
+            cp.timer -= this.game.loop.delta;
+            const jitter = (Math.random() - 0.5) * 3;
+            cp.parts.forEach(p => p.setPosition(cp.x + jitter, cp.y + jitter * 0.5));
+            if (Math.random() < 0.2) spawnParticles(this, cp.x, cp.y + cp.h / 2, 0x998877, 1, 20);
+            if (cp.timer <= 0) {
+                cp.state = 'gone';
+                cp.timer = CRUMBLE_RESPAWN;
+                cp.body.enable = false;
+                spawnParticles(this, cp.x, cp.y, 0x998877, 10, 60);
+                cp.parts.forEach(p => {
+                    this.tweens.add({ targets: p, alpha: 0, y: cp.y + 60, duration: 400 });
+                });
+            }
+        } else if (cp.state === 'gone') {
+            cp.timer -= this.game.loop.delta;
+            if (cp.timer <= 0) {
+                cp.state = 'solid';
+                cp.body.enable = true;
+                cp.parts.forEach(p => {
+                    p.setPosition(cp.x, cp.y);
+                    this.tweens.add({ targets: p, alpha: 1, duration: 250 });
+                });
+            }
+        }
+    });
+
+    // --- Wind zones ---
+    windZones.forEach(wz => {
+        const inside = Math.abs(player.x - wz.x) < wz.width / 2 &&
+                       Math.abs(player.y - wz.y) < wz.height / 2;
+        if (inside && !isDashing) {
+            // Horizontal push is positional: the movement block rewrites
+            // velocity.x every frame, so a velocity nudge is erased by ground
+            // friction before it can move anything.
+            player.x += wz.fx * deltaS;
+            playerRect.x = player.x;
+            // Vertical is velocity-based, and must out-pull gravity (800, plus
+            // 400 more while fast-falling) to lift the player at all.
+            player.body.velocity.y += wz.fy * deltaS;
+        }
+        wz.marks.forEach(m => {
+            m.x += wz.fx * deltaS * 0.35;
+            m.y += wz.fy * deltaS * 0.35;
+            if (m.x > wz.x + wz.width / 2) m.x = wz.x - wz.width / 2;
+            if (m.x < wz.x - wz.width / 2) m.x = wz.x + wz.width / 2;
+            if (m.y > wz.y + wz.height / 2) m.y = wz.y - wz.height / 2;
+            if (m.y < wz.y - wz.height / 2) m.y = wz.y + wz.height / 2;
+        });
+    });
+
+    // --- Keys & gates ---
+    levelKeys.forEach(k => {
+        if (k.taken) return;
+        k.rect.y = k.baseY + Math.sin(this.time.now / 320) * 4;
+        k.rect.rotation = Math.sin(this.time.now / 500) * 0.2;
+        if (Phaser.Math.Distance.Between(player.x, player.y, k.rect.x, k.rect.y) < 30) {
+            k.taken = true;
+            k.rect.destroy();
+            playSound('unlock');
+            spawnParticles(this, k.x, k.y, 0xffcc33, 10, 50);
+            const gate = timedGates.find(g => g.id === k.id);
+            if (gate && !gate.open) {
+                gate.open = true;
+                gate.body.enable = false;
+                showScorePopup(this, player.x, player.y - 40, 'GATE OPEN!', '#ffcc33');
+                this.tweens.add({
+                    targets: gate.rect, alpha: 0.15, scaleY: 0.05,
+                    duration: 400, ease: 'Back.easeIn'
+                });
+                shakeCamera(this, 14, 120);
+            }
+        }
+    });
+
+    // 2.5D presentation: contact shadows, weather, foreground scroll
+    if (typeof updateShadows === 'function') {
+        updateShadows(this);
+        updateWeather(this, this.game.loop.delta);
+        updateForeground(this);
+    }
+
+    // Flow meter: driven by how much of the speed cap is actually being used
+    if (typeof updateFlowMeter === 'function') {
+        const cap = activePowerUps.speed ? 330 : MAX_SPEED;
+        const speedRatio = Math.abs(player.body.velocity.x) / cap;
+        updateFlowMeter(this, this.game.loop.delta, speedRatio, playerRect);
     }
 
     // Tutorial hints
@@ -1771,7 +2382,12 @@ function update() {
             // Update visual rectangle
             mp.rect.setPosition(platform.x, platform.y);
 
-            // Move player with platform if standing on it
+            // Move player with platform if standing on it.
+            // Vertical carry is deliberately not applied: gravity (800) far
+            // outpaces platform speeds (~40-60), so the player tracks a
+            // descending platform on its own, and collision lifts them on the
+            // way up. Adding an explicit carry here fights the solver and
+            // makes the ride drift.
             if (player.body.touching.down && platform.body.touching.up) {
                 const onPlatform = Math.abs(player.x - platform.x) < platform.displayWidth / 2 + player.displayWidth / 2;
                 if (onPlatform) {
@@ -1785,7 +2401,7 @@ function update() {
     }
 
     // Boss trigger
-    if (currentLevelIndex === 9 && !bossTriggered && currentLevel.bossArena && player.x > currentLevel.bossArena.x) {
+    if (!bossTriggered && currentLevel.bossArena && player.x > currentLevel.bossArena.x) {
         bossTriggered = true;
         triggerBoss.call(this);
     }
@@ -1834,6 +2450,15 @@ function collectCoin(player, coin) {
     coinsCollected++;
     const highScore = highScores['level' + currentLevelIndex] || 0;
     scoreText.setText(`Score: ${score} | Best: ${highScore}`);
+
+    // Bank toward the persistent wallet (spendable currency, separate from
+    // score). Flow tier multiplies the payout, so running fast pays better.
+    if (typeof earnCoins === 'function') {
+        const flowMult = typeof getFlowMultiplier === 'function' ? getFlowMultiplier() : 1;
+        earnCoins(1 * flowMult);
+        if (walletText) walletText.setText(`● ${getDisplayCoins()}`);
+    }
+    if (typeof flowAddCoin === 'function') flowAddCoin();
 
     // Visual juice: gold particle burst + score popup + sound
     const particleCount = comboMultiplier >= 2 ? 10 : 6;
@@ -1897,11 +2522,105 @@ function handleEnemyCollision(player, enemy) {
     }
 }
 
+// Ground pound impact: a small shockwave that clears enemies and crates in
+// range. Reuses the normal stomp and break paths so scoring, combo and
+// achievement tracking all behave exactly as they do for a regular stomp.
+// Picks the player frame for the current state. Returns tex_player if the
+// animation set was never generated, so the game still runs without it.
+function selectPlayerFrame(scene, onGround, vx, vy) {
+    if (!scene.textures.exists('tex_player_run0')) return 'tex_player';
+    if (isPounding) return 'tex_player_pound';
+    if (isWallSliding) return 'tex_player_wallslide';
+    if (isDashing) return 'tex_player_jump';
+    if (!onGround) return vy > 60 ? 'tex_player_fall' : 'tex_player_jump';
+
+    if (Math.abs(vx) > 30) {
+        // Faster running cycles the legs faster
+        const cycleMs = Phaser.Math.Clamp(150 - Math.abs(vx) * 0.32, 55, 150);
+        return 'tex_player_run' + (Math.floor(scene.time.now / cycleMs) % 4);
+    }
+    // Idle blink every few seconds
+    return (scene.time.now % 3800) < 140 ? 'tex_player_blink' : 'tex_player';
+}
+
+function groundPoundImpact() {
+    const px = player.x;
+    const py = player.y + 16;
+
+    shakeCamera(this, 28, 140);
+    spawnParticles(this, px, py, 0xffffff, 14, 90);
+    spawnParticles(this, px, py, 0xaaddff, 8, 55);
+    playSound('stomp');
+
+    const ring = this.add.circle(px, py, POUND_RADIUS);
+    ring.setStrokeStyle(3, 0x99ddff, 0.9).setDepth(9).setScale(0.2);
+    this.tweens.add({
+        targets: ring, scale: 1, alpha: 0,
+        duration: 260, ease: 'Quad.easeOut',
+        onComplete: () => ring.destroy()
+    });
+
+    // Flyers stay immune, matching the normal stomp rules
+    enemies.children.entries.slice().forEach(enemy => {
+        if (!enemy.active || enemy.enemyType === 'flyer') return;
+        if (Phaser.Math.Distance.Between(px, py, enemy.x, enemy.y) <= POUND_RADIUS) {
+            stompEnemy.call(this, enemy);
+        }
+    });
+
+    breakableBlockRects.slice().forEach(b => {
+        if (!b.body || !b.body.active) return;
+        if (Phaser.Math.Distance.Between(px, py, b.body.x, b.body.y) <= POUND_RADIUS + 20) {
+            breakBlock.call(this, b.body);
+        }
+    });
+
+    // Holding jump on impact rebounds, so pounds can be chained
+    const jumpHeldNow = cursors.up.isDown || cursors.space.isDown || touchJump;
+    if (jumpHeldNow) player.setVelocityY(-400);
+
+    if (typeof flowAddPound === 'function') flowAddPound();
+}
+
+function hitSpring(playerObj, spring) {
+    // Only fire when coming down onto the pad, not when brushing past it
+    if (player.body.velocity.y < -50) return;
+    const now = this.time.now;
+    if (now - (spring.lastBounce || 0) < 200) return;
+    spring.lastBounce = now;
+
+    const wasPounding = isPounding;
+    if (isPounding) {
+        isPounding = false;
+        poundPauseTimer = 0;
+        player.body.setAllowGravity(true);
+    }
+
+    player.setVelocityY(wasPounding ? SPRING_POUND_VELOCITY : SPRING_VELOCITY);
+    springLaunch = true;
+    hasDoubleJumped = false;
+    canAirDash = true;
+
+    const sr = springRects.find(s => s.body === spring);
+    if (sr) {
+        sr.rect.setTexture('tex_spring_compressed');
+        this.time.delayedCall(140, () => {
+            if (sr.rect && sr.rect.scene) sr.rect.setTexture('tex_spring');
+        });
+    }
+
+    spawnParticles(this, spring.x, spring.y - 10, 0xffdd66, wasPounding ? 12 : 7, wasPounding ? 70 : 45);
+    playSound('jump');
+    if (wasPounding) shakeCamera(this, 18, 90);
+}
+
 function stompEnemy(enemy) {
     const ex = enemy.x;
     const ey = enemy.y;
     const enemyIndex = enemies.children.entries.indexOf(enemy);
     const enemyRect = enemyRects[enemyIndex];
+
+    if (typeof flowAddStomp === 'function') flowAddStomp();
 
     // Shield enemies take 2 hits
     if (enemy.hp > 1) {
@@ -1978,6 +2697,17 @@ function hitEnemy() {
     comboMultiplier = 1;
     comboTimer = 0;
 
+    // Taking a hit wipes flow, and clears any pound in progress so gravity
+    // isn't left disabled through the respawn.
+    if (typeof flowBreak === 'function') flowBreak();
+    if (isPounding) {
+        isPounding = false;
+        poundPauseTimer = 0;
+        player.body.setAllowGravity(true);
+    }
+    isOverspeed = false;
+    springLaunch = false;
+
     // Achievement tracking
     if (typeof incrementStat === 'function') {
         incrementStat('totalDeaths', 1);
@@ -2000,6 +2730,9 @@ function hitEnemy() {
         this.physics.pause();
         if (typeof stopBackgroundMusic === 'function') stopBackgroundMusic();
         playerRect.setTint(0xff0000);
+
+        // Losing the run still banks the coins earned during it
+        if (typeof bankPendingCoins === 'function') bankPendingCoins();
 
         const gameOverText = this.add.text(this.cameras.main.centerX, 300, 'GAME OVER!', {
             fontSize: '48px',
@@ -2120,6 +2853,20 @@ function reachEnd() {
         leaderRanks = saveLeaderboardEntry(currentLevelIndex, score, levelTimer);
     }
 
+    // Bank the run's coins, applying whole-run multipliers. Bonuses must be
+    // read before marking the daily clear, or the x2 is consumed too early.
+    let coinsBanked = 0;
+    let coinBonusLabel = '';
+    if (typeof bankPendingCoins === 'function') {
+        const bonuses = typeof getRunCoinBonuses === 'function' ? getRunCoinBonuses() : [];
+        let mult = 1;
+        bonuses.forEach(b => { mult *= b.mult; });
+        coinBonusLabel = bonuses.map(b => `${b.label} x${b.mult}`).join(', ');
+        coinsBanked = bankPendingCoins(mult);
+        if (typeof markFirstClearToday === 'function') markFirstClearToday();
+        if (walletText) walletText.setText(`● ${getDisplayCoins()}`);
+    }
+
     // Achievement tracking: record level completion
     if (typeof recordLevelCompletion === 'function') {
         recordLevelCompletion(currentLevelIndex);
@@ -2181,6 +2928,62 @@ function reachEnd() {
     // Stats section (appears after stars)
     const statsDelay = 1500;
 
+    // Personal-best ranking, shown to the right of the stars so the centered
+    // stats column keeps its layout.
+    if (leaderRanks.scoreRank > 0 || leaderRanks.timeRank > 0) {
+        const rankLines = [];
+        if (leaderRanks.scoreRank > 0) rankLines.push(`#${leaderRanks.scoreRank} SCORE`);
+        if (leaderRanks.timeRank > 0) rankLines.push(`#${leaderRanks.timeRank} TIME`);
+        const rankBadge = this.add.text(560, 190, rankLines.join('\n'), {
+            fontSize: '16px', fill: '#ffd700', fontStyle: 'bold',
+            align: 'center', stroke: '#000', strokeThickness: 3
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(1000).setAlpha(0).setScale(0.5);
+        this.tweens.add({
+            targets: rankBadge,
+            alpha: 1, scaleX: 1, scaleY: 1,
+            duration: 400, delay: 1400, ease: 'Back.easeOut',
+            onStart: () => spawnParticles(scene, 560, 190, 0xffd700, 8, 35)
+        });
+    }
+
+    // Coin bonuses earned this run
+    if (coinBonusLabel) {
+        const bonusText = this.add.text(560, 222, coinBonusLabel, {
+            fontSize: '11px', fill: '#ffcc33', align: 'center', wordWrap: { width: 190 }
+        }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(1000).setAlpha(0);
+        this.tweens.add({ targets: bonusText, alpha: 1, duration: 300, delay: statsDelay + 200 });
+    }
+
+    // "Next unlock" teaser — keeps the shop in view while coins accumulate
+    if (typeof getNextPurchaseTeaser === 'function') {
+        const teaser = getNextPurchaseTeaser();
+        if (teaser) {
+            const txt = teaser.remaining > 0
+                ? `Next unlock: ${teaser.name}  ${walletCoins}/${teaser.price}`
+                : `${teaser.name} unlocked — visit Cosmetics!`;
+            // Right column, clear of the centered stats and the buttons below
+            const teaserText = this.add.text(560, 345, txt, {
+                fontSize: '11px', fill: teaser.remaining > 0 ? '#aa9955' : '#ffcc33',
+                align: 'center', wordWrap: { width: 200 }
+            }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(1000).setAlpha(0);
+            this.tweens.add({ targets: teaserText, alpha: 1, duration: 300, delay: statsDelay + 750 });
+        }
+    }
+
+    // Top runs for this level
+    if (typeof getLeaderboard === 'function') {
+        const lb = getLeaderboard(currentLevelIndex);
+        if (lb.times && lb.times.length > 0) {
+            const rows = lb.times.slice(0, 3)
+                .map((e, i) => `${i + 1}. ${formatTime(e.time)}`)
+                .join('\n');
+            const lbPanel = this.add.text(560, 255, 'BEST RUNS\n' + rows, {
+                fontSize: '12px', fill: '#aaddff', align: 'center', lineSpacing: 3
+            }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(1000).setAlpha(0);
+            this.tweens.add({ targets: lbPanel, alpha: 1, duration: 300, delay: statsDelay + 300 });
+        }
+    }
+
     // Score delta
     const scoreDelta = score - prevHighScore;
     const scoreStr = isNewHighScore ? `Score: ${score} (+${scoreDelta} NEW BEST!)` : `Score: ${score}`;
@@ -2208,7 +3011,8 @@ function reachEnd() {
     this.tweens.add({ targets: timeDisplay, alpha: 1, duration: 300, delay: statsDelay + 150 });
 
     // Coins
-    const coinStr = `Coins: ${coinsCollected}/${totalLevelCoins}`;
+    let coinStr = `Coins: ${coinsCollected}/${totalLevelCoins}`;
+    if (coinsBanked > 0) coinStr += `  (+${coinsBanked} banked)`;
     const coinDisplay = this.add.text(400, 310, coinStr, {
         fontSize: '14px', fill: '#ffd700'
     }).setOrigin(0.5).setScrollFactor(0).setDepth(1000).setAlpha(0);
@@ -2710,9 +3514,22 @@ function breakBlock(block) {
 function triggerBoss() {
     const scene = this;
     const arena = currentLevel.bossArena;
+    // Level data drives the fight; the level-10 Guardian is just the default.
+    bossConfig = Object.assign({
+        name: 'THE GUARDIAN',
+        hp: 9,
+        phases: 3,
+        color: 0x440066,
+        strokeColor: 0x8800cc,
+        coreColor: 0xff0000,
+        score: 2000,
+        hidesFlag: true
+    }, currentLevel.boss || {});
+
+    bossMaxHP = bossConfig.hp;
     bossActive = true;
     bossPhase = 0;
-    bossHP = 9;
+    bossHP = bossMaxHP;
     bossAttackTimer = 2000;
 
     // Create invisible wall at arena entrance so player can't retreat
@@ -2731,10 +3548,10 @@ function triggerBoss() {
     bossSprite.setCollideWorldBounds(true);
     bossSprite.body.setMaxVelocityY(600);
 
-    // Boss visual: dark purple rectangle with pulsing red core
-    bossRect = scene.add.rectangle(bossX, bossY, 64, 64, 0x440066);
-    bossRect.setStrokeStyle(3, 0x8800cc);
-    bossCoreRect = scene.add.rectangle(bossX, bossY, 24, 24, 0xff0000);
+    // Boss visual: themed body with a pulsing core
+    bossRect = scene.add.rectangle(bossX, bossY, 64, 64, bossConfig.color);
+    bossRect.setStrokeStyle(3, bossConfig.strokeColor);
+    bossCoreRect = scene.add.rectangle(bossX, bossY, 24, 24, bossConfig.coreColor);
 
     // Collide boss with platforms
     scene.physics.add.collider(bossSprite, platforms);
@@ -2755,8 +3572,8 @@ function triggerBoss() {
     // Boss entrance sound
     playSound('bossRoar');
 
-    // Show "THE GUARDIAN" text with fade
-    const titleText = scene.add.text(400, 200, 'THE GUARDIAN', {
+    // Boss name card
+    const titleText = scene.add.text(400, 200, bossConfig.name, {
         fontSize: '48px',
         fill: '#ff0000',
         fontStyle: 'bold',
@@ -2779,7 +3596,7 @@ function triggerBoss() {
     bossHPBarBg.setScrollFactor(0).setDepth(150);
     bossHPBar = scene.add.rectangle(400, 560, 296, 12, 0x00ff00);
     bossHPBar.setScrollFactor(0).setDepth(151);
-    bossHPText = scene.add.text(400, 560, 'THE GUARDIAN', {
+    bossHPText = scene.add.text(400, 560, bossConfig.name, {
         fontSize: '10px', fill: '#fff', fontStyle: 'bold'
     }).setOrigin(0.5).setScrollFactor(0).setDepth(152);
 }
@@ -2820,20 +3637,25 @@ function damageBoss() {
     if (bossRect) bossRect.setFillStyle(0xffffff);
     scene.time.delayedCall(500, () => {
         bossInvulnerable = false;
-        if (bossRect) bossRect.setFillStyle(bossPhase === 2 ? 0x660033 : 0x440066);
+        if (bossRect) bossRect.setFillStyle(bossPhase === 2 ? 0x660033 : bossConfig.color);
     });
 
     // Update HP bar
     if (bossHPBar) {
-        const hpPct = bossHP / 9;
+        const hpPct = bossHP / bossMaxHP;
         bossHPBar.setScale(hpPct, 1);
         if (hpPct <= 0.33) bossHPBar.setFillStyle(0xff0000);
         else if (hpPct <= 0.66) bossHPBar.setFillStyle(0xff8800);
         else bossHPBar.setFillStyle(0x00ff00);
     }
 
-    // Phase transitions
-    if (bossHP === 6 && bossPhase === 0) {
+    // Phase transitions, scaled to the boss's own HP pool. A single-phase
+    // boss (a mid-boss) simply never crosses these thresholds.
+    const phaseCount = bossConfig ? bossConfig.phases : 3;
+    const phase2At = Math.ceil(bossMaxHP * 2 / 3);
+    const phase3At = Math.ceil(bossMaxHP / 3);
+
+    if (phaseCount >= 2 && bossHP === phase2At && bossPhase === 0) {
         bossPhase = 1;
         bossAttackTimer = 1500;
         shakeCamera(scene, 50, 300);
@@ -2849,7 +3671,7 @@ function damageBoss() {
         if (bossRect) bossRect.setStrokeStyle(3, 0xff8800);
     }
 
-    if (bossHP === 3 && bossPhase === 1) {
+    if (phaseCount >= 3 && bossHP === phase3At && bossPhase === 1) {
         bossPhase = 2;
         bossAttackTimer = 1000;
         bossSprite.body.setAllowGravity(false);
@@ -3114,14 +3936,19 @@ function defeatBoss() {
             });
         }
 
-        score += 2000;
+        const bossScore = bossConfig ? bossConfig.score : 2000;
+        score += bossScore;
         const highScore = highScores['level' + currentLevelIndex] || 0;
         scoreText.setText('Score: ' + score + ' | Best: ' + highScore);
-        showScorePopup(scene, savedBossX, savedBossY - 50, '+2000', '#ff00ff');
+        showScorePopup(scene, savedBossX, savedBossY - 50, '+' + bossScore, '#ff00ff');
 
-        // Reveal the flag
+        // Open the arena so the player can continue past a mid-boss
+        if (bossArenaWall) { bossArenaWall.destroy(); bossArenaWall = null; }
+        if (bossArenaWallRect) { bossArenaWallRect.destroy(); bossArenaWallRect = null; }
+
+        // Reveal the flag, if this boss was gating it
         scene.time.delayedCall(500, () => {
-            if (endFlag) {
+            if (endFlag && bossFlagHidden) {
                 endFlag.setAlpha(1);
                 endFlag.body.enable = true;
                 bossFlagHidden = false;

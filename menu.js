@@ -97,6 +97,30 @@ function showMainMenu(scene) {
     }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
     menuObjects.push(starCount);
 
+    // Coin wallet, plus the once-a-day login bonus
+    if (typeof walletCoins !== 'undefined') {
+        let loginBonus = 0;
+        if (typeof claimDailyLoginBonus === 'function') {
+            loginBonus = claimDailyLoginBonus();
+        }
+
+        const walletDisplay = scene.add.text(400, 210, `● ${walletCoins} coins`, {
+            fontSize: '13px', fill: '#ffcc33'
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
+        menuObjects.push(walletDisplay);
+
+        if (loginBonus > 0) {
+            const bonusText = scene.add.text(400, 228, `+${loginBonus} daily bonus!`, {
+                fontSize: '12px', fill: '#7fdc7f', fontStyle: 'bold'
+            }).setOrigin(0.5).setScrollFactor(0).setDepth(2001).setAlpha(0);
+            menuObjects.push(bonusText);
+            scene.tweens.add({
+                targets: bonusText, alpha: 1, y: 224,
+                duration: 400, delay: 300, ease: 'Back.easeOut'
+            });
+        }
+    }
+
     // Big PLAY button — the hero action
     const playBtn = createMenuButton(scene, 400, 245, '\u25B6  PLAY', '#0a0', '#0c0', () => {
         clearMenuObjects();
@@ -172,7 +196,7 @@ function showMainMenu(scene) {
     });
     achBtn.setStyle({ fontSize: '13px', padding: { x: 12, y: 6 } });
 
-    const cosBtn = createMenuButton(scene, 400, 435, '\uD83C\uDFA8 Cosmetics', '#3a3a3a', '#4a4a4a', () => {
+    const cosBtn = createMenuButton(scene, 400, 435, '\uD83C\uDFA8 Cosmetics & Shop', '#3a3a3a', '#4a4a4a', () => {
         clearMenuObjects();
         if (typeof showCosmeticScreen === 'function') showCosmeticScreen(scene);
     });
@@ -185,7 +209,7 @@ function showMainMenu(scene) {
     modBtn.setStyle({ fontSize: '13px', padding: { x: 12, y: 6 } });
 
     // ---- FOOTER: Controls ----
-    const controls = scene.add.text(400, 480, 'Arrows: Move  |  Space: Jump  |  Shift: Dash  |  ESC: Pause', {
+    const controls = scene.add.text(400, 480, 'Arrows: Move  |  Space: Jump  |  Shift: Dash  |  R: Retry  |  ESC: Pause', {
         fontSize: '10px', fill: '#444'
     }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
     menuObjects.push(controls);

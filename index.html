@@ -79,6 +79,22 @@
             opacity: 1;
         }
 
+        /* Music buffering indicator (the track is a few MB, so first play can lag) */
+        #music-loading {
+            display: none;
+            position: fixed;
+            bottom: 12px;
+            left: 12px;
+            background: rgba(0, 0, 0, 0.65);
+            border-radius: 6px;
+            color: #aaa;
+            font-family: monospace;
+            font-size: 11px;
+            padding: 5px 10px;
+            z-index: 10000;
+        }
+        #music-loading.visible { display: block; }
+
         /* Touch controls overlay */
         #touch-controls {
             display: none;
@@ -109,6 +125,7 @@
         }
         #btn-left  { bottom: 20px; left: 20px; }
         #btn-right { bottom: 20px; left: 110px; }
+        #btn-down  { bottom: 20px; left: 200px; }
         #btn-dash  { bottom: 20px; right: 110px; }
         #btn-jump  { bottom: 20px; right: 20px; }
     </style>
@@ -123,12 +140,16 @@
     <!-- Landscape suggestion toast for mobile portrait (non-blocking, auto-hides) -->
     <div id="rotate-toast">&#128241;&#8635; Tip: rotate to landscape for a bigger view</div>
 
+    <!-- Music buffering indicator (toggled by audio.js) -->
+    <div id="music-loading">&#9834; loading music&hellip;</div>
+
     <div id="game-container"></div>
 
     <!-- Touch control buttons (shown only on touch devices via JS below) -->
     <div id="touch-controls">
         <div class="touch-btn" id="btn-left">&#9664;</div>
         <div class="touch-btn" id="btn-right">&#9654;</div>
+        <div class="touch-btn" id="btn-down">&#9660;</div>
         <div class="touch-btn" id="btn-dash">&#128168;</div>
         <div class="touch-btn" id="btn-jump">&#9650;</div>
     </div>
@@ -151,6 +172,9 @@
     <script src="menu.js"></script>
     <script src="achievements.js"></script>
     <script src="cosmetics.js"></script>
+    <script src="economy.js"></script>
+    <script src="flow.js"></script>
+    <script src="visuals.js"></script>
     <script src="endless.js"></script>
     <script src="modifiers.js"></script>
     <script src="daily.js"></script>
@@ -177,6 +201,7 @@
             bindBtn('btn-left',  function() { touchLeft  = true;  }, function() { touchLeft  = false; });
             bindBtn('btn-right', function() { touchRight = true;  }, function() { touchRight = false; });
             bindBtn('btn-jump',  function() { touchJump  = true;  }, function() { touchJump  = false; });
+            bindBtn('btn-down',  function() { touchDown  = true;  }, function() { touchDown  = false; });
             bindBtn('btn-dash',  function() { touchDashPressed = true; }, function() {});
 
             // Landscape suggestion: brief toast in portrait, never blocks play

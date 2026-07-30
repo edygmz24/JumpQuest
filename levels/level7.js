@@ -3,6 +3,9 @@ const level7 = {
     worldWidth: 4000,
     worldHeight: 600,
     theme: {
+        biome: 'machine',
+        propStyle: 'towers',
+        weather: 'embers',
         skyColor: 0x2C3E50,
         groundColor: 0x555555,
         platformColor: 0x7F8C8D,
@@ -58,6 +61,9 @@ const level7 = {
     ],
 
     enemies: [
+        // The Machine: ramming hardware
+        { x: 2000, y: 464, type: 'charger' },
+        { x: 3100, y: 464, type: 'charger' },
         // Walkers patrolling platforms
         { x: 320, y: 434, type: 'walker' },
         { x: 1150, y: 484, type: 'walker' },
@@ -71,6 +77,12 @@ const level7 = {
         { x: 3640, y: 364, type: 'shooter' },
         // Shield enemy guarding final area
         { x: 3800, y: 434, type: 'shield' }
+    ],
+
+    // Crumbling conveyor plates
+    crumblingPlatforms: [
+        { x: 1500, y: 420, width: 100, height: 20 },
+        { x: 2600, y: 400, width: 100, height: 20 }
     ],
 
     obstacles: [

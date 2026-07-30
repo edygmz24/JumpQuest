@@ -3,6 +3,9 @@ const level6 = {
     worldWidth: 3800,
     worldHeight: 600,
     theme: {
+        biome: 'sky',
+        propStyle: 'mountains',
+        weather: 'snow',
         skyColor: 0xADD8E6,
         groundColor: 0xCCCCCC,
         platformColor: 0xE8E8E8,
@@ -69,6 +72,20 @@ const level6 = {
         { x: 3300, y: 260, type: 'flyer' },
         // Jumper
         { x: 2160, y: 404, type: 'jumper' }
+    ],
+
+    // Springs suit the bouncy-cloud theme: shortcuts up the tall cloud
+    // staircases for anyone willing to line the launch up.
+    springs: [
+        { x: 1240, y: 550 },
+        { x: 2260, y: 550 },
+        { x: 3010, y: 550 }
+    ],
+
+    // Sky level: an updraft and a crosswind to fight through
+    windZones: [
+        { x: 1100, y: 380, width: 260, height: 340, fx: 0, fy: -1450 },
+        { x: 2450, y: 380, width: 300, height: 320, fx: 150, fy: 0 }
     ],
 
     obstacles: [

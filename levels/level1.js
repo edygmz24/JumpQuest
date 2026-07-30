@@ -4,6 +4,9 @@ const level1 = {
     worldHeight: 600,
 
     theme: {
+        biome: 'meadow',
+        propStyle: 'mountains',
+        weather: 'leaves',
         skyColor: 0x87CEEB,
         groundColor: 0x228B22,
         platformColor: 0x8B4513,
@@ -43,6 +46,12 @@ const level1 = {
 
     obstacles: [],
 
+    // First spring the player meets — sits in the open with a coin arc above it
+    // so the launch teaches itself.
+    springs: [
+        { x: 1650, y: 550 }
+    ],
+
     coins: [
         // Section 1 (0-600): Arrow pattern pointing right on the ground
         // Arrow shaft (horizontal line)
@@ -63,7 +72,12 @@ const level1 = {
 
         // Section 3: Coins behind the walker (reward for stomping)
         { x: 1480, y: 450 },
-        { x: 1520, y: 450 }
+        { x: 1520, y: 450 },
+
+        // Section 3.5: Reward arc above the spring
+        { x: 1650, y: 430 },
+        { x: 1650, y: 360 },
+        { x: 1650, y: 300 }
     ],
 
     checkpoints: [

@@ -3,6 +3,9 @@ const level10 = {
     worldWidth: 6000,
     worldHeight: 600,
     theme: {
+        biome: 'castle',
+        propStyle: 'spires',
+        weather: 'embers',
         skyColor: 0x1a0033,
         groundColor: 0x2a0944,
         platformColor: 0x4a1a7a,
@@ -82,6 +85,10 @@ const level10 = {
     ],
 
     enemies: [
+        // Gauntlet: the full roster
+        { x: 1800, y: 300, type: 'diver' },
+        { x: 3400, y: 464, type: 'charger' },
+        { x: 4700, y: 320, type: 'diver' },
         // Section 1: Walkers on spike platforms
         { x: 290, y: 464, type: 'walker' },
         { x: 600, y: 464, type: 'walker' },
