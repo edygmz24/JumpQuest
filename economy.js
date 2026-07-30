@@ -10,6 +10,8 @@
 // what you've picked up, but a fresh restart starts the tally over.
 
 const WALLET_KEY = 'jqWallet';
+const FIRST_CLEAR_KEY = 'jqLastEarnDay';
+const LOGIN_BONUS_KEY = 'jqLastLoginBonus';
 
 let walletCoins = 0;   // banked total, persisted
 let pendingCoins = 0;  // earned this run, not yet banked
@@ -34,13 +36,54 @@ function earnCoins(amount) {
     pendingCoins += Math.max(0, amount);
 }
 
-function bankPendingCoins() {
-    const banked = Math.floor(pendingCoins);
+// Run-level multipliers are applied here rather than per-coin, because
+// "first clear today" isn't known until the run actually ends.
+function bankPendingCoins(multiplier) {
+    const mult = multiplier > 0 ? multiplier : 1;
+    const banked = Math.floor(pendingCoins * mult);
     pendingCoins = 0;
     if (banked <= 0) return 0;
     walletCoins += banked;
     saveWallet();
     return banked;
+}
+
+function _todayString() {
+    if (typeof getDailyDateString === 'function') return getDailyDateString();
+    return new Date().toISOString().slice(0, 10);
+}
+
+// Doubles the first level cleared each day — the classic session starter.
+function isFirstClearToday() {
+    return localStorage.getItem(FIRST_CLEAR_KEY) !== _todayString();
+}
+
+function markFirstClearToday() {
+    localStorage.setItem(FIRST_CLEAR_KEY, _todayString());
+}
+
+// Multipliers that apply to a whole run, with labels for the results screen.
+function getRunCoinBonuses() {
+    const bonuses = [];
+    if (typeof modifierMode !== 'undefined' && modifierMode === 'hardcore') {
+        bonuses.push({ label: 'Hardcore', mult: 1.5 });
+    }
+    if (isFirstClearToday()) {
+        bonuses.push({ label: 'First clear today', mult: 2 });
+    }
+    return bonuses;
+}
+
+// Once-a-day login bonus that scales with the daily streak.
+function claimDailyLoginBonus() {
+    const today = _todayString();
+    if (localStorage.getItem(LOGIN_BONUS_KEY) === today) return 0;
+    localStorage.setItem(LOGIN_BONUS_KEY, today);
+    const streak = (typeof dailyStreak !== 'undefined' && dailyStreak > 0) ? dailyStreak : 0;
+    const bonus = Math.min(10 + streak * 10, 50);
+    walletCoins += bonus;
+    saveWallet();
+    return bonus;
 }
 
 function spendCoins(amount) {

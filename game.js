@@ -2426,10 +2426,17 @@ function reachEnd() {
         leaderRanks = saveLeaderboardEntry(currentLevelIndex, score, levelTimer);
     }
 
-    // Bank the run's coins into the persistent wallet
+    // Bank the run's coins, applying whole-run multipliers. Bonuses must be
+    // read before marking the daily clear, or the x2 is consumed too early.
     let coinsBanked = 0;
+    let coinBonusLabel = '';
     if (typeof bankPendingCoins === 'function') {
-        coinsBanked = bankPendingCoins();
+        const bonuses = typeof getRunCoinBonuses === 'function' ? getRunCoinBonuses() : [];
+        let mult = 1;
+        bonuses.forEach(b => { mult *= b.mult; });
+        coinBonusLabel = bonuses.map(b => `${b.label} x${b.mult}`).join(', ');
+        coinsBanked = bankPendingCoins(mult);
+        if (typeof markFirstClearToday === 'function') markFirstClearToday();
         if (walletText) walletText.setText(`● ${getDisplayCoins()}`);
     }
 
@@ -2510,6 +2517,30 @@ function reachEnd() {
             duration: 400, delay: 1400, ease: 'Back.easeOut',
             onStart: () => spawnParticles(scene, 560, 190, 0xffd700, 8, 35)
         });
+    }
+
+    // Coin bonuses earned this run
+    if (coinBonusLabel) {
+        const bonusText = this.add.text(560, 222, coinBonusLabel, {
+            fontSize: '11px', fill: '#ffcc33', align: 'center', wordWrap: { width: 190 }
+        }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(1000).setAlpha(0);
+        this.tweens.add({ targets: bonusText, alpha: 1, duration: 300, delay: statsDelay + 200 });
+    }
+
+    // "Next unlock" teaser — keeps the shop in view while coins accumulate
+    if (typeof getNextPurchaseTeaser === 'function') {
+        const teaser = getNextPurchaseTeaser();
+        if (teaser) {
+            const txt = teaser.remaining > 0
+                ? `Next unlock: ${teaser.name}  ${walletCoins}/${teaser.price}`
+                : `${teaser.name} unlocked — visit Cosmetics!`;
+            // Right column, clear of the centered stats and the buttons below
+            const teaserText = this.add.text(560, 345, txt, {
+                fontSize: '11px', fill: teaser.remaining > 0 ? '#aa9955' : '#ffcc33',
+                align: 'center', wordWrap: { width: 200 }
+            }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(1000).setAlpha(0);
+            this.tweens.add({ targets: teaserText, alpha: 1, duration: 300, delay: statsDelay + 750 });
+        }
     }
 
     // Top runs for this level

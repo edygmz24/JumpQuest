@@ -12,21 +12,34 @@ const COSMETIC_ITEMS = {
         purple:  { name: 'Purple',  color: 0x9900ff, unlock: { type: 'achievement', id: 'Combo King' } },
         cyan:    { name: 'Cyan',    color: 0x00ffff, unlock: { type: 'achievement', id: 'Dash Master' } },
         gold:    { name: 'Gold',    color: 0xffd700, unlock: { type: 'stars', count: 30 } },
-        rainbow: { name: 'Rainbow', color: null,     unlock: { type: 'achievement', id: 'Perfectionist' } }
+        rainbow: { name: 'Rainbow', color: null,     unlock: { type: 'achievement', id: 'Perfectionist' } },
+        // Purchasable with coins
+        orange:  { name: 'Ember',   color: 0xff7722, unlock: { type: 'coins', price: 120 } },
+        pink:    { name: 'Blossom', color: 0xff66aa, unlock: { type: 'coins', price: 250 } },
+        mint:    { name: 'Mint',    color: 0x66ffcc, unlock: { type: 'coins', price: 400 } }
     },
     trails: {
         none:    { name: 'None',    colors: [],                  unlock: { type: 'default' } },
         fire:    { name: 'Fire',    colors: [0xff4400, 0xff8800], unlock: { type: 'stars', count: 15 } },
         ice:     { name: 'Ice',     colors: [0x00ccff, 0xffffff], unlock: { type: 'achievement', id: 'Speed Demon' } },
         sparkle: { name: 'Sparkle', colors: [0xffd700],           unlock: { type: 'stars', count: 20 } },
-        shadow:  { name: 'Shadow',  colors: [0x222222],           unlock: { type: 'achievement', id: 'Exterminator' } }
+        shadow:  { name: 'Shadow',  colors: [0x222222],           unlock: { type: 'achievement', id: 'Exterminator' } },
+        // Purchasable with coins
+        bubble:  { name: 'Bubble',  colors: [0x88ddff, 0xffffff], unlock: { type: 'coins', price: 200 } },
+        prism:   { name: 'Prism',   colors: [0xff4444, 0x44ff44, 0x4488ff], unlock: { type: 'coins', price: 450 } },
+        nova:    { name: 'Nova',    colors: [0xffee88, 0xff9933, 0xffffff], unlock: { type: 'coins', price: 800 } }
     },
     hats: {
         none:    { name: 'None',    unlock: { type: 'default' } },
         crown:   { name: 'Crown',   unlock: { type: 'stars', count: 25 } },
         tophat:  { name: 'Top Hat', unlock: { type: 'achievement', id: 'Champion' } },
         antenna: { name: 'Antenna', unlock: { type: 'achievement', id: 'Combo Master' } },
-        halo:    { name: 'Halo',    unlock: { type: 'achievement', id: 'Flawless' } }
+        halo:    { name: 'Halo',    unlock: { type: 'achievement', id: 'Flawless' } },
+        // Purchasable with coins
+        cap:        { name: 'Cap',        unlock: { type: 'coins', price: 150 } },
+        headphones: { name: 'Headphones', unlock: { type: 'coins', price: 350 } },
+        viking:     { name: 'Viking',     unlock: { type: 'coins', price: 600 } },
+        flame:      { name: 'Flame',      unlock: { type: 'coins', price: 1000 } }
     }
 };
 
@@ -64,7 +77,56 @@ function initCosmetics() {
     } else {
         cosmeticData = { equipped: { color: 'blue', trail: 'none', hat: 'none' } };
     }
+    // Purchased items, stored as "category:id"
+    if (!Array.isArray(cosmeticData.owned)) cosmeticData.owned = [];
     _saveCosmeticData();
+}
+
+function _ownedKey(category, id) {
+    return category + ':' + id;
+}
+
+function isCosmeticOwned(category, id) {
+    if (!cosmeticData) initCosmetics();
+    return cosmeticData.owned.indexOf(_ownedKey(category, id)) !== -1;
+}
+
+function getCosmeticPrice(category, id) {
+    const items = COSMETIC_ITEMS[category];
+    if (!items || !items[id]) return null;
+    const unlock = items[id].unlock;
+    return unlock.type === 'coins' ? unlock.price : null;
+}
+
+// Returns 'ok', 'owned', 'not_for_sale', or 'insufficient'
+function purchaseCosmetic(category, id) {
+    if (!cosmeticData) initCosmetics();
+    const price = getCosmeticPrice(category, id);
+    if (price === null) return 'not_for_sale';
+    if (isCosmeticOwned(category, id)) return 'owned';
+    if (typeof spendCoins !== 'function' || !spendCoins(price)) return 'insufficient';
+
+    cosmeticData.owned.push(_ownedKey(category, id));
+    _saveCosmeticData();
+    return 'ok';
+}
+
+// The cheapest thing the player can't afford yet, for the "next unlock" teaser
+function getNextPurchaseTeaser() {
+    if (!cosmeticData) initCosmetics();
+    const wallet = typeof walletCoins !== 'undefined' ? walletCoins : 0;
+    let best = null;
+    Object.keys(COSMETIC_ITEMS).forEach(cat => {
+        Object.keys(COSMETIC_ITEMS[cat]).forEach(id => {
+            const price = getCosmeticPrice(cat, id);
+            if (price === null || isCosmeticOwned(cat, id)) return;
+            if (!best || price < best.price) {
+                best = { category: cat, id: id, name: COSMETIC_ITEMS[cat][id].name, price: price };
+            }
+        });
+    });
+    if (best) best.remaining = Math.max(0, best.price - wallet);
+    return best;
 }
 
 function _saveCosmeticData() {
@@ -87,6 +149,10 @@ function isCosmeticUnlocked(category, id) {
             return isAchievementUnlocked(unlock.id);
         }
         return false;
+    }
+
+    if (unlock.type === 'coins') {
+        return isCosmeticOwned(category, id);
     }
 
     return false;
@@ -250,6 +316,57 @@ function drawPlayerHat(scene, rect, track) {
         gfx.setPosition(px, py - 8);
         gfx.setDepth(15);
         objects.push(gfx);
+    } else if (hatId === 'cap') {
+        // Baseball cap: dome plus a visor facing right
+        const gfx = scene.add.graphics();
+        gfx.fillStyle(0x2266cc, 1);
+        gfx.fillEllipse(0, -1, 22, 14);
+        gfx.fillRect(-11, -1, 22, 4);
+        gfx.fillStyle(0x1a4fa0, 1);
+        gfx.fillRect(2, 1, 15, 3);          // visor
+        gfx.fillStyle(0x88bbff, 1);
+        gfx.fillCircle(0, -7, 2);           // button
+        gfx.setPosition(px, py);
+        gfx.setDepth(15);
+        objects.push(gfx);
+    } else if (hatId === 'headphones') {
+        const gfx = scene.add.graphics();
+        gfx.lineStyle(3, 0x333338, 1);
+        gfx.beginPath();
+        gfx.arc(0, 2, 12, Math.PI, 0, false);
+        gfx.strokePath();
+        gfx.fillStyle(0x8844cc, 1);
+        gfx.fillRoundedRect(-15, 0, 6, 11, 2);   // left cup
+        gfx.fillRoundedRect(9, 0, 6, 11, 2);     // right cup
+        gfx.fillStyle(0xbb77ff, 1);
+        gfx.fillRect(-14, 2, 2, 7);
+        gfx.setPosition(px, py);
+        gfx.setDepth(15);
+        objects.push(gfx);
+    } else if (hatId === 'viking') {
+        const gfx = scene.add.graphics();
+        gfx.fillStyle(0x9aa3ad, 1);
+        gfx.fillEllipse(0, 0, 22, 15);           // helmet dome
+        gfx.fillRect(-11, 0, 22, 3);
+        gfx.fillStyle(0x6f7883, 1);
+        gfx.fillRect(-2, -8, 4, 9);              // nose guard ridge
+        gfx.fillStyle(0xf2e2c0, 1);              // horns
+        gfx.fillTriangle(-11, -1, -20, -9, -10, -7);
+        gfx.fillTriangle(11, -1, 20, -9, 10, -7);
+        gfx.setPosition(px, py);
+        gfx.setDepth(15);
+        objects.push(gfx);
+    } else if (hatId === 'flame') {
+        const gfx = scene.add.graphics();
+        gfx.fillStyle(0xff5511, 1);
+        gfx.fillTriangle(-7, 2, 7, 2, 0, -18);
+        gfx.fillStyle(0xff9933, 1);
+        gfx.fillTriangle(-4, 2, 4, 2, 0, -12);
+        gfx.fillStyle(0xffe066, 1);
+        gfx.fillTriangle(-2, 2, 2, 2, 0, -6);
+        gfx.setPosition(px, py);
+        gfx.setDepth(15);
+        objects.push(gfx);
     }
 
     if (track !== false) _currentHatObjects = objects;
@@ -276,6 +393,10 @@ function updateHatPosition(hatObjects, rect) {
         if (hatObjects[1]) hatObjects[1].setPosition(px, py - 16);  // ball
     } else if (hatId === 'halo') {
         if (hatObjects[0]) hatObjects[0].setPosition(px, py - 8);
+    } else if (hatObjects[0]) {
+        // Single-graphics hats (cap, headphones, viking, flame) draw relative
+        // to their own origin, so they only need the anchor point.
+        hatObjects[0].setPosition(px, py);
     }
 }
 
@@ -317,6 +438,15 @@ function _renderCosmeticScreen(scene) {
         stroke: '#000', strokeThickness: 3
     }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
     menuObjects.push(title);
+
+    // Wallet balance — this screen doubles as the shop. Kept on the left
+    // because the PAUSE button sits at depth 2100 over the top-right.
+    if (typeof walletCoins !== 'undefined') {
+        const wallet = scene.add.text(25, 30, '● ' + walletCoins, {
+            fontSize: '20px', fill: '#ffcc33', fontStyle: 'bold'
+        }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(2002);
+        menuObjects.push(wallet);
+    }
 
     // Tab buttons
     const tabs = ['colors', 'trails', 'hats'];
@@ -404,6 +534,14 @@ function _renderCosmeticScreen(scene) {
                 hatIcon = scene.add.text(cx, cy, '\u2022', { fontSize: '18px', fill: unlocked ? '#f00' : '#555' });
             } else if (id === 'halo') {
                 hatIcon = scene.add.text(cx, cy, '\u25CB', { fontSize: '18px', fill: unlocked ? '#ffd700' : '#555' });
+            } else if (id === 'cap') {
+                hatIcon = scene.add.text(cx, cy, '\u25E0', { fontSize: '18px', fill: unlocked ? '#2266cc' : '#555' });
+            } else if (id === 'headphones') {
+                hatIcon = scene.add.text(cx, cy, '\u2229', { fontSize: '18px', fill: unlocked ? '#8844cc' : '#555' });
+            } else if (id === 'viking') {
+                hatIcon = scene.add.text(cx, cy, '\u16A6', { fontSize: '18px', fill: unlocked ? '#9aa3ad' : '#555' });
+            } else if (id === 'flame') {
+                hatIcon = scene.add.text(cx, cy, '\u25B2', { fontSize: '18px', fill: unlocked ? '#ff5511' : '#555' });
             }
             if (hatIcon) {
                 hatIcon.setOrigin(0.5).setScrollFactor(0).setDepth(2002);
@@ -417,12 +555,17 @@ function _renderCosmeticScreen(scene) {
         }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(2002);
         menuObjects.push(nameText);
 
-        // Status line: equipped, unlock requirement, or "Click to equip"
+        // Status line: equipped, price, unlock requirement, or "Click to equip"
+        const price = getCosmeticPrice(_cosmeticActiveTab, id);
+        const affordable = price !== null && typeof walletCoins !== 'undefined' && walletCoins >= price;
         var statusStr = '';
         var statusColor = '#888';
         if (isEquipped) {
             statusStr = 'Equipped';
             statusColor = '#44aaff';
+        } else if (!unlocked && price !== null) {
+            statusStr = '● ' + price + (affordable ? '  — click to buy' : '  (need ' + (price - walletCoins) + ' more)');
+            statusColor = affordable ? '#ffcc33' : '#8a7a45';
         } else if (!unlocked) {
             statusStr = _getUnlockText(item.unlock);
             statusColor = '#aa5555';
@@ -445,6 +588,25 @@ function _renderCosmeticScreen(scene) {
             box.on('pointerup', function () {
                 equipCosmetic(cat, itemId);
                 _renderCosmeticScreen(scene);
+            });
+        } else if (!unlocked && price !== null) {
+            // For sale: buy it, then equip immediately so the purchase is felt
+            box.setInteractive({ useHandCursor: affordable });
+            const buyId = id;
+            const buyCat = _cosmeticActiveTab;
+            if (affordable) {
+                box.on('pointerover', function () { box.setFillStyle(0x3a3520); });
+                box.on('pointerout', function () { box.setFillStyle(boxColor); });
+            }
+            box.on('pointerup', function () {
+                const result = purchaseCosmetic(buyCat, buyId);
+                if (result === 'ok') {
+                    equipCosmetic(buyCat, buyId);
+                    if (typeof playSound === 'function') playSound('unlock');
+                    _renderCosmeticScreen(scene);
+                } else {
+                    _showLockedMessage(scene, 'Not enough coins — need ' + (price - walletCoins) + ' more');
+                }
             });
         } else if (!unlocked) {
             box.setInteractive({ useHandCursor: false });
@@ -469,6 +631,9 @@ function _getUnlockText(unlock) {
     }
     if (unlock.type === 'achievement') {
         return 'Locked: "' + unlock.id + '" achievement';
+    }
+    if (unlock.type === 'coins') {
+        return '● ' + unlock.price;
     }
     return 'Locked';
 }
