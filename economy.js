@@ -24,19 +24,21 @@ function saveWallet() {
 }
 
 // Total to show the player: banked plus what's riding on the current run.
+// Pending is kept fractional so flow-tier multipliers (x1.5) accumulate
+// exactly; only whole coins are ever shown or banked.
 function getDisplayCoins() {
-    return walletCoins + pendingCoins;
+    return walletCoins + Math.floor(pendingCoins);
 }
 
 function earnCoins(amount) {
-    pendingCoins += Math.max(0, Math.floor(amount));
+    pendingCoins += Math.max(0, amount);
 }
 
 function bankPendingCoins() {
-    if (pendingCoins <= 0) return 0;
-    const banked = pendingCoins;
-    walletCoins += banked;
+    const banked = Math.floor(pendingCoins);
     pendingCoins = 0;
+    if (banked <= 0) return 0;
+    walletCoins += banked;
     saveWallet();
     return banked;
 }

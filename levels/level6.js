@@ -71,6 +71,14 @@ const level6 = {
         { x: 2160, y: 404, type: 'jumper' }
     ],
 
+    // Springs suit the bouncy-cloud theme: shortcuts up the tall cloud
+    // staircases for anyone willing to line the launch up.
+    springs: [
+        { x: 1240, y: 550 },
+        { x: 2260, y: 550 },
+        { x: 3010, y: 550 }
+    ],
+
     obstacles: [
         // Spikes on ground to punish falling
         { x: 650, y: 555 },

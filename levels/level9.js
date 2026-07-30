@@ -65,6 +65,12 @@ const level9 = {
         { x: 3300, y: 380, type: 'flyer' }
     ],
 
+    // Speed level: springs keep momentum going without stopping to climb
+    springs: [
+        { x: 1500, y: 550 },
+        { x: 3100, y: 550 }
+    ],
+
     obstacles: [
         // Sparse obstacles - this is about speed not spike avoidance
         { x: 1260, y: 555 },

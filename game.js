@@ -35,6 +35,7 @@ let cursors;
 let touchLeft = false;
 let touchRight = false;
 let touchJump = false;
+let touchDown = false;
 let touchDashPressed = false;
 let enemies;
 let enemyRects = [];
@@ -168,6 +169,33 @@ let dashTimer = 0;
 let dashDirection = 1;
 let lastFacingDir = 1;
 
+// Dash-jump momentum chaining ("wavedash"): jumping out of a dash carries the
+// dash's speed past the normal cap, which then bleeds off instead of snapping.
+// Normal play is untouched — this only fires on the dash+jump overlap.
+const DASH_JUMP_WINDOW = 120;  // ms after a dash ends where the carry applies
+const DASH_JUMP_CARRY = 0.9;   // fraction of DASH_SPEED carried into the jump
+const OVERSPEED_DECAY = 260;   // px/s^2 — gentle on purpose: at AIR_DECEL the
+                               // carry evaporates in ~175ms and buys no ground
+let dashEndTime = -9999;
+let isOverspeed = false;
+
+// Ground Pound
+const POUND_SPEED = 700;
+const POUND_PAUSE = 80;   // ms hang before the plunge, so the input reads
+const POUND_RADIUS = 60;  // impact radius for enemies and crates
+let isPounding = false;
+let poundPauseTimer = 0;
+
+// Springs
+const SPRING_VELOCITY = -650;
+const SPRING_POUND_VELOCITY = -850; // pounding onto a spring launches higher
+let springs;
+let springRects = [];
+// Set while riding a launch the player didn't trigger with the jump button.
+// Without it the variable-jump-height cut multiplies the launch by 0.85 every
+// frame and eats ~55% of the height before the player leaves the pad.
+let springLaunch = false;
+
 // Breakable Blocks
 let breakableBlocks;
 let breakableBlockRects = [];
@@ -281,6 +309,26 @@ function generateGameTextures(scene) {
         g.fillStyle(0xffffff);                                              // eye shine
         g.fillRect(17, 10, 2, 3); g.fillRect(26, 10, 2, 3);
         g.fillStyle(0x1a1a2e); g.fillRect(20, 21, 6, 2);                    // mouth
+    });
+
+    // --- Spring: coiled launcher ---
+    make('tex_spring', 32, 24, g => {
+        g.fillStyle(0x44444e); g.fillRect(1, 19, 30, 5);                     // base plate
+        g.fillStyle(0x2c2c34); g.fillRect(1, 22, 30, 2);                     // base shadow
+        g.fillStyle(0xd8a63a);                                               // coils
+        g.fillRect(7, 15, 18, 3);
+        g.fillRect(7, 11, 18, 3);
+        g.fillStyle(0xf0c862);                                               // coil highlights
+        g.fillRect(7, 15, 18, 1); g.fillRect(7, 11, 18, 1);
+        g.fillStyle(0xbb3333); g.fillRect(4, 3, 24, 7);                      // top pad
+        g.fillStyle(0xff6666); g.fillRect(4, 3, 24, 2);                      // pad highlight
+    });
+    make('tex_spring_compressed', 32, 24, g => {
+        g.fillStyle(0x44444e); g.fillRect(1, 19, 30, 5);
+        g.fillStyle(0x2c2c34); g.fillRect(1, 22, 30, 2);
+        g.fillStyle(0xd8a63a); g.fillRect(7, 16, 18, 3);
+        g.fillStyle(0xbb3333); g.fillRect(4, 11, 24, 6);
+        g.fillStyle(0xff6666); g.fillRect(4, 11, 24, 2);
     });
 
     // --- Enemies ---
@@ -505,6 +553,12 @@ function create() {
     canAirDash = true;
     dashTimer = 0;
     lastFacingDir = 1;
+    dashEndTime = -9999;
+    isOverspeed = false;
+    isPounding = false;
+    poundPauseTimer = 0;
+    springRects = [];
+    springLaunch = false;
     breakableBlockRects = [];
     fakeWalls = [];
     fakeWallRects = [];
@@ -559,6 +613,7 @@ function create() {
     if (typeof resetLevelAchievementTrackers === 'function') resetLevelAchievementTrackers();
     if (typeof initWallet === 'function') initWallet();
     if (typeof resetEconomyLevelState === 'function') resetEconomyLevelState();
+    if (typeof resetFlowState === 'function') resetFlowState();
 
     // Load the current level
     loadLevel.call(this, currentLevelIndex);
@@ -903,6 +958,18 @@ function loadLevel(levelIndex) {
         });
     }
 
+    // Springs from level data
+    springs = this.physics.add.staticGroup();
+    springRects = [];
+    if (currentLevel.springs) {
+        currentLevel.springs.forEach(sData => {
+            const s = springs.create(sData.x, sData.y, null).setDisplaySize(32, 20).setVisible(false).refreshBody();
+            s.lastBounce = 0;
+            const sRect = this.add.image(sData.x, sData.y, 'tex_spring');
+            springRects.push({ rect: sRect, body: s });
+        });
+    }
+
     // --- Secret Areas ---
 
     // Fake Walls: look like platforms but can be dashed through
@@ -1009,6 +1076,7 @@ function loadLevel(levelIndex) {
     this.physics.add.overlap(player, endFlag, reachEnd, null, this);
     this.physics.add.overlap(player, obstacles, hitEnemy, null, this);
     this.physics.add.overlap(player, coins, collectCoin, null, this);
+    this.physics.add.overlap(player, springs, hitSpring, null, this);
     this.physics.add.overlap(player, powerUps, collectPowerUp, null, this);
     this.physics.add.overlap(player, projectiles, hitByProjectile, null, this);
     // Note: Checkpoints are activated based on X position in update(), not by overlap
@@ -1057,7 +1125,7 @@ function loadLevel(levelIndex) {
     });
     levelName.setScrollFactor(0);
 
-    const instructions = this.add.text(16, 50, 'Arrows: Move | Space: Jump | Shift: Dash | R: Retry', {
+    const instructions = this.add.text(16, 50, 'Arrows: Move | Space: Jump | Shift: Dash | Down+Jump: Pound | R: Retry', {
         fontSize: '14px',
         fill: '#fff',
         backgroundColor: '#000',
@@ -1148,6 +1216,11 @@ function loadLevel(levelIndex) {
     const dashLabel = this.add.text(80, 218, 'DASH', {
         fontSize: '10px', fill: '#00ccff'
     }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(100);
+
+    // Flow meter, sharing the row with the dash bar
+    if (typeof createFlowHUD === 'function') {
+        createFlowHUD(this, 130, 218);
+    }
 
     // Sound toggle button (always visible, bottom-right corner)
     const muteLabel = (typeof audioMuted !== 'undefined' && audioMuted) ? '[ MUSIC OFF ]' : '[ MUSIC ON ]';
@@ -1290,6 +1363,7 @@ function update() {
     const deltaS = this.game.loop.delta / 1000;
     const onGround = player.body.touching.down || player.body.blocked.down;
     const jumpPressed = cursors.up.isDown || cursors.space.isDown || touchJump;
+    const jumpJustPressed = jumpPressed && !wasJumpPressed;
 
     // --- Coyote Time ---
     if (onGround) {
@@ -1321,6 +1395,7 @@ function update() {
         dashTimer -= this.game.loop.delta;
         if (dashTimer <= 0) {
             isDashing = false;
+            dashEndTime = this.time.now;
             player.body.setAllowGravity(true);
         } else {
             player.setVelocityX(DASH_SPEED * dashDirection);
@@ -1358,6 +1433,41 @@ function update() {
         }
     }
 
+    // --- Ground Pound ---
+    // Down + Jump in mid-air: hang briefly, then plunge. The pause is what
+    // makes it read as a deliberate move rather than a dropped jump.
+    if (!isPounding && !onGround && !isDashing && (cursors.down.isDown || touchDown) && jumpJustPressed) {
+        isPounding = true;
+        poundPauseTimer = POUND_PAUSE;
+        jumpBufferTimer = 0;
+        isOverspeed = false;
+        player.setVelocity(0, 0);
+        player.body.setAllowGravity(false);
+        spawnParticles(this, player.x, player.y, 0xffffff, 6, 25);
+        playSound('dash');
+    }
+
+    if (isPounding) {
+        poundPauseTimer -= this.game.loop.delta;
+        if (poundPauseTimer <= 0) {
+            player.body.setAllowGravity(true);
+            player.setVelocityY(POUND_SPEED);
+            player.setVelocityX(0);
+            playerRect.rotation += 0.45;
+            if (Math.random() < 0.6) {
+                spawnParticles(this, player.x, player.y - 12, 0x88ccff, 1, 18);
+            }
+        }
+        // Impact. Handled here rather than in landing detection so gravity is
+        // always restored, even if the player was already grounded.
+        if (onGround) {
+            isPounding = false;
+            poundPauseTimer = 0;
+            player.body.setAllowGravity(true);
+            groundPoundImpact.call(this);
+        }
+    }
+
     // --- Wall Slide Detection ---
     const touchingWallLeft = player.body.blocked.left && !onGround;
     const touchingWallRight = player.body.blocked.right && !onGround;
@@ -1381,26 +1491,45 @@ function update() {
         wallSlideSoundTimer = 0;
     }
 
-    // --- Acceleration-based Movement (skip during dash) ---
-    if (!isDashing) {
+    // --- Acceleration-based Movement (skip during dash and ground pound) ---
+    if (!isDashing && !isPounding) {
         const maxSpeed = activePowerUps.speed ? 330 : MAX_SPEED;
         const accel = onGround ? (activePowerUps.speed ? 3000 : GROUND_ACCEL) : AIR_ACCEL;
         const decel = onGround ? GROUND_DECEL : AIR_DECEL;
         let vx = player.body.velocity.x;
 
-        if (cursors.left.isDown || touchLeft) {
-            vx -= accel * (vx > 0 ? TURN_BOOST : 1) * deltaS;
-            if (vx < -maxSpeed) vx = -maxSpeed;
-        } else if (cursors.right.isDown || touchRight) {
-            vx += accel * (vx < 0 ? TURN_BOOST : 1) * deltaS;
-            if (vx > maxSpeed) vx = maxSpeed;
+        // Carrying dash speed out of a wavedash: bleed back down to the cap
+        // instead of snapping, so the momentum is worth chaining. Holding the
+        // travel direction can't add to it, but steering back still works.
+        if (isOverspeed && Math.abs(vx) > maxSpeed) {
+            const dir = Math.sign(vx);
+            vx = dir * Math.max(Math.abs(vx) - OVERSPEED_DECAY * deltaS, maxSpeed);
+            if (Math.abs(vx) <= maxSpeed) isOverspeed = false;
+
+            // Steering back the other way still bites, so the carry is
+            // controllable rather than a locked slide.
+            if ((cursors.left.isDown || touchLeft) && dir > 0) {
+                vx -= accel * TURN_BOOST * deltaS;
+            } else if ((cursors.right.isDown || touchRight) && dir < 0) {
+                vx += accel * TURN_BOOST * deltaS;
+            }
         } else {
-            if (vx > 0) {
-                vx -= decel * deltaS;
-                if (vx < 0) vx = 0;
-            } else if (vx < 0) {
-                vx += decel * deltaS;
-                if (vx > 0) vx = 0;
+            isOverspeed = false;
+
+            if (cursors.left.isDown || touchLeft) {
+                vx -= accel * (vx > 0 ? TURN_BOOST : 1) * deltaS;
+                if (vx < -maxSpeed) vx = -maxSpeed;
+            } else if (cursors.right.isDown || touchRight) {
+                vx += accel * (vx < 0 ? TURN_BOOST : 1) * deltaS;
+                if (vx > maxSpeed) vx = maxSpeed;
+            } else {
+                if (vx > 0) {
+                    vx -= decel * deltaS;
+                    if (vx < 0) vx = 0;
+                } else if (vx < 0) {
+                    vx += decel * deltaS;
+                    if (vx > 0) vx = 0;
+                }
             }
         }
         player.setVelocityX(vx);
@@ -1432,6 +1561,16 @@ function update() {
             jumpBufferTimer = 0;
             jumpHeld = true;
             playSound('jump');
+
+            // Wavedash: jumping during or just after a dash carries the dash's
+            // speed into the air instead of dropping back to the run cap.
+            const inDashWindow = isDashing || (this.time.now - dashEndTime) < DASH_JUMP_WINDOW;
+            if (inDashWindow) {
+                player.setVelocityX(DASH_SPEED * dashDirection * DASH_JUMP_CARRY);
+                isOverspeed = true;
+                spawnParticles(this, player.x - dashDirection * 14, player.y + 10, 0x66e0ff, 6, 40);
+                if (typeof flowAddWavedash === 'function') flowAddWavedash();
+            }
         } else if (canDoubleJump) {
             player.setVelocityY(jumpVelocity * 0.9);
             hasDoubleJumped = true;
@@ -1442,13 +1581,16 @@ function update() {
     }
 
     // --- Variable Jump Height (release to cut jump short) ---
-    if (!jumpPressed && player.body.velocity.y < 0 && !isDashing) {
+    // Skipped during a spring launch: the player never pressed jump for it, so
+    // cutting it would silently halve every launch.
+    if (springLaunch && player.body.velocity.y >= 0) springLaunch = false;
+    if (!jumpPressed && player.body.velocity.y < 0 && !isDashing && !isPounding && !springLaunch) {
         player.setVelocityY(player.body.velocity.y * 0.85);
         jumpHeld = false;
     }
 
     // --- Fast Fall (snappier descent) ---
-    if (player.body.velocity.y > 0 && !isWallSliding && !isDashing) {
+    if (player.body.velocity.y > 0 && !isWallSliding && !isDashing && !isPounding) {
         player.body.velocity.y += BASE_GRAVITY * (FAST_FALL_MULTIPLIER - 1) * deltaS;
     }
 
@@ -1645,6 +1787,7 @@ function update() {
             const dist = Math.sqrt(dx * dx + dy * dy);
             if (dist < 40 && dist > 20) {
                 showScorePopup(this, player.x, player.y - 30, 'CLOSE!', '#ffffff');
+                if (typeof flowAddNearMiss === 'function') flowAddNearMiss();
                 // Brief white flash
                 const flash = this.add.rectangle(400, 300, 800, 600, 0xffffff, 0.2).setScrollFactor(0).setDepth(998);
                 this.tweens.add({ targets: flash, alpha: 0, duration: 100, onComplete: () => flash.destroy() });
@@ -1679,6 +1822,13 @@ function update() {
     // Cosmetic trail particles
     if (typeof spawnTrailParticle === 'function' && (Math.abs(player.body.velocity.x) > 50 || Math.abs(player.body.velocity.y) > 100)) {
         spawnTrailParticle(this, player.x, player.y + 8);
+    }
+
+    // Flow meter: driven by how much of the speed cap is actually being used
+    if (typeof updateFlowMeter === 'function') {
+        const cap = activePowerUps.speed ? 330 : MAX_SPEED;
+        const speedRatio = Math.abs(player.body.velocity.x) / cap;
+        updateFlowMeter(this, this.game.loop.delta, speedRatio, playerRect);
     }
 
     // Tutorial hints
@@ -1892,11 +2042,14 @@ function collectCoin(player, coin) {
     const highScore = highScores['level' + currentLevelIndex] || 0;
     scoreText.setText(`Score: ${score} | Best: ${highScore}`);
 
-    // Bank toward the persistent wallet (spendable currency, separate from score)
+    // Bank toward the persistent wallet (spendable currency, separate from
+    // score). Flow tier multiplies the payout, so running fast pays better.
     if (typeof earnCoins === 'function') {
-        earnCoins(1);
+        const flowMult = typeof getFlowMultiplier === 'function' ? getFlowMultiplier() : 1;
+        earnCoins(1 * flowMult);
         if (walletText) walletText.setText(`● ${getDisplayCoins()}`);
     }
+    if (typeof flowAddCoin === 'function') flowAddCoin();
 
     // Visual juice: gold particle burst + score popup + sound
     const particleCount = comboMultiplier >= 2 ? 10 : 6;
@@ -1960,11 +2113,87 @@ function handleEnemyCollision(player, enemy) {
     }
 }
 
+// Ground pound impact: a small shockwave that clears enemies and crates in
+// range. Reuses the normal stomp and break paths so scoring, combo and
+// achievement tracking all behave exactly as they do for a regular stomp.
+function groundPoundImpact() {
+    const px = player.x;
+    const py = player.y + 16;
+
+    shakeCamera(this, 28, 140);
+    spawnParticles(this, px, py, 0xffffff, 14, 90);
+    spawnParticles(this, px, py, 0xaaddff, 8, 55);
+    playSound('stomp');
+
+    const ring = this.add.circle(px, py, POUND_RADIUS);
+    ring.setStrokeStyle(3, 0x99ddff, 0.9).setDepth(9).setScale(0.2);
+    this.tweens.add({
+        targets: ring, scale: 1, alpha: 0,
+        duration: 260, ease: 'Quad.easeOut',
+        onComplete: () => ring.destroy()
+    });
+
+    // Flyers stay immune, matching the normal stomp rules
+    enemies.children.entries.slice().forEach(enemy => {
+        if (!enemy.active || enemy.enemyType === 'flyer') return;
+        if (Phaser.Math.Distance.Between(px, py, enemy.x, enemy.y) <= POUND_RADIUS) {
+            stompEnemy.call(this, enemy);
+        }
+    });
+
+    breakableBlockRects.slice().forEach(b => {
+        if (!b.body || !b.body.active) return;
+        if (Phaser.Math.Distance.Between(px, py, b.body.x, b.body.y) <= POUND_RADIUS + 20) {
+            breakBlock.call(this, b.body);
+        }
+    });
+
+    // Holding jump on impact rebounds, so pounds can be chained
+    const jumpHeldNow = cursors.up.isDown || cursors.space.isDown || touchJump;
+    if (jumpHeldNow) player.setVelocityY(-400);
+
+    if (typeof flowAddPound === 'function') flowAddPound();
+}
+
+function hitSpring(playerObj, spring) {
+    // Only fire when coming down onto the pad, not when brushing past it
+    if (player.body.velocity.y < -50) return;
+    const now = this.time.now;
+    if (now - (spring.lastBounce || 0) < 200) return;
+    spring.lastBounce = now;
+
+    const wasPounding = isPounding;
+    if (isPounding) {
+        isPounding = false;
+        poundPauseTimer = 0;
+        player.body.setAllowGravity(true);
+    }
+
+    player.setVelocityY(wasPounding ? SPRING_POUND_VELOCITY : SPRING_VELOCITY);
+    springLaunch = true;
+    hasDoubleJumped = false;
+    canAirDash = true;
+
+    const sr = springRects.find(s => s.body === spring);
+    if (sr) {
+        sr.rect.setTexture('tex_spring_compressed');
+        this.time.delayedCall(140, () => {
+            if (sr.rect && sr.rect.scene) sr.rect.setTexture('tex_spring');
+        });
+    }
+
+    spawnParticles(this, spring.x, spring.y - 10, 0xffdd66, wasPounding ? 12 : 7, wasPounding ? 70 : 45);
+    playSound('jump');
+    if (wasPounding) shakeCamera(this, 18, 90);
+}
+
 function stompEnemy(enemy) {
     const ex = enemy.x;
     const ey = enemy.y;
     const enemyIndex = enemies.children.entries.indexOf(enemy);
     const enemyRect = enemyRects[enemyIndex];
+
+    if (typeof flowAddStomp === 'function') flowAddStomp();
 
     // Shield enemies take 2 hits
     if (enemy.hp > 1) {
@@ -2040,6 +2269,17 @@ function hitEnemy() {
     comboCount = 0;
     comboMultiplier = 1;
     comboTimer = 0;
+
+    // Taking a hit wipes flow, and clears any pound in progress so gravity
+    // isn't left disabled through the respawn.
+    if (typeof flowBreak === 'function') flowBreak();
+    if (isPounding) {
+        isPounding = false;
+        poundPauseTimer = 0;
+        player.body.setAllowGravity(true);
+    }
+    isOverspeed = false;
+    springLaunch = false;
 
     // Achievement tracking
     if (typeof incrementStat === 'function') {

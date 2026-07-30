@@ -125,6 +125,7 @@
         }
         #btn-left  { bottom: 20px; left: 20px; }
         #btn-right { bottom: 20px; left: 110px; }
+        #btn-down  { bottom: 20px; left: 200px; }
         #btn-dash  { bottom: 20px; right: 110px; }
         #btn-jump  { bottom: 20px; right: 20px; }
     </style>
@@ -148,6 +149,7 @@
     <div id="touch-controls">
         <div class="touch-btn" id="btn-left">&#9664;</div>
         <div class="touch-btn" id="btn-right">&#9654;</div>
+        <div class="touch-btn" id="btn-down">&#9660;</div>
         <div class="touch-btn" id="btn-dash">&#128168;</div>
         <div class="touch-btn" id="btn-jump">&#9650;</div>
     </div>
@@ -171,6 +173,7 @@
     <script src="achievements.js"></script>
     <script src="cosmetics.js"></script>
     <script src="economy.js"></script>
+    <script src="flow.js"></script>
     <script src="endless.js"></script>
     <script src="modifiers.js"></script>
     <script src="daily.js"></script>
@@ -197,6 +200,7 @@
             bindBtn('btn-left',  function() { touchLeft  = true;  }, function() { touchLeft  = false; });
             bindBtn('btn-right', function() { touchRight = true;  }, function() { touchRight = false; });
             bindBtn('btn-jump',  function() { touchJump  = true;  }, function() { touchJump  = false; });
+            bindBtn('btn-down',  function() { touchDown  = true;  }, function() { touchDown  = false; });
             bindBtn('btn-dash',  function() { touchDashPressed = true; }, function() {});
 
             // Landscape suggestion: brief toast in portrait, never blocks play
