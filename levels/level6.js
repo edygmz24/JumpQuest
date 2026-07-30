@@ -82,6 +82,12 @@ const level6 = {
         { x: 3010, y: 550 }
     ],
 
+    // Sky level: an updraft and a crosswind to fight through
+    windZones: [
+        { x: 1100, y: 380, width: 260, height: 340, fx: 0, fy: -1450 },
+        { x: 2450, y: 380, width: 300, height: 320, fx: 150, fy: 0 }
+    ],
+
     obstacles: [
         // Spikes on ground to punish falling
         { x: 650, y: 555 },

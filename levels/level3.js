@@ -82,6 +82,13 @@ const level3 = {
         { x: 3080, y: 300, type: 'flyer' }
     ],
 
+    // Crumbling ledges — the cave is coming apart
+    crumblingPlatforms: [
+        { x: 1150, y: 430, width: 90, height: 20 },
+        { x: 1900, y: 380, width: 90, height: 20 },
+        { x: 2750, y: 420, width: 90, height: 20 }
+    ],
+
     obstacles: [
         // Spikes in the shooter corridor to keep pressure on
         { x: 1880, y: 555 },

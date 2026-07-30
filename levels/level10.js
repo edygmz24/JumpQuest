@@ -85,6 +85,10 @@ const level10 = {
     ],
 
     enemies: [
+        // Gauntlet: the full roster
+        { x: 1800, y: 300, type: 'diver' },
+        { x: 3400, y: 464, type: 'charger' },
+        { x: 4700, y: 320, type: 'diver' },
         // Section 1: Walkers on spike platforms
         { x: 290, y: 464, type: 'walker' },
         { x: 600, y: 464, type: 'walker' },

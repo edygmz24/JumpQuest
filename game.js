@@ -125,12 +125,25 @@ const ENEMY_TYPES = {
     jumper: { color: 0xff8800, speed: 60 },
     flyer: { color: 0x8800ff, speed: 80 },
     shooter: { color: 0x880000, speed: 0 },
-    shield: { color: 0x008888, speed: 80 }
+    shield: { color: 0x008888, speed: 80 },
+    diver: { color: 0xdd44aa, speed: 70 },
+    charger: { color: 0xcc5511, speed: 90 }
 };
+
+// Diver: drifts until the player is below, telegraphs, then swoops
+const DIVER_TRIGGER_X = 150;
+const DIVER_TELEGRAPH = 450;
+const DIVER_SPEED = 420;
+// Charger: winds up when the player shares its Y band, then rushes
+const CHARGER_SIGHT = 260;
+const CHARGER_WINDUP = 500;
+const CHARGER_SPEED = 300;
 let projectiles;
 let projectileRects = [];
 
-// Boss System
+// Boss System — configured from level data so any level can host one
+let bossConfig = null;
+let bossMaxHP = 9;
 let bossActive = false;
 let bossPhase = 0;
 let bossHP = 9;
@@ -185,6 +198,14 @@ const POUND_PAUSE = 80;   // ms hang before the plunge, so the input reads
 const POUND_RADIUS = 60;  // impact radius for enemies and crates
 let isPounding = false;
 let poundPauseTimer = 0;
+
+// Hazards
+const CRUMBLE_DELAY = 420;    // ms of shaking before a platform drops
+const CRUMBLE_RESPAWN = 3000; // ms until it reforms
+let crumblingPlatforms = [];
+let windZones = [];
+let levelKeys = [];
+let timedGates = [];
 
 // Springs
 const SPRING_VELOCITY = -650;
@@ -360,6 +381,48 @@ function generateGameTextures(scene) {
     make('tex_player_fall', 32, 32, g => drawPlayerBody(g, { feet: 'spread', wideEyes: true, mouth: 'open' }));
     make('tex_player_pound', 32, 32, g => drawPlayerBody(g, { feet: 'tuck', mouth: 'grit', lean: 1 }));
     make('tex_player_wallslide', 32, 32, g => drawPlayerBody(g, { feet: 'spread', mouth: 'grit', lean: 3 }));
+
+    // --- Key & gate ---
+    make('tex_key', 22, 22, g => {
+        g.fillStyle(0xffcc33); g.fillCircle(7, 8, 6);
+        g.fillStyle(0x000000, 0); g.fillCircle(7, 8, 2);
+        g.fillStyle(0xb88a1c); g.fillCircle(7, 8, 2.5);
+        g.fillStyle(0xffcc33); g.fillRect(10, 6, 11, 4);
+        g.fillRect(16, 10, 3, 4); g.fillRect(20, 10, 2, 3);
+        g.fillStyle(0xfff0a0); g.fillRect(10, 6, 11, 1.5);
+    });
+    make('tex_gate', 30, 90, g => {
+        g.fillStyle(0x5a4a30); g.fillRect(0, 0, 30, 90);
+        g.fillStyle(0x7a6440); g.fillRect(2, 2, 26, 86);
+        g.fillStyle(0x4a3a24);
+        for (let i = 0; i < 5; i++) g.fillRect(3, 6 + i * 18, 24, 3);
+        g.fillStyle(0xffcc33); g.fillCircle(15, 45, 5);
+        g.fillStyle(0x5a4a30); g.fillCircle(15, 45, 2);
+    });
+
+    // --- Diver: winged, swoops from above ---
+    make('tex_enemy_diver', 30, 26, g => {
+        g.fillStyle(0x99226e); g.fillTriangle(1, 6, 29, 6, 15, 25);          // dark underside
+        g.fillStyle(0xdd44aa); g.fillTriangle(3, 4, 27, 4, 15, 22);          // body
+        g.fillStyle(0xff88cc);                                               // wings
+        g.fillTriangle(0, 5, 11, 3, 3, 12);
+        g.fillTriangle(30, 5, 19, 3, 27, 12);
+        g.fillStyle(0xffffff); g.fillRect(10, 7, 4, 4); g.fillRect(16, 7, 4, 4);
+        g.fillStyle(0x330022); g.fillRect(11, 8, 2, 3); g.fillRect(17, 8, 2, 3);
+    });
+
+    // --- Charger: heavy, horned, rushes in a straight line ---
+    make('tex_enemy_charger', 34, 30, g => {
+        g.fillStyle(0x8a3608); g.fillRoundedRect(0, 4, 34, 26, 6);
+        g.fillStyle(0xcc5511); g.fillRoundedRect(2, 6, 30, 21, 5);
+        g.fillStyle(0xee8844); g.fillRoundedRect(5, 8, 24, 5, 2);
+        g.fillStyle(0xf5e0c0);                                               // horns
+        g.fillTriangle(29, 10, 34, 3, 31, 12);
+        g.fillTriangle(5, 10, 0, 3, 3, 12);
+        g.fillStyle(0xffffff); g.fillRect(11, 14, 7, 6); g.fillRect(20, 14, 7, 6);
+        g.fillStyle(0x330000); g.fillRect(14, 16, 3, 4); g.fillRect(22, 16, 3, 4);
+        g.fillStyle(0x6a2606); g.fillRect(6, 27, 8, 3); g.fillRect(20, 27, 8, 3);
+    });
 
     // --- Spring: coiled launcher ---
     make('tex_spring', 32, 24, g => {
@@ -604,6 +667,10 @@ function create() {
     poundPauseTimer = 0;
     springRects = [];
     springLaunch = false;
+    crumblingPlatforms = [];
+    windZones = [];
+    levelKeys = [];
+    timedGates = [];
     breakableBlockRects = [];
     fakeWalls = [];
     fakeWallRects = [];
@@ -631,6 +698,8 @@ function create() {
     bossShockwave = null;
     bossShockwaveRect = null;
     bossTriggered = false;
+    bossConfig = null;
+    bossMaxHP = 9;
     bossAttackTimer = 0;
     bossInvulnerable = false;
     bossArenaWall = null;
@@ -935,8 +1004,8 @@ function loadLevel(levelIndex) {
     currentLevel.enemies.forEach(enemyData => {
         const type = enemyData.type || 'walker';
         const config = ENEMY_TYPES[type] || ENEMY_TYPES.walker;
-        const size = type === 'flyer' ? 28 : (type === 'jumper' ? 32 : 32);
-        const height = type === 'jumper' ? 40 : size;
+        const size = type === 'flyer' ? 28 : (type === 'diver' ? 30 : (type === 'charger' ? 34 : 32));
+        const height = type === 'jumper' ? 40 : (type === 'diver' ? 26 : (type === 'charger' ? 30 : size));
 
         const enemy = enemies.create(enemyData.x, enemyData.y, null).setDisplaySize(size, height).setVisible(false);
         const enemyTexKey = this.textures.exists('tex_enemy_' + type) ? 'tex_enemy_' + type : 'tex_enemy_walker';
@@ -981,6 +1050,18 @@ function loadLevel(levelIndex) {
                         fontSize: '14px', fill: '#fff', fontStyle: 'bold'
                     }).setOrigin(0.5);
                     break;
+                case 'diver':
+                    // Downward arrow — it comes at you from above
+                    indicator = this.add.text(enemyData.x, enemyData.y + height / 2 - 2, 'v', {
+                        fontSize: '12px', fill: '#fff', fontStyle: 'bold'
+                    }).setOrigin(0.5);
+                    break;
+                case 'charger':
+                    // Double chevron in the direction of travel
+                    indicator = this.add.text(enemyData.x, enemyData.y, '>>', {
+                        fontSize: '11px', fill: '#fff', fontStyle: 'bold'
+                    }).setOrigin(0.5);
+                    break;
             }
             if (indicator) {
                 enemyRect.cbIndicator = indicator;
@@ -997,6 +1078,19 @@ function loadLevel(levelIndex) {
             enemy.setVelocityX(config.speed * (Math.random() > 0.5 ? 1 : -1));
             enemy.setBounce(0);
             enemy.setCollideWorldBounds(true);
+        } else if (type === 'diver') {
+            enemy.body.setAllowGravity(false);
+            enemy.startY = enemyData.y;
+            enemy.diveState = 'idle';
+            enemy.nextDive = 0;
+            enemy.setBounce(0);
+            enemy.setCollideWorldBounds(true);
+        } else if (type === 'charger') {
+            enemy.setBounce(1);
+            enemy.setCollideWorldBounds(true);
+            enemy.chargeState = 'idle';
+            enemy.nextCharge = 0;
+            enemy.setVelocityX(config.speed * (Math.random() > 0.5 ? 1 : -1));
         } else if (type === 'shooter') {
             enemy.setBounce(0);
             enemy.setCollideWorldBounds(true);
@@ -1049,6 +1143,60 @@ function loadLevel(levelIndex) {
             s.lastBounce = 0;
             const sRect = this.add.image(sData.x, sData.y, 'tex_spring');
             springRects.push({ rect: sRect, body: s });
+        });
+    }
+
+    // Crumbling platforms: solid until stood on, then they shake and drop
+    crumblingPlatforms = [];
+    if (currentLevel.crumblingPlatforms) {
+        currentLevel.crumblingPlatforms.forEach(cp => {
+            const w = cp.width || 90;
+            const h = cp.height || 20;
+            const body = platforms.create(cp.x, cp.y, null).setDisplaySize(w, h).setVisible(false).refreshBody();
+            const parts = drawTerrainBlock(this, cp.x, cp.y, w, h, shadeColor(platformColor, -0.15), false);
+            crumblingPlatforms.push({
+                body: body, parts: parts, x: cp.x, y: cp.y, w: w, h: h,
+                state: 'solid', timer: 0
+            });
+        });
+    }
+
+    // Wind zones: a constant push, with drifting motes so the force is visible
+    windZones = [];
+    if (currentLevel.windZones) {
+        currentLevel.windZones.forEach(wz => {
+            const marks = [];
+            const count = Math.max(3, Math.floor(wz.width / 90));
+            for (let i = 0; i < count; i++) {
+                const m = this.add.rectangle(
+                    wz.x - wz.width / 2 + Math.random() * wz.width,
+                    wz.y - wz.height / 2 + Math.random() * wz.height,
+                    12, 2, 0xffffff, 0.3
+                ).setDepth(6);
+                marks.push(m);
+            }
+            windZones.push({
+                x: wz.x, y: wz.y, width: wz.width, height: wz.height,
+                fx: wz.fx || 0, fy: wz.fy || 0, marks: marks
+            });
+        });
+    }
+
+    // Keys and the gates they open
+    levelKeys = [];
+    timedGates = [];
+    if (currentLevel.timedGates) {
+        currentLevel.timedGates.forEach(gate => {
+            const gh = gate.height || 90;
+            const body = platforms.create(gate.x, gate.y, null).setDisplaySize(30, gh).setVisible(false).refreshBody();
+            const rect = this.add.image(gate.x, gate.y, 'tex_gate').setDisplaySize(30, gh).setDepth(5);
+            timedGates.push({ id: gate.id, body: body, rect: rect, open: false, timer: 0, x: gate.x, y: gate.y });
+        });
+    }
+    if (currentLevel.keys) {
+        currentLevel.keys.forEach(k => {
+            const rect = this.add.image(k.x, k.y, 'tex_key').setDepth(6);
+            levelKeys.push({ id: k.opens, rect: rect, x: k.x, y: k.y, taken: false, baseY: k.y });
         });
     }
 
@@ -1140,8 +1288,9 @@ function loadLevel(levelIndex) {
         yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
     });
 
-    // Hide the flag on boss levels until boss is defeated
-    if (currentLevel.bossArena) {
+    // Hide the flag until the boss falls. A mid-boss sits mid-level with the
+    // flag well past it, so it opts out via boss.hidesFlag.
+    if (currentLevel.bossArena && (!currentLevel.boss || currentLevel.boss.hidesFlag !== false)) {
         endFlag.setAlpha(0);
         endFlag.body.enable = false;
         bossFlagHidden = true;
@@ -1824,6 +1973,76 @@ function update() {
                 else if (enemy.body.blocked.left) enemy.setVelocityX(ENEMY_TYPES.flyer.speed);
                 break;
 
+            case 'diver': {
+                // Hovers until the player passes underneath, telegraphs, then
+                // commits to a straight dive. Readable, and dodgeable by moving.
+                if (enemy.diveState === 'dive') {
+                    if (enemy.body.blocked.down || enemy.y > 580) {
+                        enemy.diveState = 'return';
+                        enemy.setVelocity(0, -120);
+                    }
+                } else if (enemy.diveState === 'return') {
+                    if (enemy.y <= enemy.startY) {
+                        enemy.y = enemy.startY;
+                        enemy.diveState = 'idle';
+                        enemy.setVelocity(0, 0);
+                        enemy.nextDive = this.time.now + 900;
+                    }
+                } else if (enemy.diveState === 'telegraph') {
+                    if (this.time.now >= enemy.diveAt) {
+                        enemy.diveState = 'dive';
+                        enemy.setVelocity(0, DIVER_SPEED);
+                        spawnParticles(this, enemy.x, enemy.y, 0xff88cc, 5, 30);
+                    }
+                } else {
+                    enemy.y = enemy.startY + Math.sin(this.time.now / 600) * 14;
+                    enemy.setVelocity(0, 0);
+                    const overhead = Math.abs(player.x - enemy.x) < DIVER_TRIGGER_X;
+                    if (overhead && player.y > enemy.y && this.time.now > (enemy.nextDive || 0)) {
+                        enemy.diveState = 'telegraph';
+                        enemy.diveAt = this.time.now + DIVER_TELEGRAPH;
+                        const warn = this.add.text(enemy.x, enemy.y - 22, '!', {
+                            fontSize: '16px', fill: '#ff66cc', fontStyle: 'bold'
+                        }).setOrigin(0.5).setDepth(50);
+                        this.time.delayedCall(DIVER_TELEGRAPH, () => warn.destroy());
+                    }
+                }
+                break;
+            }
+
+            case 'charger': {
+                // Patrols slowly; when the player lines up on its level it
+                // paws the ground then charges until it hits a wall.
+                if (enemy.chargeState === 'charge') {
+                    if (enemy.body.blocked.left || enemy.body.blocked.right) {
+                        enemy.chargeState = 'idle';
+                        enemy.nextCharge = this.time.now + 1200;
+                        enemy.setVelocityX(ENEMY_TYPES.charger.speed * (enemy.body.blocked.left ? 1 : -1));
+                        shakeCamera(this, 10, 80);
+                        spawnParticles(this, enemy.x, enemy.y + 12, 0xcc9966, 6, 40);
+                    }
+                } else if (enemy.chargeState === 'windup') {
+                    enemy.setVelocityX(0);
+                    if (this.time.now >= enemy.chargeAt) {
+                        enemy.chargeState = 'charge';
+                        enemy.setVelocityX(CHARGER_SPEED * enemy.chargeDir);
+                    } else if (Math.random() < 0.25) {
+                        spawnParticles(this, enemy.x - enemy.chargeDir * 16, enemy.y + 12, 0xcc9966, 1, 18);
+                    }
+                } else {
+                    if (enemy.body.blocked.right) enemy.setVelocityX(-ENEMY_TYPES.charger.speed);
+                    else if (enemy.body.blocked.left) enemy.setVelocityX(ENEMY_TYPES.charger.speed);
+                    const sameBand = Math.abs(player.y - enemy.y) < 40;
+                    const inRange = Math.abs(player.x - enemy.x) < CHARGER_SIGHT;
+                    if (sameBand && inRange && this.time.now > (enemy.nextCharge || 0)) {
+                        enemy.chargeState = 'windup';
+                        enemy.chargeAt = this.time.now + CHARGER_WINDUP;
+                        enemy.chargeDir = player.x < enemy.x ? -1 : 1;
+                    }
+                }
+                break;
+            }
+
             case 'shooter':
                 const timeSinceShot = this.time.now - enemy.lastShot;
                 if (timeSinceShot > 2600 && !enemy.telegraphing) {
@@ -1920,6 +2139,92 @@ function update() {
     if (typeof spawnTrailParticle === 'function' && (Math.abs(player.body.velocity.x) > 50 || Math.abs(player.body.velocity.y) > 100)) {
         spawnTrailParticle(this, player.x, player.y + 8);
     }
+
+    // --- Crumbling platforms ---
+    crumblingPlatforms.forEach(cp => {
+        if (cp.state === 'solid') {
+            const standing = player.body.blocked.down &&
+                Math.abs(player.x - cp.x) < cp.w / 2 + 16 &&
+                Math.abs(player.body.bottom - (cp.y - cp.h / 2)) < 10;
+            if (standing) {
+                cp.state = 'shaking';
+                cp.timer = CRUMBLE_DELAY;
+                playSound('menuHover');
+            }
+        } else if (cp.state === 'shaking') {
+            cp.timer -= this.game.loop.delta;
+            const jitter = (Math.random() - 0.5) * 3;
+            cp.parts.forEach(p => p.setPosition(cp.x + jitter, cp.y + jitter * 0.5));
+            if (Math.random() < 0.2) spawnParticles(this, cp.x, cp.y + cp.h / 2, 0x998877, 1, 20);
+            if (cp.timer <= 0) {
+                cp.state = 'gone';
+                cp.timer = CRUMBLE_RESPAWN;
+                cp.body.enable = false;
+                spawnParticles(this, cp.x, cp.y, 0x998877, 10, 60);
+                cp.parts.forEach(p => {
+                    this.tweens.add({ targets: p, alpha: 0, y: cp.y + 60, duration: 400 });
+                });
+            }
+        } else if (cp.state === 'gone') {
+            cp.timer -= this.game.loop.delta;
+            if (cp.timer <= 0) {
+                cp.state = 'solid';
+                cp.body.enable = true;
+                cp.parts.forEach(p => {
+                    p.setPosition(cp.x, cp.y);
+                    this.tweens.add({ targets: p, alpha: 1, duration: 250 });
+                });
+            }
+        }
+    });
+
+    // --- Wind zones ---
+    windZones.forEach(wz => {
+        const inside = Math.abs(player.x - wz.x) < wz.width / 2 &&
+                       Math.abs(player.y - wz.y) < wz.height / 2;
+        if (inside && !isDashing) {
+            // Horizontal push is positional: the movement block rewrites
+            // velocity.x every frame, so a velocity nudge is erased by ground
+            // friction before it can move anything.
+            player.x += wz.fx * deltaS;
+            playerRect.x = player.x;
+            // Vertical is velocity-based, and must out-pull gravity (800, plus
+            // 400 more while fast-falling) to lift the player at all.
+            player.body.velocity.y += wz.fy * deltaS;
+        }
+        wz.marks.forEach(m => {
+            m.x += wz.fx * deltaS * 0.35;
+            m.y += wz.fy * deltaS * 0.35;
+            if (m.x > wz.x + wz.width / 2) m.x = wz.x - wz.width / 2;
+            if (m.x < wz.x - wz.width / 2) m.x = wz.x + wz.width / 2;
+            if (m.y > wz.y + wz.height / 2) m.y = wz.y - wz.height / 2;
+            if (m.y < wz.y - wz.height / 2) m.y = wz.y + wz.height / 2;
+        });
+    });
+
+    // --- Keys & gates ---
+    levelKeys.forEach(k => {
+        if (k.taken) return;
+        k.rect.y = k.baseY + Math.sin(this.time.now / 320) * 4;
+        k.rect.rotation = Math.sin(this.time.now / 500) * 0.2;
+        if (Phaser.Math.Distance.Between(player.x, player.y, k.rect.x, k.rect.y) < 30) {
+            k.taken = true;
+            k.rect.destroy();
+            playSound('unlock');
+            spawnParticles(this, k.x, k.y, 0xffcc33, 10, 50);
+            const gate = timedGates.find(g => g.id === k.id);
+            if (gate && !gate.open) {
+                gate.open = true;
+                gate.body.enable = false;
+                showScorePopup(this, player.x, player.y - 40, 'GATE OPEN!', '#ffcc33');
+                this.tweens.add({
+                    targets: gate.rect, alpha: 0.15, scaleY: 0.05,
+                    duration: 400, ease: 'Back.easeIn'
+                });
+                shakeCamera(this, 14, 120);
+            }
+        }
+    });
 
     // 2.5D presentation: contact shadows, weather, foreground scroll
     if (typeof updateShadows === 'function') {
@@ -2096,7 +2401,7 @@ function update() {
     }
 
     // Boss trigger
-    if (currentLevelIndex === 9 && !bossTriggered && currentLevel.bossArena && player.x > currentLevel.bossArena.x) {
+    if (!bossTriggered && currentLevel.bossArena && player.x > currentLevel.bossArena.x) {
         bossTriggered = true;
         triggerBoss.call(this);
     }
@@ -3209,9 +3514,22 @@ function breakBlock(block) {
 function triggerBoss() {
     const scene = this;
     const arena = currentLevel.bossArena;
+    // Level data drives the fight; the level-10 Guardian is just the default.
+    bossConfig = Object.assign({
+        name: 'THE GUARDIAN',
+        hp: 9,
+        phases: 3,
+        color: 0x440066,
+        strokeColor: 0x8800cc,
+        coreColor: 0xff0000,
+        score: 2000,
+        hidesFlag: true
+    }, currentLevel.boss || {});
+
+    bossMaxHP = bossConfig.hp;
     bossActive = true;
     bossPhase = 0;
-    bossHP = 9;
+    bossHP = bossMaxHP;
     bossAttackTimer = 2000;
 
     // Create invisible wall at arena entrance so player can't retreat
@@ -3230,10 +3548,10 @@ function triggerBoss() {
     bossSprite.setCollideWorldBounds(true);
     bossSprite.body.setMaxVelocityY(600);
 
-    // Boss visual: dark purple rectangle with pulsing red core
-    bossRect = scene.add.rectangle(bossX, bossY, 64, 64, 0x440066);
-    bossRect.setStrokeStyle(3, 0x8800cc);
-    bossCoreRect = scene.add.rectangle(bossX, bossY, 24, 24, 0xff0000);
+    // Boss visual: themed body with a pulsing core
+    bossRect = scene.add.rectangle(bossX, bossY, 64, 64, bossConfig.color);
+    bossRect.setStrokeStyle(3, bossConfig.strokeColor);
+    bossCoreRect = scene.add.rectangle(bossX, bossY, 24, 24, bossConfig.coreColor);
 
     // Collide boss with platforms
     scene.physics.add.collider(bossSprite, platforms);
@@ -3254,8 +3572,8 @@ function triggerBoss() {
     // Boss entrance sound
     playSound('bossRoar');
 
-    // Show "THE GUARDIAN" text with fade
-    const titleText = scene.add.text(400, 200, 'THE GUARDIAN', {
+    // Boss name card
+    const titleText = scene.add.text(400, 200, bossConfig.name, {
         fontSize: '48px',
         fill: '#ff0000',
         fontStyle: 'bold',
@@ -3278,7 +3596,7 @@ function triggerBoss() {
     bossHPBarBg.setScrollFactor(0).setDepth(150);
     bossHPBar = scene.add.rectangle(400, 560, 296, 12, 0x00ff00);
     bossHPBar.setScrollFactor(0).setDepth(151);
-    bossHPText = scene.add.text(400, 560, 'THE GUARDIAN', {
+    bossHPText = scene.add.text(400, 560, bossConfig.name, {
         fontSize: '10px', fill: '#fff', fontStyle: 'bold'
     }).setOrigin(0.5).setScrollFactor(0).setDepth(152);
 }
@@ -3319,20 +3637,25 @@ function damageBoss() {
     if (bossRect) bossRect.setFillStyle(0xffffff);
     scene.time.delayedCall(500, () => {
         bossInvulnerable = false;
-        if (bossRect) bossRect.setFillStyle(bossPhase === 2 ? 0x660033 : 0x440066);
+        if (bossRect) bossRect.setFillStyle(bossPhase === 2 ? 0x660033 : bossConfig.color);
     });
 
     // Update HP bar
     if (bossHPBar) {
-        const hpPct = bossHP / 9;
+        const hpPct = bossHP / bossMaxHP;
         bossHPBar.setScale(hpPct, 1);
         if (hpPct <= 0.33) bossHPBar.setFillStyle(0xff0000);
         else if (hpPct <= 0.66) bossHPBar.setFillStyle(0xff8800);
         else bossHPBar.setFillStyle(0x00ff00);
     }
 
-    // Phase transitions
-    if (bossHP === 6 && bossPhase === 0) {
+    // Phase transitions, scaled to the boss's own HP pool. A single-phase
+    // boss (a mid-boss) simply never crosses these thresholds.
+    const phaseCount = bossConfig ? bossConfig.phases : 3;
+    const phase2At = Math.ceil(bossMaxHP * 2 / 3);
+    const phase3At = Math.ceil(bossMaxHP / 3);
+
+    if (phaseCount >= 2 && bossHP === phase2At && bossPhase === 0) {
         bossPhase = 1;
         bossAttackTimer = 1500;
         shakeCamera(scene, 50, 300);
@@ -3348,7 +3671,7 @@ function damageBoss() {
         if (bossRect) bossRect.setStrokeStyle(3, 0xff8800);
     }
 
-    if (bossHP === 3 && bossPhase === 1) {
+    if (phaseCount >= 3 && bossHP === phase3At && bossPhase === 1) {
         bossPhase = 2;
         bossAttackTimer = 1000;
         bossSprite.body.setAllowGravity(false);
@@ -3613,14 +3936,19 @@ function defeatBoss() {
             });
         }
 
-        score += 2000;
+        const bossScore = bossConfig ? bossConfig.score : 2000;
+        score += bossScore;
         const highScore = highScores['level' + currentLevelIndex] || 0;
         scoreText.setText('Score: ' + score + ' | Best: ' + highScore);
-        showScorePopup(scene, savedBossX, savedBossY - 50, '+2000', '#ff00ff');
+        showScorePopup(scene, savedBossX, savedBossY - 50, '+' + bossScore, '#ff00ff');
 
-        // Reveal the flag
+        // Open the arena so the player can continue past a mid-boss
+        if (bossArenaWall) { bossArenaWall.destroy(); bossArenaWall = null; }
+        if (bossArenaWallRect) { bossArenaWallRect.destroy(); bossArenaWallRect = null; }
+
+        // Reveal the flag, if this boss was gating it
         scene.time.delayedCall(500, () => {
-            if (endFlag) {
+            if (endFlag && bossFlagHidden) {
                 endFlag.setAlpha(1);
                 endFlag.body.enable = true;
                 bossFlagHidden = false;

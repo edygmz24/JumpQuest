@@ -47,6 +47,9 @@ const level9 = {
     movingPlatforms: [],
 
     enemies: [
+        // Speed alley: punishes blind sprinting
+        { x: 2500, y: 300, type: 'diver' },
+        { x: 4300, y: 464, type: 'charger' },
         // Chain stomp group 1 - walkers on first long platform
         { x: 430, y: 464, type: 'walker' },
         { x: 500, y: 464, type: 'walker' },

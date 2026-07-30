@@ -102,6 +102,14 @@ const level4 = {
         { x: 3750, y: 380, type: 'flyer' }
     ],
 
+    // Locked gate near the end, with its key held back up the level
+    keys: [
+        { x: 2150, y: 300, opens: 'fortress' }
+    ],
+    timedGates: [
+        { id: 'fortress', x: 3250, y: 500, height: 130 }
+    ],
+
     obstacles: [
         // Section 1: spikes on ground
         { x: 200, y: 555 },
