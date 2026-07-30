@@ -153,37 +153,66 @@ function generateEndlessChunk(scene, startX) {
         } else if (diff < 0.5) {
             enemyType = roll < 0.6 ? 'walker' : 'jumper';
         } else if (diff < 0.8) {
-            if (roll < 0.35) enemyType = 'walker';
-            else if (roll < 0.65) enemyType = 'jumper';
-            else enemyType = 'flyer';
+            if (roll < 0.28) enemyType = 'walker';
+            else if (roll < 0.52) enemyType = 'jumper';
+            else if (roll < 0.72) enemyType = 'flyer';
+            else if (roll < 0.86) enemyType = 'diver';
+            else enemyType = 'charger';
         } else {
-            if (roll < 0.25) enemyType = 'walker';
-            else if (roll < 0.45) enemyType = 'jumper';
-            else if (roll < 0.70) enemyType = 'flyer';
-            else enemyType = 'shooter';
+            if (roll < 0.15) enemyType = 'walker';
+            else if (roll < 0.30) enemyType = 'jumper';
+            else if (roll < 0.45) enemyType = 'flyer';
+            else if (roll < 0.63) enemyType = 'shooter';
+            else if (roll < 0.82) enemyType = 'diver';
+            else enemyType = 'charger';
         }
 
         const config = ENEMY_TYPES[enemyType];
         const ex = startX + endlessRandomRange(60, 340);
-        const ey = enemyType === 'flyer' ? endlessRandomRange(250, 400) : 550;
-        const size = 28;
-        const height = enemyType === 'jumper' ? 40 : size;
+        const ey = (enemyType === 'flyer' || enemyType === 'diver')
+            ? endlessRandomRange(250, 400)
+            : 540;
+        const size = enemyType === 'flyer' ? 28 :
+            (enemyType === 'diver' ? 30 : (enemyType === 'charger' ? 34 : 32));
+        const height = enemyType === 'jumper' ? 40 :
+            (enemyType === 'diver' ? 26 : (enemyType === 'charger' ? 30 : size));
 
         const enemy = enemies.create(ex, ey, null).setDisplaySize(size, height).setVisible(false);
-        const enemyRect = scene.textures.exists('tex_enemy_' + enemyType)
-            ? scene.add.sprite(ex, ey, 'tex_enemy_' + enemyType).setDisplaySize(size, height)
-            : scene.add.rectangle(ex, ey, size, height, config.color);
+        const enemyTexKey = scene.textures.exists('tex_enemy_' + enemyType)
+            ? 'tex_enemy_' + enemyType
+            : 'tex_enemy_walker';
+        const enemyRect = scene.add.sprite(ex, ey, enemyTexKey).setDisplaySize(size, height);
 
-        enemy.setBounce(0);
         enemy.setCollideWorldBounds(false);
-        enemy.body.allowGravity = (enemyType !== 'flyer');
         enemy.enemyType = enemyType;
         enemy.hp = 1;
-        enemy.lastJump = 0;
-        enemy.lastShot = 0;
+        enemy.visual = enemyRect;
         enemy.startY = ey;
 
-        enemyRects.push({ rect: enemyRect, body: enemy });
+        if (enemyType === 'flyer') {
+            enemy.body.setAllowGravity(false);
+            enemy.setVelocityX(config.speed * (endlessRandom() > 0.5 ? 1 : -1));
+            enemy.setBounce(0);
+        } else if (enemyType === 'diver') {
+            enemy.body.setAllowGravity(false);
+            enemy.diveState = 'idle';
+            enemy.nextDive = 0;
+            enemy.setBounce(0);
+        } else if (enemyType === 'charger') {
+            enemy.setBounce(1);
+            enemy.chargeState = 'idle';
+            enemy.nextCharge = 0;
+            enemy.setVelocityX(config.speed * (endlessRandom() > 0.5 ? 1 : -1));
+        } else if (enemyType === 'shooter') {
+            enemy.setBounce(0);
+            enemy.lastShot = 0;
+        } else {
+            enemy.setBounce(1);
+            enemy.setVelocityX(config.speed * (endlessRandom() > 0.5 ? 1 : -1));
+            if (enemyType === 'jumper') enemy.lastJump = 0;
+        }
+
+        enemyRects.push(enemyRect);
         endlessObjects.push({ body: enemy, rect: enemyRect, type: 'enemy', x: ex });
     }
 
@@ -278,7 +307,7 @@ function cleanupEndlessObjects(thresholdX) {
                 const idx = coinRects.findIndex(cr => cr.body === obj.body);
                 if (idx !== -1) coinRects.splice(idx, 1);
             } else if (obj.type === 'enemy') {
-                const idx = enemyRects.findIndex(er => er.body === obj.body);
+                const idx = enemyRects.findIndex(er => er === obj.rect);
                 if (idx !== -1) enemyRects.splice(idx, 1);
             } else if (obj.type === 'powerup') {
                 const idx = powerUpRects.findIndex(pr => pr.body === obj.body);
@@ -308,6 +337,7 @@ function cleanupEndlessObjects(thresholdX) {
 // ========================
 
 function endEndlessMode(scene) {
+    if (gameOver) return;
     gameOver = true;
     scene.physics.pause();
 
@@ -319,6 +349,13 @@ function endEndlessMode(scene) {
     if (isNewBest) {
         endlessBest = endlessDistance;
         localStorage.setItem('jqEndlessBest', endlessBest.toString());
+    }
+
+    // Endless coins now participate in the persistent economy. There is no
+    // first-clear bonus here because an endless run is not a level clear.
+    const coinsBanked = typeof bankPendingCoins === 'function' ? bankPendingCoins() : 0;
+    if (walletText && typeof getDisplayCoins === 'function') {
+        walletText.setText('● ' + getDisplayCoins());
     }
 
     // Overlay background
@@ -336,7 +373,7 @@ function endEndlessMode(scene) {
     const statsLines = [
         'Distance: ' + endlessDistance + 'm' + bestLabel,
         'Best: ' + endlessBest + 'm',
-        'Coins: ' + coinsCollected,
+        'Coins: ' + coinsCollected + (coinsBanked > 0 ? '  (+' + coinsBanked + ' banked)' : ''),
         'Max Combo: ' + maxCombo + 'x'
     ];
     const statsText = scene.add.text(400, 250, statsLines.join('\n'), {
@@ -402,26 +439,3 @@ function cleanupEndlessMode() {
     endlessDistanceText = null;
     _endlessSeedState = 0;
 }
-
-// ========================
-// Integration Points (document only — do not modify other files)
-// ========================
-
-// In game.js update() function, add after existing update logic:
-//   if (endlessMode && typeof updateEndlessMode === 'function') updateEndlessMode.call(this, this);
-
-// In game.js create() function, after loadLevel(currentLevelIndex), add:
-//   if (endlessMode && typeof startEndlessMode === 'function') startEndlessMode.call(this, this);
-
-// In menu.js showMainMenu(), add an "ENDLESS MODE" button:
-//   const endlessBtn = createMenuButton(scene, 400, 330, 'ENDLESS MODE', '#806', '#a08', () => {
-//       endlessMode = true;
-//       currentLevelIndex = 0;
-//       clearMenuObjects();
-//       showingMenu = false;
-//       scene.scene.restart();
-//   });
-
-// In index.html, add before </body>:
-//   <script src="endless.js"></script>
-// (must be after game.js and menu.js)

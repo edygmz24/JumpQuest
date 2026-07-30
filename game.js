@@ -1,5 +1,12 @@
+const gameUrlParams = new URLSearchParams(window.location.search);
+const requestedRenderer = gameUrlParams.get('renderer');
+
 const config = {
-    type: Phaser.AUTO,
+    // `?renderer=canvas` is a supported smoke-test path for devices where
+    // WebGL is unavailable. All WebGL-only effects remain guarded.
+    type: (requestedRenderer === 'canvas' || gameUrlParams.get('canvas') === '1')
+        ? Phaser.CANVAS
+        : Phaser.AUTO,
     parent: 'game-container',
     scale: {
         mode: Phaser.Scale.FIT,
@@ -264,6 +271,11 @@ let ghostSprite = null;       // ghost visual (translucent rectangle)
 let ghostFrameIndex = 0;     // current frame in replay
 let ghostEnabled = true;      // toggle from pause menu
 let isRecordingGhost = true;  // always recording during gameplay
+const GHOST_SAMPLE_MS = 1000 / 30; // fixed-rate recording across high-refresh displays
+const GHOST_MAX_FRAMES = 9000;     // five minutes at 30 Hz
+let ghostRecordAccumulator = 0;
+let ghostPlaybackElapsed = 0;
+let ghostReplaySampleMs = 1000 / 60; // legacy array replays were frame-based at ~60 Hz
 
 // Array of all levels (loaded from separate files)
 let levels = [level1, level2, level3, level4, level5, level6, level7, level8, level9, level10];
@@ -716,10 +728,25 @@ function create() {
     if (ghostSprite) { ghostSprite.destroy(); ghostSprite = null; }
     ghostData = [];
     ghostFrameIndex = 0;
+    ghostRecordAccumulator = 0;
+    ghostPlaybackElapsed = 0;
+    ghostReplaySampleMs = 1000 / 60;
     isRecordingGhost = true;
     // Load ghost replay for this level
     const savedGhost = localStorage.getItem('jqGhost_level' + currentLevelIndex);
-    ghostReplay = savedGhost ? JSON.parse(savedGhost) : null;
+    try {
+        const parsedGhost = savedGhost ? JSON.parse(savedGhost) : null;
+        if (Array.isArray(parsedGhost)) {
+            ghostReplay = parsedGhost;
+        } else if (parsedGhost && Array.isArray(parsedGhost.frames)) {
+            ghostReplay = parsedGhost.frames;
+            ghostReplaySampleMs = parsedGhost.sampleMs || GHOST_SAMPLE_MS;
+        } else {
+            ghostReplay = null;
+        }
+    } catch (e) {
+        ghostReplay = null;
+    }
 
     // Initialize systems
     if (typeof initStats === 'function') initStats();
@@ -728,6 +755,7 @@ function create() {
     if (typeof initWallet === 'function') initWallet();
     if (typeof resetEconomyLevelState === 'function') resetEconomyLevelState();
     if (typeof resetFlowState === 'function') resetFlowState();
+    if (typeof resetSpeedrunRunState === 'function') resetSpeedrunRunState();
     if (typeof resetVisualState === 'function') {
         resetVisualState();
         detectLowFxMode(this);
@@ -737,10 +765,11 @@ function create() {
     // Load the current level
     loadLevel.call(this, currentLevelIndex);
 
-    // Start endless mode if active
-    if (typeof endlessMode !== 'undefined' && endlessMode && typeof startEndlessMode === 'function') {
-        startEndlessMode.call(this, this);
+    if (typeof speedrunMode !== 'undefined' && speedrunMode && typeof beginSpeedrun === 'function') {
+        beginSpeedrun(this);
     }
+
+    if (typeof createPerformanceMonitor === 'function') createPerformanceMonitor(this);
 
     // Apply difficulty modifiers
     if (typeof applyModifiers === 'function') applyModifiers(this);
@@ -761,10 +790,8 @@ function create() {
         if (endText) { endText.setAlpha(0); }
         if (startText) { startText.setAlpha(0); }
         // Remove base level enemies for clean endless experience
-        if (enemies) {
-            enemies.children.entries.forEach(e => e.disableBody(true, true));
-        }
-        enemyRects.forEach(r => { if (r && r.destroy) r.destroy(); else if (r && r.rect) r.rect.destroy(); });
+        if (enemies) enemies.clear(true, true);
+        enemyRects.forEach(r => { if (r && r.destroy) r.destroy(); });
         enemyRects = [];
         // Remove base level coins (endless generates its own)
         if (coins) {
@@ -774,6 +801,10 @@ function create() {
         coinRects = [];
         totalLevelCoins = 0;
         coinsCollected = 0;
+        if (typeof startEndlessMode === 'function') startEndlessMode.call(this, this);
+    } else if (typeof showingSpeedrunSelect !== 'undefined' && showingSpeedrunSelect &&
+               typeof showSpeedrunLevelSelect === 'function') {
+        showSpeedrunLevelSelect(this);
     } else if (showingMenu && typeof showMainMenu === 'function') {
         // Show main menu on first load
         showMainMenu(this);
@@ -914,7 +945,8 @@ function loadLevel(levelIndex) {
     // Ambient floating particles (fireflies at night, dust motes by day)
     ambientParticles = [];
     const ambColor = isNight ? 0xffe28a : 0xffffff;
-    for (let i = 0; i < 14; i++) {
+    const ambientCount = (typeof lowFxMode !== 'undefined' && lowFxMode) ? 0 : 14;
+    for (let i = 0; i < ambientCount; i++) {
         const p = this.add.circle(Math.random() * 800, Math.random() * 500,
             isNight ? 2 : 1.5, ambColor, isNight ? 0.7 : 0.35);
         p.setDepth(-5);
@@ -981,13 +1013,14 @@ function loadLevel(levelIndex) {
     }
 
     // Ghost sprite (translucent player copy showing best-time replay)
-    if (ghostReplay && ghostEnabled) {
-        ghostSprite = this.add.image(ghostReplay[0]?.x || 100, ghostReplay[0]?.y || 500, 'tex_player').setAlpha(0.25);
+    if (ghostReplay && ghostEnabled && ghostReplay.length > 0) {
+        const ghostAlpha = typeof getGhostReplayAlpha === 'function' ? getGhostReplayAlpha() : 0.25;
+        ghostSprite = this.add.image(ghostReplay[0]?.x || 100, ghostReplay[0]?.y || 500, 'tex_player').setAlpha(ghostAlpha);
         ghostSprite.setDepth(50);
         // The ghost wears the same hat, faded to match
         if (typeof drawPlayerHat === 'function') {
             ghostHatObjects = drawPlayerHat(this, ghostSprite, false);
-            ghostHatObjects.forEach(o => o.setAlpha(0.25).setDepth(50));
+            ghostHatObjects.forEach(o => o.setAlpha(ghostAlpha).setDepth(50));
         }
     }
 
@@ -1071,6 +1104,7 @@ function loadLevel(levelIndex) {
         enemyRects.push(enemyRect);
         enemy.enemyType = type;
         enemy.hp = type === 'shield' ? 2 : 1;
+        enemy.visual = enemyRect;
 
         if (type === 'flyer') {
             enemy.body.setAllowGravity(false);
@@ -1498,13 +1532,22 @@ function loadLevel(levelIndex) {
     // R key for an instant retry — the "one more run" shortcut
     this.input.keyboard.on('keydown-R', () => {
         if (isPaused || gameOver || levelComplete) return;
-        if (showingMenu || showingLevelSelect) return;
-        restartWithTransition(this);
+        if (showingMenu || showingLevelSelect ||
+            (typeof showingSpeedrunSelect !== 'undefined' && showingSpeedrunSelect)) return;
+        if (typeof speedrunMode !== 'undefined' && speedrunMode) {
+            this.scene.restart();
+        } else {
+            restartWithTransition(this);
+        }
     });
 }
 
 function update() {
-    if (gameOver || levelComplete || isPaused || showingMenu || showingLevelSelect) {
+    if (typeof updatePerformanceMonitor === 'function') {
+        updatePerformanceMonitor(this, this.game.loop.delta);
+    }
+    if (gameOver || levelComplete || isPaused || showingMenu || showingLevelSelect ||
+        (typeof showingSpeedrunSelect !== 'undefined' && showingSpeedrunSelect)) {
         return;
     }
 
@@ -1516,6 +1559,7 @@ function update() {
     const bestTime = bestTimes['level' + currentLevelIndex];
     const bestTimeStr = bestTime ? formatTime(bestTime) : '--:--';
     timerText.setText(`Time: ${formatTime(levelTimer)} | Best: ${bestTimeStr}`);
+    if (typeof updateSpeedrunHUD === 'function') updateSpeedrunHUD(levelTimer);
 
     // --- Combo Timer ---
     if (comboTimer > 0) {
@@ -1567,28 +1611,45 @@ function update() {
         updateHatPosition(playerHatObjects, playerRect);
     }
 
-    // Ghost: record current frame
-    if (isRecordingGhost && !gameOver && !levelComplete) {
+    // Ghost: fixed-rate recording avoids refresh-rate-dependent file sizes and
+    // playback speed on 60/120/165 Hz displays.
+    ghostRecordAccumulator += this.game.loop.delta;
+    if (isRecordingGhost && !gameOver && !levelComplete &&
+        ghostRecordAccumulator >= GHOST_SAMPLE_MS && ghostData.length < GHOST_MAX_FRAMES) {
         ghostData.push({
             x: player.x,
             y: player.y,
             sx: playerRect.scaleX,
             sy: playerRect.scaleY
         });
+        ghostRecordAccumulator %= GHOST_SAMPLE_MS;
     }
 
-    // Ghost: playback
-    if (ghostSprite && ghostReplay && ghostEnabled && ghostFrameIndex < ghostReplay.length) {
+    // Ghost: time-based playback with interpolation stays smooth and keeps old
+    // legacy array recordings compatible at their original ~60 Hz cadence.
+    if (ghostSprite && ghostReplay && ghostEnabled && ghostReplay.length > 0) {
+        ghostPlaybackElapsed += this.game.loop.delta;
+        const replayPosition = ghostPlaybackElapsed / ghostReplaySampleMs;
+        ghostFrameIndex = Math.floor(replayPosition);
         const gf = ghostReplay[ghostFrameIndex];
-        ghostSprite.setPosition(gf.x, gf.y);
-        ghostSprite.setScale(gf.sx, gf.sy);
+        const next = ghostReplay[Math.min(ghostFrameIndex + 1, ghostReplay.length - 1)];
+        if (!gf) {
+            ghostSprite.setAlpha(0);
+            ghostHatObjects.forEach(o => o.setAlpha(0));
+        } else {
+            const blend = replayPosition - ghostFrameIndex;
+            ghostSprite.setPosition(
+                Phaser.Math.Linear(gf.x, next.x, blend),
+                Phaser.Math.Linear(gf.y, next.y, blend)
+            );
+            ghostSprite.setScale(
+                Phaser.Math.Linear(gf.sx, next.sx, blend),
+                Phaser.Math.Linear(gf.sy, next.sy, blend)
+            );
+        }
         if (typeof updateHatPosition === 'function') {
             updateHatPosition(ghostHatObjects, ghostSprite);
         }
-        ghostFrameIndex++;
-    } else if (ghostSprite && ghostFrameIndex >= (ghostReplay?.length || 0)) {
-        ghostSprite.setAlpha(0); // hide when replay ends
-        ghostHatObjects.forEach(o => o.setAlpha(0));
     }
 
     const deltaS = this.game.loop.delta / 1000;
@@ -1810,6 +1871,7 @@ function update() {
                 isOverspeed = true;
                 spawnParticles(this, player.x - dashDirection * 14, player.y + 10, 0x66e0ff, 6, 40);
                 if (typeof flowAddWavedash === 'function') flowAddWavedash();
+                if (typeof recordWavedash === 'function') recordWavedash(this);
             }
         } else if (canDoubleJump) {
             player.setVelocityY(jumpVelocity * 0.9);
@@ -2066,20 +2128,22 @@ function update() {
                 break;
         }
 
-        // Update enemy rectangle position
-        if (enemyRects[index]) {
-            enemyRects[index].setPosition(enemy.x, enemy.y);
+        // Endless mode creates and retires enemies continuously, so keep the
+        // visual attached to its body instead of relying only on group indexes.
+        const enemyVisual = enemy.visual || enemyRects[index];
+        if (enemyVisual) {
+            enemyVisual.setPosition(enemy.x, enemy.y);
             // Face direction of travel
-            if (enemyRects[index].setFlipX && Math.abs(enemy.body.velocity.x) > 5) {
-                enemyRects[index].setFlipX(enemy.body.velocity.x < 0);
+            if (enemyVisual.setFlipX && Math.abs(enemy.body.velocity.x) > 5) {
+                enemyVisual.setFlipX(enemy.body.velocity.x < 0);
             }
             // Update shield border position
-            if (enemyRects[index].shieldBorder) {
-                enemyRects[index].shieldBorder.setPosition(enemy.x, enemy.y);
+            if (enemyVisual.shieldBorder) {
+                enemyVisual.shieldBorder.setPosition(enemy.x, enemy.y);
             }
             // Update colorblind indicator position
-            if (enemyRects[index].cbIndicator) {
-                const ind = enemyRects[index].cbIndicator;
+            if (enemyVisual.cbIndicator) {
+                const ind = enemyVisual.cbIndicator;
                 if (type === 'shooter') {
                     const dir = player.x < enemy.x ? -1 : 1;
                     ind.setPosition(enemy.x + dir * 20, enemy.y);
@@ -2251,7 +2315,7 @@ function update() {
     }
 
     // Check checkpoint activation based on player X position
-    checkpointRects.forEach((cpData) => {
+    checkpointRects.forEach((cpData, checkpointIndex) => {
         if (!cpData.activated && player.x >= cpData.body.x) {
             cpData.activated = true;
             cpData.rect.setTint(0x44ff44); // Green = activated
@@ -2268,6 +2332,9 @@ function update() {
             });
             spawnParticles(this, cpData.body.x, cpData.body.y - 25, 0x00ff00, 10, 60);
             playSound('checkpoint');
+            if (typeof recordSpeedrunCheckpoint === 'function') {
+                recordSpeedrunCheckpoint(this, checkpointIndex, levelTimer);
+            }
         }
     });
 
@@ -2580,6 +2647,7 @@ function groundPoundImpact() {
     if (jumpHeldNow) player.setVelocityY(-400);
 
     if (typeof flowAddPound === 'function') flowAddPound();
+    if (typeof recordGroundPound === 'function') recordGroundPound(this);
 }
 
 function hitSpring(playerObj, spring) {
@@ -2618,7 +2686,7 @@ function stompEnemy(enemy) {
     const ex = enemy.x;
     const ey = enemy.y;
     const enemyIndex = enemies.children.entries.indexOf(enemy);
-    const enemyRect = enemyRects[enemyIndex];
+    const enemyRect = enemy.visual || enemyRects[enemyIndex];
 
     if (typeof flowAddStomp === 'function') flowAddStomp();
 
@@ -2653,7 +2721,9 @@ function stompEnemy(enemy) {
             ease: 'Power2',
             onComplete: () => { enemyRect.destroy(); }
         });
-        enemyRects[enemyIndex] = null;
+        const visualIndex = enemyRects.indexOf(enemyRect);
+        if (visualIndex !== -1) enemyRects[visualIndex] = null;
+        enemy.visual = null;
     }
 
     // Combo: stomps add 3 to combo and give more time
@@ -2725,6 +2795,19 @@ function hitEnemy() {
     livesText.setText(`Lives: ${'❤'.repeat(lives)}`);
 
     if (lives <= 0) {
+        if (typeof endlessMode !== 'undefined' && endlessMode &&
+            typeof endEndlessMode === 'function') {
+            endEndlessMode(this);
+            return;
+        }
+        if (typeof speedrunMode !== 'undefined' && speedrunMode &&
+            typeof quickRestartSpeedrun === 'function') {
+            if (typeof stopBackgroundMusic === 'function') stopBackgroundMusic();
+            playerRect.setTint(0xff5555);
+            quickRestartSpeedrun(this);
+            return;
+        }
+
         // Game over - no more lives
         gameOver = true;
         this.physics.pause();
@@ -2812,6 +2895,10 @@ function reachEnd() {
     const isNewBestTime = !prevBestTime || levelTimer < prevBestTime;
     const isNewBestDeaths = prevBestDeaths === null || deathCount < prevBestDeaths;
     const isFlawless = deathCount === 0;
+    const speedrunResult = (typeof speedrunMode !== 'undefined' && speedrunMode &&
+        typeof completeSpeedrun === 'function')
+        ? completeSpeedrun(currentLevelIndex, levelTimer)
+        : null;
 
     // Save high score
     if (isNewHighScore) {
@@ -2826,8 +2913,11 @@ function reachEnd() {
     }
 
     // Save ghost replay on new best time
-    if (isNewBestTime && ghostData.length > 0 && ghostData.length < 3600) {
-        localStorage.setItem('jqGhost_level' + currentLevelIndex, JSON.stringify(ghostData));
+    if (isNewBestTime && ghostData.length > 0 && ghostData.length <= GHOST_MAX_FRAMES) {
+        localStorage.setItem('jqGhost_level' + currentLevelIndex, JSON.stringify({
+            sampleMs: GHOST_SAMPLE_MS,
+            frames: ghostData
+        }));
     }
 
     // Save best deaths
@@ -2884,7 +2974,7 @@ function reachEnd() {
     const scene = this;
 
     // Show credits screen for game completion
-    if (isLastLevel) {
+    if (isLastLevel && !(typeof speedrunMode !== 'undefined' && speedrunMode)) {
         showCreditsScreen(scene, { score, levelTimer, coinsCollected, totalLevelCoins, deathCount, earnedStars, isNewHighScore, isNewBestTime, prevHighScore, prevBestTime });
         return;
     }
@@ -2894,12 +2984,33 @@ function reachEnd() {
     overlay.setScrollFactor(0).setDepth(999);
 
     const winText = this.add.text(400, 120,
-        isLastLevel ? 'GAME COMPLETE!' : 'LEVEL COMPLETE!', {
+        speedrunResult ? 'SPEEDRUN COMPLETE!' : (isLastLevel ? 'GAME COMPLETE!' : 'LEVEL COMPLETE!'), {
         fontSize: '42px', fill: '#00ff00', fontStyle: 'bold',
         stroke: '#000', strokeThickness: 3
     }).setOrigin(0.5).setScrollFactor(0).setDepth(1000);
     winText.setAlpha(0);
     this.tweens.add({ targets: winText, alpha: 1, duration: 400, ease: 'Power2' });
+
+    if (speedrunResult) {
+        let resultLabel = 'TIME  ' + formatSpeedrunTime(levelTimer);
+        if (speedrunResult.isNewBest) {
+            resultLabel += speedrunResult.previousTime
+                ? '   NEW PB  ' + formatSpeedrunDelta(levelTimer - speedrunResult.previousTime)
+                : '   FIRST PB';
+        } else if (speedrunResult.previousTime) {
+            resultLabel += '   ' + formatSpeedrunDelta(levelTimer - speedrunResult.previousTime);
+        }
+        const speedrunBadge = this.add.text(400, 155, resultLabel, {
+            fontSize: '16px',
+            fill: speedrunResult.isNewBest ? '#7dff9b' : '#ffb0b0',
+            fontStyle: 'bold',
+            fontFamily: 'monospace',
+            backgroundColor: '#000000',
+            padding: { x: 10, y: 5 }
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(1001);
+        speedrunBadge.setAlpha(0);
+        this.tweens.add({ targets: speedrunBadge, alpha: 1, duration: 350, delay: 250 });
+    }
 
     // Animated star display (appear one at a time)
     const starLabels = ['Complete', 'Coins (80%)', 'Speed Run'];
@@ -3082,7 +3193,7 @@ function reachEnd() {
     const buttonDelay = statsDelay + (isFlawless ? 1400 : 900) + (nextWasLocked ? 300 : 0);
     let btnY = (isFlawless ? deathY + 60 : deathY + 30) + unlockOffset;
 
-    if (!isLastLevel) {
+    if (!isLastLevel && !(typeof speedrunMode !== 'undefined' && speedrunMode)) {
         const nextBtn = this.add.text(400, btnY, 'NEXT LEVEL', {
             fontSize: '24px', fill: '#fff', fontStyle: 'bold',
             backgroundColor: '#0a0', padding: { x: 20, y: 8 }
@@ -3095,7 +3206,8 @@ function reachEnd() {
         btnY += 45;
     }
 
-    const restartBtn = this.add.text(400, btnY, isLastLevel ? 'PLAY AGAIN' : 'RESTART', {
+    const restartLabel = speedrunResult ? 'RUN AGAIN' : (isLastLevel ? 'PLAY AGAIN' : 'RESTART');
+    const restartBtn = this.add.text(400, btnY, restartLabel, {
         fontSize: '20px', fill: '#fff',
         backgroundColor: '#666', padding: { x: 20, y: 8 }
     }).setOrigin(0.5).setScrollFactor(0).setDepth(1000).setAlpha(0);
@@ -3104,11 +3216,15 @@ function reachEnd() {
     restartBtn.on('pointerover', () => restartBtn.setStyle({ backgroundColor: '#888' }));
     restartBtn.on('pointerout', () => restartBtn.setStyle({ backgroundColor: '#666' }));
     restartBtn.on('pointerup', () => {
-        if (isLastLevel) currentLevelIndex = 0;
-        restartWithTransition(this);
+        if (speedrunResult) {
+            this.scene.restart();
+        } else {
+            if (isLastLevel) currentLevelIndex = 0;
+            restartWithTransition(this);
+        }
     });
 
-    const menuBtn = this.add.text(400, btnY + 40, 'LEVEL SELECT', {
+    const menuBtn = this.add.text(400, btnY + 40, speedrunResult ? 'SPEEDRUN SELECT' : 'LEVEL SELECT', {
         fontSize: '18px', fill: '#fff',
         backgroundColor: '#06a', padding: { x: 20, y: 6 }
     }).setOrigin(0.5).setScrollFactor(0).setDepth(1000).setAlpha(0);
@@ -3117,7 +3233,13 @@ function reachEnd() {
     menuBtn.on('pointerover', () => menuBtn.setStyle({ backgroundColor: '#08c' }));
     menuBtn.on('pointerout', () => menuBtn.setStyle({ backgroundColor: '#06a' }));
     menuBtn.on('pointerup', () => {
-        showingLevelSelect = true;
+        if (speedrunResult) {
+            speedrunMode = false;
+            showingSpeedrunSelect = true;
+            showingLevelSelect = false;
+        } else {
+            showingLevelSelect = true;
+        }
         restartWithTransition(this);
     });
 }
@@ -3255,7 +3377,10 @@ function togglePause() {
         pauseMenuObjects.push(cbBtn);
 
         // Level Select button
-        const levelBtn = scene.add.text(400, 480, 'LEVEL SELECT', {
+        const levelSelectLabel = (typeof speedrunMode !== 'undefined' && speedrunMode)
+            ? 'SPEEDRUN SELECT'
+            : 'LEVEL SELECT';
+        const levelBtn = scene.add.text(400, 480, levelSelectLabel, {
             fontSize: '22px', fill: '#fff', fontStyle: 'bold',
             backgroundColor: '#06a', padding: { x: 30, y: 10 }
         }).setOrigin(0.5).setScrollFactor(0).setDepth(1501);
@@ -3268,7 +3393,13 @@ function togglePause() {
             scene.physics.resume();
             if (typeof endlessMode !== 'undefined') endlessMode = false;
             if (typeof dailyChallengeMode !== 'undefined') dailyChallengeMode = false;
-            showingLevelSelect = true;
+            if (typeof speedrunMode !== 'undefined' && speedrunMode) {
+                speedrunMode = false;
+                showingSpeedrunSelect = true;
+                showingLevelSelect = false;
+            } else {
+                showingLevelSelect = true;
+            }
             restartWithTransition(scene);
         });
         pauseMenuObjects.push(levelBtn);
@@ -3287,6 +3418,8 @@ function togglePause() {
             scene.physics.resume();
             if (typeof endlessMode !== 'undefined') endlessMode = false;
             if (typeof dailyChallengeMode !== 'undefined') dailyChallengeMode = false;
+            if (typeof speedrunMode !== 'undefined') speedrunMode = false;
+            if (typeof showingSpeedrunSelect !== 'undefined') showingSpeedrunSelect = false;
             showingMenu = true;
             restartWithTransition(scene);
         });
@@ -3975,7 +4108,10 @@ const particlePool = [];
 const PARTICLE_POOL_MAX = 200;
 
 function spawnParticles(scene, x, y, color, count, speed) {
-    for (let i = 0; i < count; i++) {
+    const particleCount = (typeof lowFxMode !== 'undefined' && lowFxMode)
+        ? Math.min(count, 4)
+        : count;
+    for (let i = 0; i < particleCount; i++) {
         let particle;
         if (particlePool.length > 0) {
             particle = particlePool.pop();
