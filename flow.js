@@ -40,6 +40,12 @@ function createFlowHUD(scene, x, y) {
     }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(100);
 }
 
+function setFlowHUDVisible(visible) {
+    [flowBarBg, flowBar, flowLabel].forEach(obj => {
+        if (obj && obj.setVisible) obj.setVisible(visible);
+    });
+}
+
 function flowAdd(amount) {
     flowMeter = Math.max(0, Math.min(FLOW_MAX, flowMeter + amount));
 }

@@ -66,7 +66,7 @@ function beginSpeedrun(scene) {
     // A speedrun attempt ends on the first hit. This keeps auto-restart useful
     // and makes checkpoint comparisons consistent across attempts.
     lives = 1;
-    if (livesText) livesText.setText('Lives: ❤');
+    if (livesText) livesText.setText(typeof formatLivesHUD === 'function' ? formatLivesHUD(1) : '♥');
     if (timerText) timerText.setVisible(false);
 
     const record = getSpeedrunRecord(currentLevelIndex);

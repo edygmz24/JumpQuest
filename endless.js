@@ -59,7 +59,7 @@ function startEndlessMode(scene) {
 
     // Set one life for endless mode
     lives = 1;
-    if (livesText) livesText.setText('Lives: ❤');
+    if (livesText) livesText.setText(typeof formatLivesHUD === 'function' ? formatLivesHUD(1) : '♥');
 
     // Extend world bounds far to the right
     scene.physics.world.setBounds(0, 0, 999999, 600);

@@ -213,7 +213,7 @@ function applyDailyModifiers(scene) {
                 // Set lives to 1
                 lives = 1;
                 if (typeof livesText !== 'undefined' && livesText && livesText.setText) {
-                    livesText.setText('Lives: 1');
+                    livesText.setText(typeof formatLivesHUD === 'function' ? formatLivesHUD(1) : '♥');
                 }
                 break;
 
@@ -243,32 +243,31 @@ function showDailyModifierHUD(scene) {
 
     const challenge = getDailyChallenge();
 
-    // "DAILY CHALLENGE" header
-    const header = scene.add.text(400, 4, 'DAILY CHALLENGE', {
-        fontSize: '12px', fill: '#ff8800', fontStyle: 'bold',
-        stroke: '#000', strokeThickness: 2
-    }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(1500);
+    // A small, centered challenge chip keeps the special rules legible without
+    // building a second text-heavy HUD above the playfield.
+    const chip = scene.add.rectangle(400, 20, 350, 38, 0x291b0b, 0.82);
+    chip.setStrokeStyle(1, 0xa85e14).setScrollFactor(0).setDepth(1499);
 
-    // Modifier icons below header
     const modText = challenge.modifiers.map(m => {
         const mod = DAILY_MODIFIERS[m];
         return mod ? `${mod.icon} ${mod.name}` : m;
     }).join('  |  ');
 
-    const modDisplay = scene.add.text(400, 18, modText, {
-        fontSize: '10px', fill: '#ffcc00',
-        stroke: '#000', strokeThickness: 2
-    }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(1500);
-
-    // Target time display
     const targetStr = typeof formatTime === 'function'
         ? formatTime(challenge.targetTime)
         : (challenge.targetTime / 1000).toFixed(1) + 's';
 
-    const targetDisplay = scene.add.text(400, 30, `Target: ${targetStr}`, {
-        fontSize: '10px', fill: '#00ffcc',
-        stroke: '#000', strokeThickness: 2
+    const header = scene.add.text(400, 8, `☀ DAILY   ·   ⏱ ${targetStr}`, {
+        fontSize: '11px', fill: '#ffb34d', fontStyle: 'bold'
     }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(1500);
+
+    const modDisplay = scene.add.text(400, 23, modText, {
+        fontSize: '10px', fill: '#ffcc00'
+    }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(1500);
+
+    if (typeof gameplayHudObjects !== 'undefined') {
+        gameplayHudObjects.push(chip, header, modDisplay);
+    }
 }
 
 // --- Complete the daily challenge ---
