@@ -62,7 +62,7 @@ function applyModifiers(scene) {
     // --- Assist Modifiers ---
     if (isModifierActive('assist', 'extraLives')) {
         lives = 5;
-        if (livesText) livesText.setText('Lives: 5');
+        if (livesText) livesText.setText(typeof formatLivesHUD === 'function' ? formatLivesHUD(5) : '♥♥♥♥♥');
     }
 
     if (isModifierActive('assist', 'slowEnemies')) {
@@ -86,7 +86,7 @@ function applyModifiers(scene) {
     // --- Hardcore Modifiers ---
     if (isModifierActive('hardcore', 'oneLife')) {
         lives = 1;
-        if (livesText) livesText.setText('Lives: 1');
+        if (livesText) livesText.setText(typeof formatLivesHUD === 'function' ? formatLivesHUD(1) : '♥');
     }
 
     if (isModifierActive('hardcore', 'noCheckpoints')) {
@@ -147,7 +147,7 @@ function updateModifiers(scene, delta) {
         if (levelTimer >= scene._hardcoreTimeLimit && !gameOver && !levelComplete) {
             // Force game over
             lives = 0;
-            if (livesText) livesText.setText('Lives: 0');
+            if (livesText) livesText.setText(typeof formatLivesHUD === 'function' ? formatLivesHUD(0) : '—');
             gameOver = true;
             scene.physics.pause();
             if (typeof stopBackgroundMusic === 'function') stopBackgroundMusic();

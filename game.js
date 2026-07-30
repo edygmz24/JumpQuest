@@ -78,6 +78,67 @@ let bestTimes = JSON.parse(localStorage.getItem('jqBestTimes') || localStorage.g
 // Lives System
 let lives = 3;
 let livesText;
+let gameplayHudObjects = [];
+let controlsPopupObjects = [];
+
+function closeControlsPopup() {
+    controlsPopupObjects.forEach(obj => {
+        if (obj && obj.active) obj.destroy();
+    });
+    controlsPopupObjects = [];
+}
+
+function toggleControlsPopup(scene) {
+    if (controlsPopupObjects.length) {
+        closeControlsPopup();
+        return;
+    }
+
+    const panel = scene.add.rectangle(400, 300, 300, 230, 0x07121e, 0.94);
+    panel.setStrokeStyle(2, 0x45678f).setScrollFactor(0).setDepth(2200);
+    const title = scene.add.text(400, 220, 'CONTROLS', {
+        fontSize: '16px', fill: '#ffdd00', fontStyle: 'bold'
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(2201);
+    const divider = scene.add.rectangle(400, 246, 250, 1, 0x45678f);
+    divider.setScrollFactor(0).setDepth(2201);
+    const rows = [
+        'MOVE       ← / →',
+        'JUMP       SPACE',
+        'DASH       SHIFT',
+        'POUND      ↓ + SPACE',
+        'RETRY      R',
+        'PAUSE      ESC'
+    ].map((text, index) => scene.add.text(400, 260 + index * 22, text, {
+        fontSize: '11px', fill: '#d7e2f0', fontFamily: 'monospace'
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(2201));
+    const closeButton = scene.add.text(536, 198, '×', {
+        fontSize: '20px', fill: '#d7e2f0', fontStyle: 'bold',
+        backgroundColor: '#1b2b3f', padding: { x: 6, y: 1 }
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(2202).setInteractive({ useHandCursor: true });
+    closeButton.on('pointerup', closeControlsPopup);
+    controlsPopupObjects = [panel, title, divider, ...rows, closeButton];
+}
+
+function setGameplayHUDVisible(visible) {
+    gameplayHudObjects.forEach(obj => {
+        if (obj && obj.setVisible) obj.setVisible(visible);
+    });
+    if (!visible) closeControlsPopup();
+    if (typeof setFlowHUDVisible === 'function') setFlowHUDVisible(visible);
+}
+
+// Compact HUD formatters keep all game modes speaking the same visual language.
+function formatScoreHUD(value, best) {
+    return `★ ${value}   RECORD ${best || 0}`;
+}
+
+function formatTimeHUD(value, best) {
+    return `⏱ ${formatTime(value)}   RECORD ${best ? formatTime(best) : '--:--'}`;
+}
+
+function formatLivesHUD(value) {
+    return '♥'.repeat(Math.max(0, value)) || '—';
+}
 
 // Moving Platforms
 let movingPlatforms = [];
@@ -1381,81 +1442,82 @@ function loadLevel(levelIndex) {
     cursors = this.input.keyboard.createCursorKeys();
     dashKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT);
 
-    // Level name and instructions - fixed to camera
-    const levelName = this.add.text(16, 16, currentLevel.name, {
-        fontSize: '18px',
-        fill: '#ffff00',
-        backgroundColor: '#000',
-        padding: { x: 10, y: 5 }
+    // One quiet panel contains persistent run information. Moment-to-moment
+    // feedback (combo, hints) stays outside it so the playfield stays clear.
+    gameplayHudObjects = [];
+    const shortLevelName = currentLevel.name.replace(/^Level\s+\d+\s*[-–]\s*/i, '');
+    const levelTitle = `LEVEL ${currentLevelIndex + 1} OF ${levels.length} - ${shortLevelName}`;
+    const levelName = this.add.text(20, 19, levelTitle, {
+        fontSize: '14px', fill: '#ffff00', fontStyle: 'bold'
     });
-    levelName.setScrollFactor(0);
+    levelName.setScrollFactor(0).setDepth(100);
+    // Let each level title define the panel width, while retaining enough room
+    // for the Dash/Flow row on shorter level names.
+    const hudPanelWidth = Math.max(285, Math.ceil(levelName.width + 40));
+    const hudPanel = this.add.rectangle(10, 10, hudPanelWidth, 128, 0x07121e, 0.78);
+    hudPanel.setOrigin(0, 0).setStrokeStyle(1, 0x29405f).setScrollFactor(0).setDepth(90);
+    gameplayHudObjects.push(hudPanel);
+    gameplayHudObjects.push(levelName);
 
-    const instructions = this.add.text(16, 50, 'Arrows: Move | Space: Jump | Shift: Dash | Down+Jump: Pound | R: Retry', {
-        fontSize: '14px',
-        fill: '#fff',
-        backgroundColor: '#000',
-        padding: { x: 10, y: 5 }
-    });
-    instructions.setScrollFactor(0);
-    // Fade the controls reminder out after a few seconds so it doesn't clutter the level view
-    this.tweens.add({
+    // The first level teaches the core moves; later levels stay unobstructed.
+    if (currentLevelIndex === 0) {
+        const instructionPanel = this.add.rectangle(400, 576, 610, 32, 0x07121e, 0.55);
+        instructionPanel.setStrokeStyle(1, 0x29405f).setOrigin(0.5, 1).setScrollFactor(0).setDepth(99);
+        const instructionSpecs = [
+        { x: 122, text: '← → : MOVE' },
+        { x: 230, text: 'SPACE : JUMP' },
+        { x: 360, text: 'SHIFT : DASH' },
+        { x: 492, text: '↓ + SPACE : POUND' },
+        { x: 647, text: 'R : RETRY' }
+        ];
+        const instructionChips = instructionSpecs.map(spec => this.add.text(spec.x, 566, spec.text, {
+        fontSize: '9px', fill: '#d7e2f0', fontStyle: 'bold',
+        backgroundColor: '#1b2b3f', padding: { x: 5, y: 3 }
+        }).setOrigin(0.5, 1).setScrollFactor(0).setDepth(100).setAlpha(0.78));
+        const instructions = this.add.container(0, 0, [instructionPanel, ...instructionChips]);
+        instructions.setScrollFactor(0).setDepth(100);
+        gameplayHudObjects.push(instructions);
+        this.tweens.add({
         targets: instructions,
         alpha: 0,
         duration: 600,
         delay: 6000,
         ease: 'Power2',
-        onComplete: () => instructions.destroy()
-    });
-
-    // Level counter
-    const levelCounter = this.add.text(16, 84, `Level ${currentLevelIndex + 1} of ${levels.length}`, {
-        fontSize: '14px',
-        fill: '#fff',
-        backgroundColor: '#000',
-        padding: { x: 10, y: 5 }
-    });
-    levelCounter.setScrollFactor(0);
+            onComplete: () => instructions.destroy()
+        });
+    }
 
     // Score display
     const highScore = highScores['level' + currentLevelIndex] || 0;
-    scoreText = this.add.text(16, 118, `Score: ${score} | Best: ${highScore}`, {
-        fontSize: '14px',
-        fill: '#ffd700',
-        backgroundColor: '#000',
-        padding: { x: 10, y: 5 }
+    scoreText = this.add.text(20, 46, formatScoreHUD(score, highScore), {
+        fontSize: '13px', fill: '#ffd700'
     });
-    scoreText.setScrollFactor(0);
+    scoreText.setScrollFactor(0).setDepth(100);
+    gameplayHudObjects.push(scoreText);
 
     // Coin wallet display
     if (typeof getDisplayCoins === 'function') {
-        walletText = this.add.text(16, 250, `● ${getDisplayCoins()}`, {
-            fontSize: '14px',
-            fill: '#ffcc33',
-            backgroundColor: '#000',
-            padding: { x: 10, y: 5 }
+        walletText = this.add.text(176, 94, `● ${getDisplayCoins()}`, {
+            fontSize: '13px', fill: '#ffcc33'
         });
         walletText.setScrollFactor(0).setDepth(100);
+        gameplayHudObjects.push(walletText);
     }
 
     // Timer display
     const bestTime = bestTimes['level' + currentLevelIndex];
-    const bestTimeStr = bestTime ? formatTime(bestTime) : '--:--';
-    timerText = this.add.text(16, 152, `Time: 0:00 | Best: ${bestTimeStr}`, {
-        fontSize: '14px',
-        fill: '#00ffff',
-        backgroundColor: '#000',
-        padding: { x: 10, y: 5 }
+    timerText = this.add.text(20, 69, formatTimeHUD(0, bestTime), {
+        fontSize: '13px', fill: '#00ffff'
     });
-    timerText.setScrollFactor(0);
+    timerText.setScrollFactor(0).setDepth(100);
+    gameplayHudObjects.push(timerText);
 
     // Lives display
-    livesText = this.add.text(16, 186, `Lives: ${'❤'.repeat(lives)}`, {
-        fontSize: '14px',
-        fill: '#ff0000',
-        backgroundColor: '#000',
-        padding: { x: 10, y: 5 }
+    livesText = this.add.text(20, 93, formatLivesHUD(lives), {
+        fontSize: '16px', fill: '#ff5b5b'
     });
-    livesText.setScrollFactor(0);
+    livesText.setScrollFactor(0).setDepth(100);
+    gameplayHudObjects.push(livesText);
 
     // Combo display (top-right area)
     comboText = this.add.text(784, 50, '', {
@@ -1466,31 +1528,34 @@ function loadLevel(levelIndex) {
         strokeThickness: 3
     });
     comboText.setOrigin(1, 0).setScrollFactor(0).setDepth(100);
+    gameplayHudObjects.push(comboText);
 
     // Combo timer bar
     comboTimerBarBg = this.add.rectangle(730, 75, 60, 6, 0x333333);
     comboTimerBarBg.setOrigin(0.5, 0).setScrollFactor(0).setDepth(100).setAlpha(0);
     comboTimerBar = this.add.rectangle(730, 75, 60, 6, 0xffdd00);
     comboTimerBar.setOrigin(0.5, 0).setScrollFactor(0).setDepth(100).setAlpha(0);
+    gameplayHudObjects.push(comboTimerBarBg, comboTimerBar);
 
     // Dash cooldown bar
-    dashCooldownBarBg = this.add.rectangle(16, 218, 60, 8, 0x333333);
+    dashCooldownBarBg = this.add.rectangle(20, 117, 72, 6, 0x33445c);
     dashCooldownBarBg.setOrigin(0, 0.5).setScrollFactor(0).setDepth(100);
-    dashCooldownBar = this.add.rectangle(16, 218, 60, 8, 0x00ccff);
+    dashCooldownBar = this.add.rectangle(20, 117, 72, 6, 0x00ccff);
     dashCooldownBar.setOrigin(0, 0.5).setScrollFactor(0).setDepth(100);
-    const dashLabel = this.add.text(80, 218, 'DASH', {
+    const dashLabel = this.add.text(98, 117, 'DASH', {
         fontSize: '10px', fill: '#00ccff'
     }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(100);
+    gameplayHudObjects.push(dashCooldownBarBg, dashCooldownBar, dashLabel);
 
     // Flow meter, sharing the row with the dash bar
     if (typeof createFlowHUD === 'function') {
-        createFlowHUD(this, 130, 218);
+        createFlowHUD(this, 148, 117);
     }
 
     // Sound toggle button (always visible, bottom-right corner)
-    const muteLabel = (typeof audioMuted !== 'undefined' && audioMuted) ? '[ MUSIC OFF ]' : '[ MUSIC ON ]';
+    const muteLabel = (typeof audioMuted !== 'undefined' && audioMuted) ? '×' : '♫';
     const muteBtn = this.add.text(784, 584, muteLabel, {
-        fontSize: '11px', fill: '#aaa',
+        fontSize: '18px', fill: '#aaa',
         fontFamily: 'monospace',
         padding: { x: 4, y: 3 }
     });
@@ -1500,15 +1565,16 @@ function loadLevel(levelIndex) {
     muteBtn.on('pointerout', () => muteBtn.setAlpha(0.45));
     muteBtn.on('pointerup', () => {
         if (typeof toggleMute === 'function') toggleMute();
-        muteBtn.setText((typeof audioMuted !== 'undefined' && audioMuted) ? '[ MUSIC OFF ]' : '[ MUSIC ON ]');
+        muteBtn.setText((typeof audioMuted !== 'undefined' && audioMuted) ? '×' : '♫');
     });
+    gameplayHudObjects.push(muteBtn);
 
     // Pause button
-    pauseButton = this.add.text(750, 16, 'PAUSE', {
-        fontSize: '16px',
-        fill: '#fff',
+    pauseButton = this.add.text(778, 12, 'PAUSE', {
+        fontSize: '11px',
+        fill: '#fff', fontStyle: 'bold',
         backgroundColor: '#666',
-        padding: { x: 10, y: 5 }
+        padding: { x: 8, y: 6 }
     });
     pauseButton.setOrigin(1, 0);
     pauseButton.setScrollFactor(0);
@@ -1523,6 +1589,7 @@ function loadLevel(levelIndex) {
     pauseButton.on('pointerup', () => {
         togglePause.call(this);
     });
+    gameplayHudObjects.push(pauseButton);
 
     // ESC key to pause
     this.input.keyboard.on('keydown-ESC', () => {
@@ -1557,8 +1624,7 @@ function update() {
     // Update timer
     levelTimer += this.game.loop.delta;
     const bestTime = bestTimes['level' + currentLevelIndex];
-    const bestTimeStr = bestTime ? formatTime(bestTime) : '--:--';
-    timerText.setText(`Time: ${formatTime(levelTimer)} | Best: ${bestTimeStr}`);
+    timerText.setText(formatTimeHUD(levelTimer, bestTime));
     if (typeof updateSpeedrunHUD === 'function') updateSpeedrunHUD(levelTimer);
 
     // --- Combo Timer ---
@@ -2516,7 +2582,7 @@ function collectCoin(player, coin) {
     score += points;
     coinsCollected++;
     const highScore = highScores['level' + currentLevelIndex] || 0;
-    scoreText.setText(`Score: ${score} | Best: ${highScore}`);
+    scoreText.setText(formatScoreHUD(score, highScore));
 
     // Bank toward the persistent wallet (spendable currency, separate from
     // score). Flow tier multiplies the payout, so running fast pays better.
@@ -2538,7 +2604,7 @@ function collectCoin(player, coin) {
     // All coins collected: big bonus celebration
     if (totalLevelCoins > 0 && coinsCollected === totalLevelCoins) {
         score += 500;
-        scoreText.setText(`Score: ${score} | Best: ${highScore}`);
+        scoreText.setText(formatScoreHUD(score, highScore));
         showScorePopup(this, player.x, player.y - 50, 'ALL COINS! +500', '#ffd700');
         spawnParticles(this, player.x, player.y, 0xffd700, 16, 70);
         spawnParticles(this, player.x, player.y - 20, 0xffffff, 8, 50);
@@ -2737,7 +2803,7 @@ function stompEnemy(enemy) {
     const points = Math.floor(basePoints * comboMultiplier);
     score += points;
     const highScore = highScores['level' + currentLevelIndex] || 0;
-    scoreText.setText(`Score: ${score} | Best: ${highScore}`);
+    scoreText.setText(formatScoreHUD(score, highScore));
 
     // Visual juice
     const color = ENEMY_TYPES[enemy.enemyType]?.color || 0xff0000;
@@ -2792,7 +2858,7 @@ function hitEnemy() {
     // Decrease lives
     lives--;
     playSound(lives <= 0 ? 'gameOver' : 'death');
-    livesText.setText(`Lives: ${'❤'.repeat(lives)}`);
+    livesText.setText(formatLivesHUD(lives));
 
     if (lives <= 0) {
         if (typeof endlessMode !== 'undefined' && endlessMode &&
@@ -3245,6 +3311,7 @@ function reachEnd() {
 }
 
 let pauseMenuObjects = [];
+let pauseSettingsObjects = [];
 
 function togglePause() {
     if (gameOver || levelComplete) {
@@ -3273,7 +3340,7 @@ function togglePause() {
         pauseMenuObjects.push(title);
 
         // Resume button
-        const resumeBtn = scene.add.text(400, 240, 'RESUME', {
+        const resumeBtn = scene.add.text(400, 225, 'RESUME', {
             fontSize: '22px', fill: '#fff', fontStyle: 'bold',
             backgroundColor: '#0a0', padding: { x: 30, y: 10 }
         }).setOrigin(0.5).setScrollFactor(0).setDepth(1501);
@@ -3284,7 +3351,7 @@ function togglePause() {
         pauseMenuObjects.push(resumeBtn);
 
         // Restart Level button
-        const restartBtn = scene.add.text(400, 295, 'RESTART LEVEL', {
+        const restartBtn = scene.add.text(400, 280, 'RESTART LEVEL', {
             fontSize: '22px', fill: '#fff', fontStyle: 'bold',
             backgroundColor: '#c60', padding: { x: 30, y: 10 }
         }).setOrigin(0.5).setScrollFactor(0).setDepth(1501);
@@ -3299,88 +3366,21 @@ function togglePause() {
         });
         pauseMenuObjects.push(restartBtn);
 
-        // Music volume slider
-        const musicLabel = scene.add.text(280, 340, 'Music', {
-            fontSize: '16px', fill: '#aaa'
-        }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(1501);
-        pauseMenuObjects.push(musicLabel);
-
-        const musicSliderBg = scene.add.rectangle(440, 340, 160, 10, 0x444444).setScrollFactor(0).setDepth(1501);
-        pauseMenuObjects.push(musicSliderBg);
-        const musicSliderFill = scene.add.rectangle(440 - 80 + 80 * musicVolume, 340, 160 * musicVolume, 10, 0x08a).setOrigin(0, 0.5).setScrollFactor(0).setDepth(1502);
-        musicSliderFill.x = 440 - 80;
-        musicSliderFill.setDisplaySize(160 * musicVolume, 10);
-        pauseMenuObjects.push(musicSliderFill);
-        const musicHandle = scene.add.circle(440 - 80 + 160 * musicVolume, 340, 10, 0xffffff).setScrollFactor(0).setDepth(1503);
-        musicHandle.setInteractive({ useHandCursor: true, draggable: true });
-        scene.input.setDraggable(musicHandle);
-        musicHandle.on('drag', (pointer, dragX) => {
-            const clampedX = Phaser.Math.Clamp(dragX, 440 - 80, 440 + 80);
-            musicHandle.x = clampedX;
-            const val = (clampedX - (440 - 80)) / 160;
-            musicSliderFill.setDisplaySize(160 * val, 10);
-            if (typeof setMusicVolume === 'function') setMusicVolume(val);
-        });
-        pauseMenuObjects.push(musicHandle);
-
-        // SFX volume slider
-        const sfxLabel = scene.add.text(280, 380, 'SFX', {
-            fontSize: '16px', fill: '#aaa'
-        }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(1501);
-        pauseMenuObjects.push(sfxLabel);
-
-        const sfxSliderBg = scene.add.rectangle(440, 380, 160, 10, 0x444444).setScrollFactor(0).setDepth(1501);
-        pauseMenuObjects.push(sfxSliderBg);
-        const sfxSliderFill = scene.add.rectangle(440 - 80, 380, 160 * sfxVolume, 10, 0x068).setOrigin(0, 0.5).setScrollFactor(0).setDepth(1502);
-        pauseMenuObjects.push(sfxSliderFill);
-        const sfxHandle = scene.add.circle(440 - 80 + 160 * sfxVolume, 380, 10, 0xffffff).setScrollFactor(0).setDepth(1503);
-        sfxHandle.setInteractive({ useHandCursor: true, draggable: true });
-        scene.input.setDraggable(sfxHandle);
-        sfxHandle.on('drag', (pointer, dragX) => {
-            const clampedX = Phaser.Math.Clamp(dragX, 440 - 80, 440 + 80);
-            sfxHandle.x = clampedX;
-            const val = (clampedX - (440 - 80)) / 160;
-            sfxSliderFill.setDisplaySize(160 * val, 10);
-            if (typeof setSfxVolume === 'function') setSfxVolume(val);
-        });
-        pauseMenuObjects.push(sfxHandle);
-
-        // Mute All toggle
-        const muteAllLabel = (sfxMuted && audioMuted) ? 'UNMUTE ALL' : 'MUTE ALL';
-        const muteAllColor = (sfxMuted && audioMuted) ? '#800' : '#555';
-        const muteBtn = scene.add.text(400, 420, muteAllLabel, {
+        const settingsBtn = scene.add.text(400, 445, 'SETTINGS', {
             fontSize: '16px', fill: '#fff', fontStyle: 'bold',
-            backgroundColor: muteAllColor, padding: { x: 20, y: 6 }
+            backgroundColor: '#34506f', padding: { x: 20, y: 6 }
         }).setOrigin(0.5).setScrollFactor(0).setDepth(1501);
-        muteBtn.setInteractive({ useHandCursor: true });
-        muteBtn.on('pointerup', () => {
-            if (typeof toggleMuteAll === 'function') toggleMuteAll();
-            muteBtn.setText((sfxMuted && audioMuted) ? 'UNMUTE ALL' : 'MUTE ALL');
-            muteBtn.setStyle({ backgroundColor: (sfxMuted && audioMuted) ? '#800' : '#555' });
-        });
-        pauseMenuObjects.push(muteBtn);
-
-        // Colorblind mode toggle
-        const cbLabel = colorblindMode ? 'COLORBLIND: ON' : 'COLORBLIND: OFF';
-        const cbColor = colorblindMode ? '#068' : '#444';
-        const cbBtn = scene.add.text(400, 448, cbLabel, {
-            fontSize: '14px', fill: '#fff',
-            backgroundColor: cbColor, padding: { x: 16, y: 5 }
-        }).setOrigin(0.5).setScrollFactor(0).setDepth(1501);
-        cbBtn.setInteractive({ useHandCursor: true });
-        cbBtn.on('pointerup', () => {
-            colorblindMode = !colorblindMode;
-            localStorage.setItem('jqColorblind', colorblindMode);
-            cbBtn.setText(colorblindMode ? 'COLORBLIND: ON' : 'COLORBLIND: OFF');
-            cbBtn.setStyle({ backgroundColor: colorblindMode ? '#068' : '#444' });
-        });
-        pauseMenuObjects.push(cbBtn);
+        settingsBtn.setInteractive({ useHandCursor: true });
+        settingsBtn.on('pointerover', () => settingsBtn.setStyle({ backgroundColor: '#45698f' }));
+        settingsBtn.on('pointerout', () => settingsBtn.setStyle({ backgroundColor: '#34506f' }));
+        settingsBtn.on('pointerup', () => showPauseSettings(scene));
+        pauseMenuObjects.push(settingsBtn);
 
         // Level Select button
         const levelSelectLabel = (typeof speedrunMode !== 'undefined' && speedrunMode)
             ? 'SPEEDRUN SELECT'
             : 'LEVEL SELECT';
-        const levelBtn = scene.add.text(400, 480, levelSelectLabel, {
+        const levelBtn = scene.add.text(400, 335, levelSelectLabel, {
             fontSize: '22px', fill: '#fff', fontStyle: 'bold',
             backgroundColor: '#06a', padding: { x: 30, y: 10 }
         }).setOrigin(0.5).setScrollFactor(0).setDepth(1501);
@@ -3405,7 +3405,7 @@ function togglePause() {
         pauseMenuObjects.push(levelBtn);
 
         // Quit to Menu button
-        const quitBtn = scene.add.text(400, 535, 'QUIT TO MENU', {
+        const quitBtn = scene.add.text(400, 390, 'QUIT TO MENU', {
             fontSize: '22px', fill: '#fff', fontStyle: 'bold',
             backgroundColor: '#600', padding: { x: 30, y: 10 }
         }).setOrigin(0.5).setScrollFactor(0).setDepth(1501);
@@ -3434,8 +3434,102 @@ function togglePause() {
 }
 
 function cleanupPauseMenu() {
+    closePauseSettings();
     pauseMenuObjects.forEach(obj => obj.destroy());
     pauseMenuObjects = [];
+}
+
+function closePauseSettings() {
+    pauseSettingsObjects.forEach(obj => {
+        if (obj && obj.active) obj.destroy();
+    });
+    pauseSettingsObjects = [];
+}
+
+function showPauseSettings(scene) {
+    closePauseSettings();
+
+    const panel = scene.add.rectangle(400, 350, 360, 330, 0x07121e, 0.97);
+    panel.setStrokeStyle(2, 0x45678f).setScrollFactor(0).setDepth(1600).setInteractive();
+    const title = scene.add.text(400, 215, 'SETTINGS', {
+        fontSize: '20px', fill: '#ffdd00', fontStyle: 'bold'
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(1601);
+    const divider = scene.add.rectangle(400, 242, 300, 1, 0x45678f);
+    divider.setScrollFactor(0).setDepth(1601);
+    const closeBtn = scene.add.text(548, 208, '×', {
+        fontSize: '20px', fill: '#d7e2f0', fontStyle: 'bold',
+        backgroundColor: '#1b2b3f', padding: { x: 6, y: 1 }
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(1602).setInteractive({ useHandCursor: true });
+    closeBtn.on('pointerup', closePauseSettings);
+
+    const musicLabel = scene.add.text(245, 275, 'MUSIC', { fontSize: '14px', fill: '#aaa' })
+        .setOrigin(0, 0.5).setScrollFactor(0).setDepth(1601);
+    const musicSliderBg = scene.add.rectangle(415, 275, 160, 10, 0x444444).setScrollFactor(0).setDepth(1601);
+    const musicSliderFill = scene.add.rectangle(335, 275, 160 * musicVolume, 10, 0x08a)
+        .setOrigin(0, 0.5).setScrollFactor(0).setDepth(1602);
+    const musicHandle = scene.add.circle(335 + 160 * musicVolume, 275, 10, 0xffffff).setScrollFactor(0).setDepth(1603);
+    musicHandle.setInteractive({ useHandCursor: true, draggable: true });
+    scene.input.setDraggable(musicHandle);
+    musicHandle.on('drag', (pointer, dragX) => {
+        const clampedX = Phaser.Math.Clamp(dragX, 335, 495);
+        musicHandle.x = clampedX;
+        const value = (clampedX - 335) / 160;
+        musicSliderFill.setDisplaySize(160 * value, 10);
+        if (typeof setMusicVolume === 'function') setMusicVolume(value);
+    });
+
+    const sfxLabel = scene.add.text(245, 315, 'SFX', { fontSize: '14px', fill: '#aaa' })
+        .setOrigin(0, 0.5).setScrollFactor(0).setDepth(1601);
+    const sfxSliderBg = scene.add.rectangle(415, 315, 160, 10, 0x444444).setScrollFactor(0).setDepth(1601);
+    const sfxSliderFill = scene.add.rectangle(335, 315, 160 * sfxVolume, 10, 0x068)
+        .setOrigin(0, 0.5).setScrollFactor(0).setDepth(1602);
+    const sfxHandle = scene.add.circle(335 + 160 * sfxVolume, 315, 10, 0xffffff).setScrollFactor(0).setDepth(1603);
+    sfxHandle.setInteractive({ useHandCursor: true, draggable: true });
+    scene.input.setDraggable(sfxHandle);
+    sfxHandle.on('drag', (pointer, dragX) => {
+        const clampedX = Phaser.Math.Clamp(dragX, 335, 495);
+        sfxHandle.x = clampedX;
+        const value = (clampedX - 335) / 160;
+        sfxSliderFill.setDisplaySize(160 * value, 10);
+        if (typeof setSfxVolume === 'function') setSfxVolume(value);
+    });
+
+    const muteBtn = scene.add.text(400, 365, (sfxMuted && audioMuted) ? 'UNMUTE ALL' : 'MUTE ALL', {
+        fontSize: '15px', fill: '#fff', fontStyle: 'bold',
+        backgroundColor: (sfxMuted && audioMuted) ? '#800' : '#555', padding: { x: 18, y: 5 }
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(1601).setInteractive({ useHandCursor: true });
+    muteBtn.on('pointerup', () => {
+        if (typeof toggleMuteAll === 'function') toggleMuteAll();
+        muteBtn.setText((sfxMuted && audioMuted) ? 'UNMUTE ALL' : 'MUTE ALL');
+        muteBtn.setStyle({ backgroundColor: (sfxMuted && audioMuted) ? '#800' : '#555' });
+    });
+
+    const cbBtn = scene.add.text(400, 405, colorblindMode ? 'COLORBLIND: ON' : 'COLORBLIND: OFF', {
+        fontSize: '14px', fill: '#fff',
+        backgroundColor: colorblindMode ? '#068' : '#444', padding: { x: 16, y: 5 }
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(1601).setInteractive({ useHandCursor: true });
+    cbBtn.on('pointerup', () => {
+        colorblindMode = !colorblindMode;
+        localStorage.setItem('jqColorblind', colorblindMode);
+        cbBtn.setText(colorblindMode ? 'COLORBLIND: ON' : 'COLORBLIND: OFF');
+        cbBtn.setStyle({ backgroundColor: colorblindMode ? '#068' : '#444' });
+    });
+
+    const controlsBtn = scene.add.text(400, 445, 'CONTROLS', {
+        fontSize: '15px', fill: '#fff', fontStyle: 'bold',
+        backgroundColor: '#34506f', padding: { x: 20, y: 5 }
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(1601).setInteractive({ useHandCursor: true });
+    controlsBtn.on('pointerup', () => toggleControlsPopup(scene));
+
+    const backBtn = scene.add.text(400, 482, 'BACK', {
+        fontSize: '13px', fill: '#d7e2f0',
+        backgroundColor: '#1b2b3f', padding: { x: 16, y: 4 }
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(1601).setInteractive({ useHandCursor: true });
+    backBtn.on('pointerup', closePauseSettings);
+
+    pauseSettingsObjects = [panel, title, divider, closeBtn, musicLabel, musicSliderBg,
+        musicSliderFill, musicHandle, sfxLabel, sfxSliderBg, sfxSliderFill, sfxHandle,
+        muteBtn, cbBtn, controlsBtn, backBtn];
 }
 
 // ========================
@@ -4072,7 +4166,7 @@ function defeatBoss() {
         const bossScore = bossConfig ? bossConfig.score : 2000;
         score += bossScore;
         const highScore = highScores['level' + currentLevelIndex] || 0;
-        scoreText.setText('Score: ' + score + ' | Best: ' + highScore);
+        scoreText.setText(formatScoreHUD(score, highScore));
         showScorePopup(scene, savedBossX, savedBossY - 50, '+' + bossScore, '#ff00ff');
 
         // Open the arena so the player can continue past a mid-boss
