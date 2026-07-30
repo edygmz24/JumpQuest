@@ -197,10 +197,12 @@ function spawnTrailParticle(scene, x, y) {
 // Hats
 // ========================
 
-function drawPlayerHat(scene, rect) {
+// Pass track === false for secondary wearers (e.g. the ghost replay) so they
+// get their own object list instead of replacing the player's tracked hat.
+function drawPlayerHat(scene, rect, track) {
     if (!cosmeticData) initCosmetics();
     // Clean up old hat objects
-    _destroyHatObjects();
+    if (track !== false) _destroyHatObjects();
 
     const hatId = cosmeticData.equipped.hat;
     if (hatId === 'none') return [];
@@ -250,7 +252,7 @@ function drawPlayerHat(scene, rect) {
         objects.push(gfx);
     }
 
-    _currentHatObjects = objects;
+    if (track !== false) _currentHatObjects = objects;
     return objects;
 }
 

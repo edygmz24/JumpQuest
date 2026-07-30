@@ -554,6 +554,15 @@ function startBackgroundMusic(levelIndex) {
         bgMusic = new Audio('Top_Floor_Dash.mp3');
         bgMusic.loop = true;
         bgMusic.volume = musicVolume;
+
+        // The track is several MB, so show a quiet indicator until it can play
+        const indicator = document.getElementById('music-loading');
+        if (indicator) {
+            indicator.classList.add('visible');
+            const hide = () => indicator.classList.remove('visible');
+            bgMusic.addEventListener('canplaythrough', hide, { once: true });
+            bgMusic.addEventListener('error', hide, { once: true });
+        }
     }
 
     bgMusic.play().catch(() => {

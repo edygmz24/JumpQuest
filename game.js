@@ -25,6 +25,9 @@ const game = new Phaser.Game(config);
 
 let player;
 let playerRect;
+let playerHatObjects = [];    // equipped cosmetic hat, drawn by cosmetics.js
+let ghostHatObjects = [];     // same hat worn by the ghost replay
+let walletText;               // HUD coin wallet counter
 let platforms;
 let cursors;
 
@@ -151,6 +154,7 @@ let bossFlagHidden = false;
 // Wall Slide / Wall Jump
 let isWallSliding = false;
 let wallSlideDir = 0; // -1 left, 1 right
+let wallSlideSoundTimer = 0; // throttles the scrape sound while sliding
 
 // Dash
 let dashKey;
@@ -493,6 +497,9 @@ function create() {
     projectileRects = [];
     isWallSliding = false;
     wallSlideDir = 0;
+    wallSlideSoundTimer = 0;
+    playerHatObjects = [];
+    ghostHatObjects = [];
     isDashing = false;
     dashCooldown = 0;
     canAirDash = true;
@@ -550,6 +557,8 @@ function create() {
     if (typeof initStats === 'function') initStats();
     if (typeof initCosmetics === 'function') initCosmetics();
     if (typeof resetLevelAchievementTrackers === 'function') resetLevelAchievementTrackers();
+    if (typeof initWallet === 'function') initWallet();
+    if (typeof resetEconomyLevelState === 'function') resetEconomyLevelState();
 
     // Load the current level
     loadLevel.call(this, currentLevelIndex);
@@ -760,10 +769,20 @@ function loadLevel(levelIndex) {
     playerRect = this.add.sprite(currentLevel.playerStart.x, currentLevel.playerStart.y, 'tex_player');
     playerRect.setDepth(10);
 
+    // Equipped cosmetic hat
+    if (typeof drawPlayerHat === 'function') {
+        playerHatObjects = drawPlayerHat(this, playerRect);
+    }
+
     // Ghost sprite (translucent player copy showing best-time replay)
     if (ghostReplay && ghostEnabled) {
         ghostSprite = this.add.image(ghostReplay[0]?.x || 100, ghostReplay[0]?.y || 500, 'tex_player').setAlpha(0.25);
         ghostSprite.setDepth(50);
+        // The ghost wears the same hat, faded to match
+        if (typeof drawPlayerHat === 'function') {
+            ghostHatObjects = drawPlayerHat(this, ghostSprite, false);
+            ghostHatObjects.forEach(o => o.setAlpha(0.25).setDepth(50));
+        }
     }
 
     player.setBounce(0);
@@ -1038,7 +1057,7 @@ function loadLevel(levelIndex) {
     });
     levelName.setScrollFactor(0);
 
-    const instructions = this.add.text(16, 50, 'Arrows: Move | Space: Jump | Shift: Dash | Wall Jump: Jump off walls', {
+    const instructions = this.add.text(16, 50, 'Arrows: Move | Space: Jump | Shift: Dash | R: Retry', {
         fontSize: '14px',
         fill: '#fff',
         backgroundColor: '#000',
@@ -1073,6 +1092,17 @@ function loadLevel(levelIndex) {
         padding: { x: 10, y: 5 }
     });
     scoreText.setScrollFactor(0);
+
+    // Coin wallet display
+    if (typeof getDisplayCoins === 'function') {
+        walletText = this.add.text(16, 250, `● ${getDisplayCoins()}`, {
+            fontSize: '14px',
+            fill: '#ffcc33',
+            backgroundColor: '#000',
+            padding: { x: 10, y: 5 }
+        });
+        walletText.setScrollFactor(0).setDepth(100);
+    }
 
     // Timer display
     const bestTime = bestTimes['level' + currentLevelIndex];
@@ -1160,6 +1190,13 @@ function loadLevel(levelIndex) {
     this.input.keyboard.on('keydown-ESC', () => {
         togglePause.call(this);
     });
+
+    // R key for an instant retry — the "one more run" shortcut
+    this.input.keyboard.on('keydown-R', () => {
+        if (isPaused || gameOver || levelComplete) return;
+        if (showingMenu || showingLevelSelect) return;
+        restartWithTransition(this);
+    });
 }
 
 function update() {
@@ -1222,6 +1259,9 @@ function update() {
 
     // Update player rectangle position to follow physics sprite
     playerRect.setPosition(player.x, player.y);
+    if (typeof updateHatPosition === 'function') {
+        updateHatPosition(playerHatObjects, playerRect);
+    }
 
     // Ghost: record current frame
     if (isRecordingGhost && !gameOver && !levelComplete) {
@@ -1238,9 +1278,13 @@ function update() {
         const gf = ghostReplay[ghostFrameIndex];
         ghostSprite.setPosition(gf.x, gf.y);
         ghostSprite.setScale(gf.sx, gf.sy);
+        if (typeof updateHatPosition === 'function') {
+            updateHatPosition(ghostHatObjects, ghostSprite);
+        }
         ghostFrameIndex++;
     } else if (ghostSprite && ghostFrameIndex >= (ghostReplay?.length || 0)) {
         ghostSprite.setAlpha(0); // hide when replay ends
+        ghostHatObjects.forEach(o => o.setAlpha(0));
     }
 
     const deltaS = this.game.loop.delta / 1000;
@@ -1327,6 +1371,14 @@ function update() {
         if (Math.random() < 0.15) {
             spawnParticles(this, player.x + wallSlideDir * 16, player.y, 0xaaaaaa, 1, 10);
         }
+        // Scrape sound, throttled so it reads as a continuous slide
+        wallSlideSoundTimer -= this.game.loop.delta;
+        if (wallSlideSoundTimer <= 0) {
+            playSound('wallSlide');
+            wallSlideSoundTimer = 200;
+        }
+    } else {
+        wallSlideSoundTimer = 0;
     }
 
     // --- Acceleration-based Movement (skip during dash) ---
@@ -1771,7 +1823,12 @@ function update() {
             // Update visual rectangle
             mp.rect.setPosition(platform.x, platform.y);
 
-            // Move player with platform if standing on it
+            // Move player with platform if standing on it.
+            // Vertical carry is deliberately not applied: gravity (800) far
+            // outpaces platform speeds (~40-60), so the player tracks a
+            // descending platform on its own, and collision lifts them on the
+            // way up. Adding an explicit carry here fights the solver and
+            // makes the ride drift.
             if (player.body.touching.down && platform.body.touching.up) {
                 const onPlatform = Math.abs(player.x - platform.x) < platform.displayWidth / 2 + player.displayWidth / 2;
                 if (onPlatform) {
@@ -1834,6 +1891,12 @@ function collectCoin(player, coin) {
     coinsCollected++;
     const highScore = highScores['level' + currentLevelIndex] || 0;
     scoreText.setText(`Score: ${score} | Best: ${highScore}`);
+
+    // Bank toward the persistent wallet (spendable currency, separate from score)
+    if (typeof earnCoins === 'function') {
+        earnCoins(1);
+        if (walletText) walletText.setText(`● ${getDisplayCoins()}`);
+    }
 
     // Visual juice: gold particle burst + score popup + sound
     const particleCount = comboMultiplier >= 2 ? 10 : 6;
@@ -2001,6 +2064,9 @@ function hitEnemy() {
         if (typeof stopBackgroundMusic === 'function') stopBackgroundMusic();
         playerRect.setTint(0xff0000);
 
+        // Losing the run still banks the coins earned during it
+        if (typeof bankPendingCoins === 'function') bankPendingCoins();
+
         const gameOverText = this.add.text(this.cameras.main.centerX, 300, 'GAME OVER!', {
             fontSize: '48px',
             fill: '#ff0000',
@@ -2120,6 +2186,13 @@ function reachEnd() {
         leaderRanks = saveLeaderboardEntry(currentLevelIndex, score, levelTimer);
     }
 
+    // Bank the run's coins into the persistent wallet
+    let coinsBanked = 0;
+    if (typeof bankPendingCoins === 'function') {
+        coinsBanked = bankPendingCoins();
+        if (walletText) walletText.setText(`● ${getDisplayCoins()}`);
+    }
+
     // Achievement tracking: record level completion
     if (typeof recordLevelCompletion === 'function') {
         recordLevelCompletion(currentLevelIndex);
@@ -2181,6 +2254,38 @@ function reachEnd() {
     // Stats section (appears after stars)
     const statsDelay = 1500;
 
+    // Personal-best ranking, shown to the right of the stars so the centered
+    // stats column keeps its layout.
+    if (leaderRanks.scoreRank > 0 || leaderRanks.timeRank > 0) {
+        const rankLines = [];
+        if (leaderRanks.scoreRank > 0) rankLines.push(`#${leaderRanks.scoreRank} SCORE`);
+        if (leaderRanks.timeRank > 0) rankLines.push(`#${leaderRanks.timeRank} TIME`);
+        const rankBadge = this.add.text(560, 190, rankLines.join('\n'), {
+            fontSize: '16px', fill: '#ffd700', fontStyle: 'bold',
+            align: 'center', stroke: '#000', strokeThickness: 3
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(1000).setAlpha(0).setScale(0.5);
+        this.tweens.add({
+            targets: rankBadge,
+            alpha: 1, scaleX: 1, scaleY: 1,
+            duration: 400, delay: 1400, ease: 'Back.easeOut',
+            onStart: () => spawnParticles(scene, 560, 190, 0xffd700, 8, 35)
+        });
+    }
+
+    // Top runs for this level
+    if (typeof getLeaderboard === 'function') {
+        const lb = getLeaderboard(currentLevelIndex);
+        if (lb.times && lb.times.length > 0) {
+            const rows = lb.times.slice(0, 3)
+                .map((e, i) => `${i + 1}. ${formatTime(e.time)}`)
+                .join('\n');
+            const lbPanel = this.add.text(560, 255, 'BEST RUNS\n' + rows, {
+                fontSize: '12px', fill: '#aaddff', align: 'center', lineSpacing: 3
+            }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(1000).setAlpha(0);
+            this.tweens.add({ targets: lbPanel, alpha: 1, duration: 300, delay: statsDelay + 300 });
+        }
+    }
+
     // Score delta
     const scoreDelta = score - prevHighScore;
     const scoreStr = isNewHighScore ? `Score: ${score} (+${scoreDelta} NEW BEST!)` : `Score: ${score}`;
@@ -2208,7 +2313,8 @@ function reachEnd() {
     this.tweens.add({ targets: timeDisplay, alpha: 1, duration: 300, delay: statsDelay + 150 });
 
     // Coins
-    const coinStr = `Coins: ${coinsCollected}/${totalLevelCoins}`;
+    let coinStr = `Coins: ${coinsCollected}/${totalLevelCoins}`;
+    if (coinsBanked > 0) coinStr += `  (+${coinsBanked} banked)`;
     const coinDisplay = this.add.text(400, 310, coinStr, {
         fontSize: '14px', fill: '#ffd700'
     }).setOrigin(0.5).setScrollFactor(0).setDepth(1000).setAlpha(0);

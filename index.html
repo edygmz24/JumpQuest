@@ -79,6 +79,22 @@
             opacity: 1;
         }
 
+        /* Music buffering indicator (the track is a few MB, so first play can lag) */
+        #music-loading {
+            display: none;
+            position: fixed;
+            bottom: 12px;
+            left: 12px;
+            background: rgba(0, 0, 0, 0.65);
+            border-radius: 6px;
+            color: #aaa;
+            font-family: monospace;
+            font-size: 11px;
+            padding: 5px 10px;
+            z-index: 10000;
+        }
+        #music-loading.visible { display: block; }
+
         /* Touch controls overlay */
         #touch-controls {
             display: none;
@@ -123,6 +139,9 @@
     <!-- Landscape suggestion toast for mobile portrait (non-blocking, auto-hides) -->
     <div id="rotate-toast">&#128241;&#8635; Tip: rotate to landscape for a bigger view</div>
 
+    <!-- Music buffering indicator (toggled by audio.js) -->
+    <div id="music-loading">&#9834; loading music&hellip;</div>
+
     <div id="game-container"></div>
 
     <!-- Touch control buttons (shown only on touch devices via JS below) -->
@@ -151,6 +170,7 @@
     <script src="menu.js"></script>
     <script src="achievements.js"></script>
     <script src="cosmetics.js"></script>
+    <script src="economy.js"></script>
     <script src="endless.js"></script>
     <script src="modifiers.js"></script>
     <script src="daily.js"></script>

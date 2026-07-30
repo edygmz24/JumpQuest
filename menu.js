@@ -97,6 +97,14 @@ function showMainMenu(scene) {
     }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
     menuObjects.push(starCount);
 
+    // Coin wallet
+    if (typeof walletCoins !== 'undefined') {
+        const walletDisplay = scene.add.text(400, 210, `● ${walletCoins} coins`, {
+            fontSize: '13px', fill: '#ffcc33'
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
+        menuObjects.push(walletDisplay);
+    }
+
     // Big PLAY button — the hero action
     const playBtn = createMenuButton(scene, 400, 245, '\u25B6  PLAY', '#0a0', '#0c0', () => {
         clearMenuObjects();
@@ -185,7 +193,7 @@ function showMainMenu(scene) {
     modBtn.setStyle({ fontSize: '13px', padding: { x: 12, y: 6 } });
 
     // ---- FOOTER: Controls ----
-    const controls = scene.add.text(400, 480, 'Arrows: Move  |  Space: Jump  |  Shift: Dash  |  ESC: Pause', {
+    const controls = scene.add.text(400, 480, 'Arrows: Move  |  Space: Jump  |  Shift: Dash  |  R: Retry  |  ESC: Pause', {
         fontSize: '10px', fill: '#444'
     }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
     menuObjects.push(controls);
