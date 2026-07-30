@@ -60,6 +60,8 @@ function isLevelUnlocked(index) {
 function showMainMenu(scene) {
     showingMenu = true;
     showingLevelSelect = false;
+    if (typeof showingSpeedrunSelect !== 'undefined') showingSpeedrunSelect = false;
+    if (typeof speedrunMode !== 'undefined') speedrunMode = false;
     clearMenuObjects();
 
     // Darken background
@@ -125,6 +127,10 @@ function showMainMenu(scene) {
     const playBtn = createMenuButton(scene, 400, 245, '\u25B6  PLAY', '#0a0', '#0c0', () => {
         clearMenuObjects();
         showingMenu = false;
+        if (typeof speedrunMode !== 'undefined') speedrunMode = false;
+        if (typeof showingSpeedrunSelect !== 'undefined') showingSpeedrunSelect = false;
+        if (typeof endlessMode !== 'undefined') endlessMode = false;
+        if (typeof dailyChallengeMode !== 'undefined') dailyChallengeMode = false;
         let startLevel = 0;
         for (let i = 0; i < levels.length; i++) {
             if (!completedLevels['level' + i]) { startLevel = i; break; }
@@ -146,34 +152,43 @@ function showMainMenu(scene) {
     }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
     menuObjects.push(modeLabel);
 
-    // Level Select + Endless + Daily in a balanced row
-    const selectBtn = createMenuButton(scene, 250, 340, 'LEVELS', '#06a', '#08c', () => {
+    // Level Select + Speedrun + Endless + Daily
+    const selectBtn = createMenuButton(scene, 145, 340, 'LEVELS', '#06a', '#08c', () => {
         clearMenuObjects();
         showLevelSelect(scene);
     });
-    selectBtn.setStyle({ fontSize: '16px', padding: { x: 20, y: 8 } });
+    selectBtn.setStyle({ fontSize: '15px', padding: { x: 16, y: 8 } });
 
-    const endlessBtn = createMenuButton(scene, 400, 340, 'ENDLESS', '#830', '#a50', () => {
+    const speedrunBtn = createMenuButton(scene, 315, 340, 'SPEEDRUN', '#07516b', '#08789b', () => {
+        clearMenuObjects();
+        if (typeof showSpeedrunLevelSelect === 'function') showSpeedrunLevelSelect(scene);
+        else showMainMenu(scene);
+    });
+    speedrunBtn.setStyle({ fontSize: '15px', padding: { x: 16, y: 8 } });
+
+    const endlessBtn = createMenuButton(scene, 490, 340, 'ENDLESS', '#830', '#a50', () => {
         clearMenuObjects();
         showingMenu = false;
+        if (typeof speedrunMode !== 'undefined') speedrunMode = false;
+        if (typeof showingSpeedrunSelect !== 'undefined') showingSpeedrunSelect = false;
         if (typeof endlessMode !== 'undefined') endlessMode = true;
         currentLevelIndex = 0;
         if (typeof restartWithTransition === 'function') restartWithTransition(scene);
         else scene.scene.restart();
     });
-    endlessBtn.setStyle({ fontSize: '16px', padding: { x: 20, y: 8 } });
+    endlessBtn.setStyle({ fontSize: '15px', padding: { x: 16, y: 8 } });
 
-    const dailyBtn = createMenuButton(scene, 550, 340, 'DAILY', '#063', '#085', () => {
+    const dailyBtn = createMenuButton(scene, 655, 340, 'DAILY', '#063', '#085', () => {
         clearMenuObjects();
         if (typeof showDailyChallengeScreen === 'function') showDailyChallengeScreen(scene);
         else showMainMenu(scene);
     });
-    dailyBtn.setStyle({ fontSize: '16px', padding: { x: 20, y: 8 } });
+    dailyBtn.setStyle({ fontSize: '15px', padding: { x: 16, y: 8 } });
 
     // Daily streak badge
     const ds = typeof dailyStreak !== 'undefined' && dailyStreak > 0 ? dailyStreak : 0;
     if (ds > 0) {
-        const streakText = scene.add.text(550, 365, `${ds} day streak`, {
+        const streakText = scene.add.text(655, 365, `${ds} day streak`, {
             fontSize: '9px', fill: '#0fa'
         }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
         menuObjects.push(streakText);
@@ -218,6 +233,8 @@ function showMainMenu(scene) {
 function showLevelSelect(scene) {
     showingMenu = false;
     showingLevelSelect = true;
+    if (typeof showingSpeedrunSelect !== 'undefined') showingSpeedrunSelect = false;
+    if (typeof speedrunMode !== 'undefined') speedrunMode = false;
     clearMenuObjects();
 
     const bg = scene.add.rectangle(400, 300, 800, 600, 0x000000, 0.9);

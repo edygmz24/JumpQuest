@@ -71,12 +71,13 @@ The transformation. All additive around the body/visual split — physics untouc
 - **Mid-boss at level 5:** generalize `triggerBoss`/`updateBoss` (game.js:2710, 2878) to read `boss:{hp, phases, attacks}` from level data instead of hardcoding `currentLevelIndex === 9` (game.js:1788); level 5 gets a 3-HP single-phase "Crystal Guardian" — doubles the difficulty-curve peak and reuses the whole boss FSM.
 - **Level retrofit:** levels 2-9 each get one signature mechanic + springs + a wavedash-rewarding shortcut line. All levels must stay completable *without* the new verbs.
 
-## Phase 6 — Polish & stretch (effort M, ~2-3 days)
+## Phase 6 — Polish & stretch (implemented)
 
-- Endless mode: bank coins, inject new enemies (endless.js).
-- New achievements for wavedash/pound/flow tiers (achievements.js).
-- Mobile/perf pass: `lowFxMode` tuning, `?fps=1` overlay, forced-Canvas smoke test.
-- **Stretch (lower priority per user):** dedicated speedrun mode (big timer, ghost at 0.45 alpha, checkpoint splits vs PB, auto quick-restart), full leaderboard screen from level select, Light2D night levels.
+- Endless mode banks run coins and injects `diver` / `charger` enemies as difficulty ramps (`endless.js`).
+- New achievements cover first and cumulative wavedashes / ground pounds plus both flow tiers (`achievements.js`).
+- Mobile/perf tooling includes tuned adaptive `lowFxMode`, `?lowfx=1|0` overrides, a `?fps=1` renderer/FPS/object overlay, particle reduction, and a forced-Canvas `?renderer=canvas` smoke-test path.
+- Dedicated speedrun mode provides per-level PBs, a hundredths timer, 0.45-alpha ghost, checkpoint splits against PB, one-hit auto quick-restart, and its own level picker (`speedrun.js`).
+- Final performance measurements still require representative physical devices; the diagnostics above make that pass repeatable without changing the build.
 
 ---
 

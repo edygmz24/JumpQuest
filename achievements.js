@@ -14,6 +14,12 @@ const ACHIEVEMENTS = [
     { id: 'untouchable',    name: 'Untouchable',     desc: 'Complete a level without getting hit',     icon: '\u{1F6E1}', hidden: false },
     { id: 'air_master',     name: 'Air Master',      desc: 'Perform 5 wall jumps in one level',       icon: '\u{1F4A8}', hidden: false },
     { id: 'dash_master',    name: 'Dash Master',     desc: 'Dash 50 times total',                     icon: '\u{1F3C3}', hidden: false },
+    { id: 'wave_rider',     name: 'Wave Rider',      desc: 'Perform your first wavedash',             icon: '\u{1F30A}', hidden: false },
+    { id: 'wave_master',    name: 'Wave Master',     desc: 'Perform 25 wavedashes total',             icon: '\u{1F3C4}', hidden: false },
+    { id: 'ground_control', name: 'Ground Control',  desc: 'Land your first ground pound',            icon: '\u{1F4AB}', hidden: false },
+    { id: 'seismic',        name: 'Seismic',         desc: 'Land 25 ground pounds total',             icon: '\u{1F30B}', hidden: false },
+    { id: 'in_the_zone',    name: 'In the Zone',     desc: 'Reach the HOT flow tier',                 icon: '\u{1F525}', hidden: false },
+    { id: 'flow_state',     name: 'Flow State',      desc: 'Reach the ON FIRE flow tier',             icon: '\u{26A1}',  hidden: false },
 
     // Cumulative achievements
     { id: 'coin_collector', name: 'Coin Collector',  desc: 'Collect 100 coins total',                 icon: '\u{1FA99}', hidden: false },
@@ -69,6 +75,9 @@ function initStats() {
             totalDeaths: 0,
             totalPlayTime: 0,
             maxCombo: 0,
+            totalWavedashes: 0,
+            totalGroundPounds: 0,
+            highestFlowTier: 0,
             levelsCompleted: [],
             wallJumpsThisLevel: 0,
             deathsThisLevel: 0
@@ -78,6 +87,7 @@ function initStats() {
     const defaults = {
         totalCoins: 0, totalStomps: 0, totalDashes: 0, totalWallJumps: 0,
         totalDeaths: 0, totalPlayTime: 0, maxCombo: 0,
+        totalWavedashes: 0, totalGroundPounds: 0, highestFlowTier: 0,
         levelsCompleted: [], wallJumpsThisLevel: 0, deathsThisLevel: 0
     };
     for (const key in defaults) {
@@ -275,6 +285,12 @@ function checkAchievements(scene) {
     if (jqStats.totalDashes >= 50) {
         unlockAchievement(scene, 'dash_master');
     }
+    if (jqStats.totalWavedashes >= 1)  unlockAchievement(scene, 'wave_rider');
+    if (jqStats.totalWavedashes >= 25) unlockAchievement(scene, 'wave_master');
+    if (jqStats.totalGroundPounds >= 1)  unlockAchievement(scene, 'ground_control');
+    if (jqStats.totalGroundPounds >= 25) unlockAchievement(scene, 'seismic');
+    if (jqStats.highestFlowTier >= 1) unlockAchievement(scene, 'in_the_zone');
+    if (jqStats.highestFlowTier >= 2) unlockAchievement(scene, 'flow_state');
 
     // --- Cumulative achievements ---
 
@@ -313,6 +329,34 @@ function checkAchievements(scene) {
     }
 
     // Wrong Way and Patience are checked via updateAchievementTimers()
+}
+
+// --- Phase 6 movement/flow hooks ---
+
+function recordWavedash(scene) {
+    if (!jqStats) initStats();
+    jqStats.totalWavedashes++;
+    saveStats();
+    unlockAchievement(scene, 'wave_rider');
+    if (jqStats.totalWavedashes >= 25) unlockAchievement(scene, 'wave_master');
+}
+
+function recordGroundPound(scene) {
+    if (!jqStats) initStats();
+    jqStats.totalGroundPounds++;
+    saveStats();
+    unlockAchievement(scene, 'ground_control');
+    if (jqStats.totalGroundPounds >= 25) unlockAchievement(scene, 'seismic');
+}
+
+function recordFlowTier(scene, tier) {
+    if (!jqStats) initStats();
+    if (tier > jqStats.highestFlowTier) {
+        jqStats.highestFlowTier = tier;
+        saveStats();
+    }
+    if (tier >= 1) unlockAchievement(scene, 'in_the_zone');
+    if (tier >= 2) unlockAchievement(scene, 'flow_state');
 }
 
 // --- Per-frame timer updates for secret achievements ---

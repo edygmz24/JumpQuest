@@ -116,6 +116,7 @@ function _onFlowTierChange(scene, newTier, oldTier, playerVisual) {
         showScorePopup(scene, playerVisual.x, playerVisual.y - 40, label, color);
         spawnParticles(scene, playerVisual.x, playerVisual.y, newTier >= 2 ? 0xff6622 : 0xffaa22, 10, 55);
         playSound('powerup');
+        if (typeof recordFlowTier === 'function') recordFlowTier(scene, newTier);
     }
 
     // Glow only at the top tier, and only where postFX exists (WebGL)

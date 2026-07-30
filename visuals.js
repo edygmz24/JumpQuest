@@ -27,19 +27,114 @@ let lowFxMode = false;
 let shadowPool = [];
 let weatherParticles = [];
 let foregroundLayers = [];
+let performanceText = null;
+let _perfSampleElapsed = 0;
+let _perfSampleFrames = 0;
+let _perfWarmupElapsed = 0;
+let _perfLowWindows = 0;
+let _perfOverlayElapsed = 0;
+let _perfForcedLowFx = null;
 
 function resetVisualState() {
     shadowPool = [];
     weatherParticles = [];
     foregroundLayers = [];
     lowFxMode = false;
+    performanceText = null;
+    _perfSampleElapsed = 0;
+    _perfSampleFrames = 0;
+    _perfWarmupElapsed = 0;
+    _perfLowWindows = 0;
+    _perfOverlayElapsed = 0;
+    _perfForcedLowFx = null;
 }
 
 function detectLowFxMode(scene) {
-    // Touch devices are the common weak case; the FPS check catches the rest
-    // once the level has been running for a moment.
-    lowFxMode = (typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0);
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('lowfx') === '1') _perfForcedLowFx = true;
+    else if (params.get('lowfx') === '0') _perfForcedLowFx = false;
+
+    const touchDevice = typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0;
+    const lowMemory = typeof navigator !== 'undefined' &&
+        typeof navigator.deviceMemory === 'number' && navigator.deviceMemory <= 4;
+    const fewCores = typeof navigator !== 'undefined' &&
+        typeof navigator.hardwareConcurrency === 'number' && navigator.hardwareConcurrency <= 4;
+
+    // Prefer effects on capable touch hardware; two weak-device signals, or an
+    // explicit query override, are required before reducing presentation.
+    lowFxMode = _perfForcedLowFx !== null
+        ? _perfForcedLowFx
+        : ((touchDevice && (lowMemory || fewCores)) || (lowMemory && fewCores));
     return lowFxMode;
+}
+
+function setLowFxMode(scene, enabled) {
+    lowFxMode = !!enabled;
+
+    shadowPool.forEach(entry => {
+        if (entry.img) entry.img.setVisible(!lowFxMode && entry.inUse);
+    });
+    weatherParticles.forEach(entry => {
+        if (entry.obj) entry.obj.setVisible(!lowFxMode);
+    });
+    foregroundLayers.forEach(entry => {
+        if (entry.sprite) entry.sprite.setVisible(!lowFxMode);
+    });
+    if (typeof ambientParticles !== 'undefined') {
+        ambientParticles.forEach(entry => {
+            if (entry.obj) entry.obj.setVisible(!lowFxMode);
+        });
+    }
+    if (lowFxMode && scene.cameras.main.postFX) {
+        scene.cameras.main.postFX.clear();
+    }
+}
+
+function createPerformanceMonitor(scene) {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('fps') !== '1') return;
+
+    performanceText = scene.add.text(790, 590, 'FPS --', {
+        fontSize: '11px',
+        fill: '#9dff9d',
+        fontFamily: 'monospace',
+        align: 'right',
+        backgroundColor: '#000000',
+        padding: { x: 6, y: 4 }
+    }).setOrigin(1, 1).setScrollFactor(0).setDepth(3000);
+}
+
+function updatePerformanceMonitor(scene, delta) {
+    _perfWarmupElapsed += delta;
+    _perfSampleElapsed += delta;
+    _perfOverlayElapsed += delta;
+    _perfSampleFrames++;
+
+    if (performanceText && _perfOverlayElapsed >= 500) {
+        const fps = scene.game.loop.actualFps || (_perfSampleFrames / (_perfSampleElapsed / 1000));
+        const renderer = scene.game.renderer.type === Phaser.CANVAS ? 'Canvas' : 'WebGL';
+        const objects = scene.children && scene.children.list ? scene.children.list.length : 0;
+        performanceText.setText(
+            'FPS ' + Math.round(fps) +
+            '  •  ' + renderer +
+            '  •  FX ' + (lowFxMode ? 'LOW' : 'FULL') +
+            '  •  OBJ ' + objects
+        );
+        performanceText.setColor(fps < 48 ? '#ff8a8a' : (fps < 56 ? '#ffe28a' : '#9dff9d'));
+        _perfOverlayElapsed = 0;
+    }
+
+    // Wait through scene construction/JIT warmup, then require two consecutive
+    // low-FPS windows before reducing effects. Query overrides never adapt.
+    if (_perfSampleElapsed >= 2000) {
+        const averageFps = _perfSampleFrames / (_perfSampleElapsed / 1000);
+        if (_perfForcedLowFx === null && _perfWarmupElapsed >= 5000 && !lowFxMode) {
+            _perfLowWindows = averageFps < 48 ? _perfLowWindows + 1 : 0;
+            if (_perfLowWindows >= 2) setLowFxMode(scene, true);
+        }
+        _perfSampleElapsed = 0;
+        _perfSampleFrames = 0;
+    }
 }
 
 // ========================
@@ -208,7 +303,10 @@ function _placeShadow(scene, x, bottomY, width) {
 }
 
 function updateShadows(scene) {
-    if (lowFxMode) return;
+    if (lowFxMode) {
+        shadowPool.forEach(entry => entry.img.setVisible(false));
+        return;
+    }
     for (let i = 0; i < shadowPool.length; i++) {
         shadowPool[i].inUse = false;
         shadowPool[i].img.setVisible(false);
@@ -358,7 +456,7 @@ function buildForeground(scene, worldWidth, color) {
 }
 
 function updateForeground(scene) {
-    if (!foregroundLayers.length) return;
+    if (lowFxMode || !foregroundLayers.length) return;
     const cam = scene.cameras.main;
     for (let i = 0; i < foregroundLayers.length; i++) {
         const l = foregroundLayers[i];
@@ -403,7 +501,7 @@ function buildWeather(scene, kind) {
 
 // Camera-relative with wraparound, so a fixed pool covers any world width.
 function updateWeather(scene, delta) {
-    if (!weatherParticles.length) return;
+    if (lowFxMode || !weatherParticles.length) return;
     const dt = delta / 1000;
     for (let i = 0; i < weatherParticles.length; i++) {
         const p = weatherParticles[i];
