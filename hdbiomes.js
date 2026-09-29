@@ -5,6 +5,7 @@
 // animated props, ground and platform materials, framing layers, ambient
 // effects and lighting. Painters live in hdscenery.js; hdlook.js assembles.
 //
+// title: shown when an endless run enters the world.
 // coveredSky: the back wall fills the screen, so the sky is never drawn.
 // Layer fields: tex (paints and returns a texture key), y/h (screen band),
 // f (scroll factor), depth, alpha, low (dropped in low-FX mode), drift
@@ -35,6 +36,7 @@ const HD_EARTH = {
 const HD_BIOMES = {
     // ---- Level 1: late-afternoon meadow under snowy peaks ----
     meadow: {
+        title: 'Green Meadows',
         sky: {
             stops: [[0, '#3a78c2'], [0.35, '#74b0e3'], [0.62, '#c3dcea'], [0.78, '#f3dfb4'], [1, '#eed3a0']],
             sun: { x: 640, y: 92, glow: '255,232,176' }
@@ -72,6 +74,7 @@ const HD_BIOMES = {
 
     // ---- Level 2: sunlit desert canyon ----
     canyon: {
+        title: 'Coin Canyon',
         sky: {
             stops: [[0, '#4f7fbf'], [0.4, '#8fb5d8'], [0.68, '#efcfa4'], [1, '#f2b27c']],
             sun: { x: 600, y: 130, r: 40, glow: '255,214,150', haloAlpha: 0.7 }
@@ -108,6 +111,7 @@ const HD_BIOMES = {
 
     // ---- Level 9: the canyon at night, under an aurora ----
     canyonNight: {
+        title: 'Moonlit Canyon',
         sky: {
             stops: [[0, '#02040a'], [0.45, '#081424'], [0.75, '#0f2a2c'], [1, '#173a30']],
             stars: 220,
@@ -146,6 +150,7 @@ const HD_BIOMES = {
 
     // ---- Level 3: crystal cave ----
     cave: {
+        title: 'Crystal Caves',
         sky: { stops: [[0, '#04060b'], [0.5, '#0a1020'], [1, '#10182a']], darkTop: true },
         coveredSky: true,
         clouds: null,
@@ -184,6 +189,7 @@ const HD_BIOMES = {
 
     // ---- Level 4: fortress at sunset ----
     fortress: {
+        title: 'Sunset Fortress',
         sky: {
             stops: [[0, '#1f1236'], [0.3, '#5c2148'], [0.55, '#c9472e'], [0.75, '#f28a38'], [1, '#ffcf70']],
             sun: { x: 560, y: 360, r: 56, glow: '255,190,110', core: '255,236,190', halo: 340, haloAlpha: 0.75 }
@@ -219,6 +225,7 @@ const HD_BIOMES = {
 
     // ---- Levels 5 and 10: moonlit castle ----
     castleNight: {
+        title: 'Moonlit Castle',
         sky: {
             stops: [[0, '#04020b'], [0.45, '#120828'], [0.75, '#26124a'], [1, '#3a1c5e']],
             stars: 200,
@@ -257,6 +264,7 @@ const HD_BIOMES = {
 
     // ---- Level 6: above the clouds ----
     sky: {
+        title: 'Bouncy Clouds',
         sky: {
             stops: [[0, '#2c6ccf'], [0.45, '#7db5ee'], [0.8, '#d4ebfb'], [1, '#f0f8ff']],
             sun: { x: 660, y: 90, glow: '255,244,220' }
@@ -286,6 +294,7 @@ const HD_BIOMES = {
 
     // ---- Level 7: inside the machine ----
     machine: {
+        title: 'The Machine',
         sky: { stops: [[0, '#0b0f15'], [0.6, '#18202b'], [1, '#222c38']], darkTop: true },
         coveredSky: true,
         clouds: null,
@@ -320,6 +329,7 @@ const HD_BIOMES = {
 
     // ---- Level 8: deep jungle ----
     jungle: {
+        title: 'Emerald Jungle',
         sky: { stops: [[0, '#0a2012'], [0.4, '#1c4426'], [0.75, '#4f8a48'], [1, '#86b060']] },
         clouds: null,
         rays: { color: 0xe8ffb0, fromTop: true },

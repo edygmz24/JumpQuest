@@ -136,7 +136,7 @@ function generateEndlessChunk(scene, startX) {
 
         const coin = coins.create(cx, cy, null).setDisplaySize(20, 20).setVisible(false).refreshBody();
         const coinRect = scene.textures.exists('tex_coin')
-            ? scene.add.image(cx, cy, 'tex_coin')
+            ? scene.add.image(cx, cy, artKey('tex_coin'))
             : scene.add.rectangle(cx, cy, 20, 20, 0xffd700);
         coinRects.push({ rect: coinRect, body: coin });
         endlessObjects.push({ body: coin, rect: coinRect, type: 'coin', x: cx });
@@ -181,7 +181,7 @@ function generateEndlessChunk(scene, startX) {
         const enemyTexKey = scene.textures.exists('tex_enemy_' + enemyType)
             ? 'tex_enemy_' + enemyType
             : 'tex_enemy_walker';
-        const enemyRect = scene.add.sprite(ex, ey, enemyTexKey).setDisplaySize(size, height);
+        const enemyRect = scene.add.sprite(ex, ey, artKey(enemyTexKey)).setDisplaySize(size, height);
 
         enemy.setCollideWorldBounds(false);
         enemy.enemyType = enemyType;
@@ -223,7 +223,7 @@ function generateEndlessChunk(scene, startX) {
 
         const spike = obstacles.create(ox, oy, null).setDisplaySize(30, 30).setVisible(false).refreshBody();
         const spikeRect = scene.textures.exists('tex_spike')
-            ? scene.add.image(ox, oy, 'tex_spike')
+            ? scene.add.image(ox, oy, artKey('tex_spike'))
             : scene.add.rectangle(ox, oy, 30, 30, 0xff0000);
         endlessObjects.push({ body: spike, rect: spikeRect, type: 'obstacle', x: ox });
     }
@@ -240,7 +240,7 @@ function generateEndlessChunk(scene, startX) {
         pu.powerUpType = puType;
         let puRect;
         if (scene.textures.exists('tex_gem')) {
-            puRect = scene.add.image(pux, puy, 'tex_gem').setTint(puConfig.color);
+            puRect = scene.add.image(pux, puy, artKey('tex_gem')).setTint(puConfig.color);
         } else {
             puRect = scene.add.rectangle(pux, puy, 25, 25, puConfig.color);
             puRect.setStrokeStyle(2, 0xffffff);

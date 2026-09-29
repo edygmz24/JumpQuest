@@ -1298,20 +1298,25 @@ function hdCloudSurface(ctx, W, top, H, left, right) {
 }
 
 // Short tufts drawn IN FRONT of the player, so feet sink into the grass.
-// Kept under 12px so they never hide what the player is landing on.
-function hdTuftTexture(scene, key, colors, variant) {
-    return hdTexture(scene, key, 28, 14, (ctx, W, H) => {
-        const rnd = hdRandom(300 + variant);
-        for (let i = 0; i < 14; i++) {
-            const x = 4 + rnd() * (W - 8);
-            const bh = 5 + rnd() * 7;
-            const lean = (rnd() - 0.4) * 5;
-            ctx.fillStyle = hdHex(hdMix(colors[0], colors[1], rnd()));
-            ctx.beginPath();
-            ctx.moveTo(x - 1.2, H);
-            ctx.quadraticCurveTo(x + lean * 0.4, H - bh * 0.6, x + lean, H - bh);
-            ctx.quadraticCurveTo(x + lean * 0.4 + 0.6, H - bh * 0.5, x + 1.2, H);
-            ctx.fill();
+// Kept under 12px so they never hide what the player is landing on. One
+// tileable strip covers any length of level, including endless runs.
+function hdTuftStripTexture(scene, key, colors) {
+    return hdTexture(scene, key, 1024, 14, (ctx, W, H) => {
+        const rnd = hdRandom(515);
+        for (let x = 30; x < W - 20; x += 70 + rnd() * 110) {
+            const seed = Math.floor(rnd() * 1e6);
+            const r = hdRandom(seed);
+            for (let i = 0; i < 14; i++) {
+                const bx = x - 10 + r() * 20;
+                const bh = 5 + r() * 7;
+                const lean = (r() - 0.4) * 5;
+                ctx.fillStyle = hdHex(hdMix(colors[0], colors[1], r()));
+                ctx.beginPath();
+                ctx.moveTo(bx - 1.2, H);
+                ctx.quadraticCurveTo(bx + lean * 0.4, H - bh * 0.6, bx + lean, H - bh);
+                ctx.quadraticCurveTo(bx + lean * 0.4 + 0.6, H - bh * 0.5, bx + 1.2, H);
+                ctx.fill();
+            }
         }
     });
 }

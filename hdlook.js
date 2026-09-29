@@ -11,6 +11,8 @@
 // Canvas 2D API and cached as textures, so it works in both renderers and
 // needs no image files.
 //
+// Endless mode tours every world, switching every 400m.
+//
 // Add ?look=classic to the URL to compare against the original art.
 
 let hdLookActive = false;
@@ -33,9 +35,7 @@ let hdNextShootingStar = 0;
 
 function shouldUseHdLook() {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('look') === 'classic') return false;
-    if (typeof endlessMode !== 'undefined' && endlessMode) return false;
-    return true;
+    return params.get('look') !== 'classic';
 }
 
 // Swaps a classic texture key for its HD counterpart when one exists.
@@ -577,44 +577,102 @@ function hdPlayerTextures(scene) {
 // ========================
 // Scene assembly
 // ========================
+// Scenery (everything that belongs to a world: sky, layers, props, ground,
+// framing, atmosphere, lighting) is built by hdBuildScenery and can be torn
+// down and rebuilt, which is how endless mode moves from world to world.
+// The rig, goal, glows and boss skin live outside it.
+
+const HD_LOOP_TILE = 1024;       // how far a looping strip jumps when it recycles
+const HD_ENDLESS_WORLD_PX = 4000; // endless: a new world every 400m
+const HD_ENDLESS_ORDER = ['meadow', 'canyon', 'jungle', 'sky', 'fortress', 'cave', 'machine', 'castleNight', 'canyonNight'];
+
+let hdScenery = [];        // objects owned by the current world
+let hdStrips = [];         // endless: tiled strips that recycle as the camera moves
+let hdLoopers = [];        // sprites that wrap around (clouds, props, overhangs)
+let hdEndlessWorld = 0;
+let hdEndlessNextX = 0;
+let hdWarmJobs = [];       // endless: textures for the next world, painted a few per frame
+let hdSwitching = false;
+const hdWorldKeys = {};    // endless: texture keys each world painted, for release
+
+function hdEndless() {
+    return typeof endlessMode !== 'undefined' && endlessMode;
+}
 
 function hdResetState() {
     hdRig = null;
     hdCoinGlows = [];
-    hdParticles = [];
-    hdCritters = [];
-    hdDrifters = [];
-    hdOptional = [];
-    hdDarkness = null;
     hdGoal = null;
     hdBoss = null;
     hdBubbles = [];
     hdGlowFollowers = [];
+    hdResetSceneryState();
+    hdScenery = [];
+    hdEndlessWorld = 0;
+    hdEndlessNextX = 0;
+    hdWarmJobs = [];
+    hdSwitching = false;
+}
+
+function hdResetSceneryState() {
+    hdParticles = [];
+    hdCritters = [];
+    hdDrifters = [];
+    hdOptional = [];
+    hdStrips = [];
+    hdLoopers = [];
+    hdDarkness = null;
     hdNextShootingStar = 0;
 }
 
-// A tiled strip that scrolls with the camera at `factor`, sized so it always
-// covers the view without per-frame repositioning.
+// A tiled strip that scrolls with the camera at `factor`. In a level it is
+// simply sized to cover the whole world; in endless mode the world has no
+// end, so it is one screen plus a margin wide and recycles itself as the
+// camera moves (see hdUpdateStrips).
 function hdLayer(scene, key, y, height, factor, depth, alpha) {
-    const worldW = currentLevel.worldWidth;
-    const width = Math.ceil(800 + Math.max(0, worldW - 800) * factor) + 4;
+    const width = hdEndless()
+        ? 800 + HD_LOOP_TILE * 2
+        : Math.ceil(800 + Math.max(0, currentLevel.worldWidth - 800) * factor) + 4;
     const strip = scene.add.tileSprite(0, y, width, height, key).setOrigin(0, 0);
     strip.setScrollFactor(factor, 0).setDepth(depth);
+    strip.hdDrift = 0;
     if (alpha !== undefined) strip.setAlpha(alpha);
+    if (hdEndless()) hdStrips.push({ strip: strip, f: factor });
     return strip;
 }
 
-// Builds the sky, parallax, props, weather, lighting and ground for the
-// current level's world. Called from loadLevel in place of the classic
-// backdrop.
+// Keeps a looping strip under the camera. Moving the strip and its tile
+// offset by the same amount leaves every texel where it was on screen.
+function hdUpdateStrips(scene) {
+    const scrollX = scene.cameras.main.scrollX;
+    hdStrips.forEach(s => {
+        const want = Math.floor((scrollX * s.f - HD_LOOP_TILE / 2) / HD_LOOP_TILE) * HD_LOOP_TILE;
+        if (s.strip.x !== want) s.strip.x = want;
+        s.strip.tilePositionX = s.strip.x + s.strip.hdDrift;
+    });
+}
+
+// Sprites spread over `span` at scroll factor f wrap around once they leave
+// the screen, so a handful of them cover any distance.
+function hdLoop(obj, f, span, vx) {
+    hdLoopers.push({ obj: obj, f: f, span: span, vx: vx || 0, margin: Math.max(obj.displayWidth, 60) / 2 + 20 });
+}
+
+function hdUpdateLoopers(scene, dt, running) {
+    const scrollX = scene.cameras.main.scrollX;
+    hdLoopers.forEach(l => {
+        if (running) l.obj.x += l.vx * dt;
+        const sx = l.obj.x - scrollX * l.f;
+        if (sx < -l.margin) l.obj.x += l.span;
+        else if (sx > l.span - l.margin) l.obj.x -= l.span;
+    });
+}
+
+// Builds the look for the current level. Called from loadLevel in place of
+// the classic backdrop.
 function buildHdLook(scene) {
     hdLookActive = true;
     hdResetState();
-    hdBiomeName = hdBiomeFor(currentLevel);
-    hdBiome = HD_BIOMES[hdBiomeName];
-    const recipe = hdBiome;
-    const worldW = currentLevel.worldWidth;
-    const low = typeof lowFxMode !== 'undefined' && lowFxMode;
 
     hdGlowTexture(scene);
     hdRayTexture(scene);
@@ -624,14 +682,37 @@ function buildHdLook(scene) {
     hdBossPartTextures(scene);
     hdPlayerTextures(scene);
 
+    // Endless runs start in the meadow and tour every world
+    hdBuildScenery(scene, hdEndless() ? HD_ENDLESS_ORDER[0] : hdBiomeFor(currentLevel));
+    if (hdEndless()) {
+        hdEndlessNextX = HD_ENDLESS_WORLD_PX;
+        hdQueueWarmup(scene, HD_ENDLESS_ORDER[1]);
+    }
+
+    scene.events.on('postupdate', hdPostUpdate, scene);
+    scene.events.once('shutdown', () => {
+        scene.events.off('postupdate', hdPostUpdate, scene);
+        hdLookActive = false;
+        hdResetState();
+    });
+}
+
+function hdBuildScenery(scene, name) {
+    hdBiomeName = name;
+    hdBiome = HD_BIOMES[name];
+    const recipe = hdBiome;
+    const low = typeof lowFxMode !== 'undefined' && lowFxMode;
+    const before = new Set(scene.children.list);
+    const texBefore = new Set(game.textures.getTextureKeys());
+
     // Sky (with sun or moon baked in) stays fixed: it is "infinitely" far
     // away. Worlds whose back wall covers the whole screen skip it.
     if (!recipe.coveredSky) {
-        scene.add.image(0, 0, hdSkyTexture(scene, 'hd_sky_' + hdBiomeName, recipe.sky))
+        scene.add.image(0, 0, hdSkyTexture(scene, 'hd_sky_' + name, recipe.sky))
             .setOrigin(0, 0).setScrollFactor(0).setDepth(-40);
     }
 
-    const rnd = hdRandom(2024 + currentLevelIndex);
+    const rnd = hdRandom(2024 + currentLevelIndex + HD_ENDLESS_ORDER.indexOf(name));
     if (recipe.clouds) hdBuildClouds(scene, recipe.clouds, rnd, low);
 
     // Parallax stack, far to near
@@ -644,46 +725,30 @@ function buildHdLook(scene) {
     if (recipe.rays && !low) hdBuildRays(scene, recipe);
 
     // Ground: one continuous strip, surface at y=560
-    scene.add.tileSprite(0, 560 - HD_GROUND_LIP, worldW, 600 - 560 + HD_GROUND_LIP,
-        hdGroundTexture(scene, 'hd_ground_' + hdBiomeName, recipe.ground))
-        .setOrigin(0, 0).setDepth(-3);
-
-    // Soft shadows cast onto the ground by the floating platforms
-    if (currentLevel.platforms && scene.textures.exists('tex_shadow')) {
-        const strength = recipe.light ? 0.6 : 1;
-        currentLevel.platforms.forEach(p => {
-            const height = 560 - (p.y + p.height / 2);
-            if (height <= 0 || height > 260 || p.width < 40) return;
-            const t = 1 - height / 260;
-            scene.add.image(p.x - 12 - height * 0.08, 562, 'tex_shadow')
-                .setScale(p.width / 40, 0.9).setAlpha((0.18 + t * 0.3) * strength).setDepth(-1);
-        });
-    }
+    hdLayer(scene, hdGroundTexture(scene, 'hd_ground_' + name, recipe.ground),
+        560 - HD_GROUND_LIP, 600 - 560 + HD_GROUND_LIP, 1, -3);
 
     // Grass tufts in front of the player, so feet sink into the grass
     if (recipe.tufts) {
-        for (let i = 0; i < 3; i++) hdTuftTexture(scene, 'hd_tuft_' + hdBiomeName + '_' + i, recipe.tufts, i);
-        const trnd = hdRandom(515);
-        for (let x = 30 + trnd() * 60; x < worldW; x += 70 + trnd() * 110) {
-            const tuft = scene.add.image(x, 562, 'hd_tuft_' + hdBiomeName + '_' + Math.floor(trnd() * 3))
-                .setOrigin(0.5, 1).setDepth(11).setFlipX(trnd() < 0.5);
-            hdOptional.push(tuft);
-        }
+        const key = hdTuftStripTexture(scene, 'hd_tufts_' + name, recipe.tufts);
+        hdOptional.push(hdLayer(scene, key, 562 - 14, 14, 1, 11));
     }
 
     // Depth of field: a blurred strip along the bottom and out-of-focus
     // shapes hanging into the top of the frame
     if (!low && recipe.foreground) {
-        const key = hdForegroundTexture(scene, 'hd_fg_' + hdBiomeName, recipe.foreground);
+        const key = hdForegroundTexture(scene, 'hd_fg_' + name, recipe.foreground);
         hdOptional.push(hdLayer(scene, key, 556, 46, 1.3, 70, 0.95));
     }
     if (!low && recipe.overhang) {
         const key = hdOverhangTexture(scene, 'hd_overhang_' + recipe.overhang, recipe.overhang);
-        const reach = 800 + Math.max(0, worldW - 800) * 1.25;
-        for (let x = 900, i = 0; x < reach; x += 1300 + rnd() * 900, i++) {
+        const reach = hdEndless() ? 3900 : 800 + Math.max(0, currentLevel.worldWidth - 800) * 1.25;
+        const start = hdEndless() ? scene.cameras.main.scrollX * 1.25 + 900 : 900;
+        for (let x = start, i = 0; x < start + reach - 900; x += 1300 + rnd() * 600, i++) {
             const b = scene.add.image(x, -8, key).setOrigin(0.5, 0)
                 .setScrollFactor(1.25, 0).setDepth(70).setFlipX(i % 2 === 1).setAlpha(0.95);
             hdOptional.push(b);
+            if (hdEndless()) hdLoop(b, 1.25, reach);
         }
     }
 
@@ -691,8 +756,8 @@ function buildHdLook(scene) {
 
     // Dark worlds: everything away from the player falls into shadow
     if (recipe.light && recipe.light.darkness) {
-        hdDarkness = scene.add.image(0, 0, 'hd_darkness').setScale(8, 6.5)
-            .setDepth(65).setAlpha(recipe.light.darkness);
+        hdDarkness = scene.add.image(player ? player.x : 0, player ? player.y : 0, 'hd_darkness')
+            .setScale(8, 6.5).setDepth(65).setAlpha(recipe.light.darkness);
     }
 
     // Vignette, WebGL only (same cost as the classic look's)
@@ -702,32 +767,143 @@ function buildHdLook(scene) {
         cam.postFX.addVignette(0.5, 0.5, 0.95, recipe.light ? 0.4 : 0.28);
     }
 
-    scene.events.on('postupdate', hdPostUpdate, scene);
-    scene.events.once('shutdown', () => {
-        scene.events.off('postupdate', hdPostUpdate, scene);
-        hdLookActive = false;
-        hdResetState();
+    hdScenery = scene.children.list.filter(o => !before.has(o));
+    hdNoteWorldKeys(name, texBefore);
+    if (hdEndless()) hdUpdateStrips(scene);
+}
+
+// Remembers which textures a world painted (endless only), so they can be
+// released when the run moves on
+function hdNoteWorldKeys(name, texBefore) {
+    if (!hdEndless()) return;
+    const set = hdWorldKeys[name] || (hdWorldKeys[name] = new Set());
+    game.textures.getTextureKeys().forEach(k => { if (!texBefore.has(k)) set.add(k); });
+}
+
+// Endless: frees the world just left. Anything the new world shares or that
+// is still on screen stays; the next lap paints the rest again ahead of time.
+function hdReleaseWorld(scene, oldName, newName) {
+    const used = new Set();
+    scene.children.list.forEach(o => {
+        if (o.texture) used.add(o.texture.key);
+        if (o.displayTexture) used.add(o.displayTexture.key);
     });
+    const keep = hdWorldKeys[newName] || new Set();
+    const oldPlat = 'hd_plat_' + HD_BIOMES[oldName].platform.name + '_';
+    const samePlat = HD_BIOMES[oldName].platform.name === HD_BIOMES[newName].platform.name;
+    const candidates = new Set(hdWorldKeys[oldName] || []);
+    if (!samePlat) game.textures.getTextureKeys().forEach(k => { if (k.startsWith(oldPlat)) candidates.add(k); });
+    candidates.forEach(k => {
+        if (used.has(k) || keep.has(k) || !game.textures.exists(k)) return;
+        game.textures.remove(k);
+    });
+    delete hdWorldKeys[oldName];
+}
+
+function hdTeardownScenery(scene) {
+    hdScenery.forEach(o => {
+        scene.tweens.killTweensOf(o);
+        o.destroy();
+    });
+    hdScenery = [];
+    hdResetSceneryState();
+}
+
+// Endless: swap worlds under a quick flash, restyle the platforms already
+// on screen, name the new world, and start painting the one after it.
+function hdSwitchWorld(scene, name) {
+    if (hdSwitching) return;
+    hdSwitching = true;
+    const flash = scene.add.rectangle(400, 300, 800, 600, 0xffffff, 1)
+        .setScrollFactor(0).setDepth(80).setAlpha(0);
+    scene.tweens.add({
+        targets: flash, alpha: 0.9, duration: 140, ease: 'Sine.easeIn',
+        onComplete: () => {
+            if (!hdLookActive) { flash.destroy(); return; }
+            const oldName = hdBiomeName;
+            hdTeardownScenery(scene);
+            hdBuildScenery(scene, name);
+            hdRestylePlatforms(scene);
+            hdReleaseWorld(scene, oldName, name);
+            // Below the HUD and tutorial hints
+            const title = scene.add.text(400, 225, hdBiome.title, {
+                fontSize: '26px', fill: '#ffffff', fontStyle: 'bold', stroke: '#000', strokeThickness: 5
+            }).setOrigin(0.5).setScrollFactor(0).setDepth(95).setAlpha(0);
+            scene.tweens.add({
+                targets: title, alpha: 1, y: 215, duration: 400, hold: 1400, yoyo: true,
+                onComplete: () => title.destroy()
+            });
+            scene.tweens.add({
+                targets: flash, alpha: 0, duration: 500, ease: 'Sine.easeOut',
+                onComplete: () => { flash.destroy(); hdSwitching = false; }
+            });
+            const next = HD_ENDLESS_ORDER[(hdEndlessWorld + 1) % HD_ENDLESS_ORDER.length];
+            hdQueueWarmup(scene, next);
+        }
+    });
+}
+
+// Every platform image remembers its size, so it can be redrawn in the new
+// world's material without touching its physics body
+function hdRestylePlatforms(scene) {
+    scene.children.list.forEach(o => {
+        if (!o.hdPlat) return;
+        const p = o.hdPlat;
+        o.setTexture(hdPlatformTexture(scene, p.w, p.h, p.variant, hdBiome.platform, p.crumbling));
+    });
+}
+
+// Queue the next world's textures so they are ready before the switch. Each
+// job paints one texture; hdPostUpdate runs one per frame.
+function hdQueueWarmup(scene, name) {
+    const r = HD_BIOMES[name];
+    const jobs = [];
+    if (!r.coveredSky) jobs.push(() => hdSkyTexture(scene, 'hd_sky_' + name, r.sky));
+    if (r.clouds) for (let i = 0; i < 3; i++) jobs.push(() => hdCloudTexture(scene, i, r.clouds.pal));
+    r.layers.forEach(L => jobs.push(() => L.tex(scene)));
+    (r.props || []).forEach(p => {
+        if (p.kind === 'gear') jobs.push(() => hdGearTexture(scene, 'hd_gear_' + p.radius + '_' + p.color.toString(16), p.radius, p.color));
+        if (p.kind === 'island') jobs.push(() => hdIslandTexture(scene, 'hd_island'));
+    });
+    jobs.push(() => hdGroundTexture(scene, 'hd_ground_' + name, r.ground));
+    if (r.tufts) jobs.push(() => hdTuftStripTexture(scene, 'hd_tufts_' + name, r.tufts));
+    if (r.foreground) jobs.push(() => hdForegroundTexture(scene, 'hd_fg_' + name, r.foreground));
+    if (r.overhang) jobs.push(() => hdOverhangTexture(scene, 'hd_overhang_' + r.overhang, r.overhang));
+    // Record what each job paints, so the world can be released later
+    hdWarmJobs = jobs.map(job => () => {
+        const texBefore = new Set(game.textures.getTextureKeys());
+        job();
+        hdNoteWorldKeys(name, texBefore);
+    });
+}
+
+function hdUpdateEndless(scene) {
+    if (hdWarmJobs.length) hdWarmJobs.shift()();
+    if (!player || hdSwitching || player.x < hdEndlessNextX) return;
+    hdEndlessNextX += HD_ENDLESS_WORLD_PX;
+    hdEndlessWorld++;
+    hdSwitchWorld(scene, HD_ENDLESS_ORDER[hdEndlessWorld % HD_ENDLESS_ORDER.length]);
 }
 
 function hdBuildClouds(scene, c, rnd, low) {
     for (let i = 0; i < 3; i++) hdCloudTexture(scene, i, c.pal);
-    const worldW = currentLevel.worldWidth;
+    const worldW = hdEndless() ? 4000 : currentLevel.worldWidth;
     const count = low ? 3 : Math.max(4, Math.floor(worldW / c.per));
     const stretch = c.stretch || [1, 1];
+    const scrollX = scene.cameras.main.scrollX;
     for (let i = 0; i < count; i++) {
         const far = i % 2 === 0;
         const factor = far ? 0.03 + rnd() * 0.03 : 0.08 + rnd() * 0.06;
-        const x = (i + rnd() * 0.6) / count * (800 + worldW * factor);
+        // Spread across at least a screen and a half so wrapping never pops
+        // a cloud into view
+        const span = Math.max(1800, 800 + worldW * factor);
+        const x = scrollX * factor + (i + rnd() * 0.6) / count * span - 300;
         const y = c.y[0] + rnd() * (c.y[1] - c.y[0]);
         const scale = far ? 0.45 + rnd() * 0.25 : 0.65 + rnd() * 0.35;
         const cloud = scene.add.image(x, y, 'hd_cloud_' + c.pal + '_' + (i % 3))
             .setScale(scale * stretch[0], scale * stretch[1]).setAlpha(far ? 0.75 : 0.95)
             .setScrollFactor(factor, 0).setDepth(far ? -38 : -36);
-        scene.tweens.add({
-            targets: cloud, x: x + 30 + rnd() * 50, duration: 14000 + rnd() * 10000,
-            yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
-        });
+        hdLoop(cloud, factor, span, -(2 + rnd() * 4));
     }
 }
 
@@ -739,9 +915,10 @@ function hdBuildRays(scene, recipe) {
         ? [[120, -0.25, 1.4, 0.12], [330, -0.2, 1.6, 0.09], [560, -0.3, 1.3, 0.11], [740, -0.22, 1.5, 0.08]]
         : [[sun.x, 0.66, 1.3, 0.1], [sun.x, 0.9, 1.5, 0.08], [sun.x, 1.14, 1.2, 0.07]];
     rays.forEach(([x, angle, len, alpha], i) => {
+        // Screen-fixed: they belong to the light source, not the ground
         const ray = scene.add.image(x, recipe.rays.fromTop ? -20 : sun.y, 'hd_ray')
             .setOrigin(0.5, 0).setRotation(angle).setScale(1 + i * 0.2, len)
-            .setScrollFactor(recipe.rays.fromTop ? 0.1 : 0.02, 0).setDepth(-29)
+            .setScrollFactor(0).setDepth(-29)
             .setBlendMode(Phaser.BlendModes.ADD).setAlpha(alpha).setTint(recipe.rays.color);
         scene.tweens.add({
             targets: ray, alpha: alpha * 0.35, duration: 3500 + i * 900,
@@ -755,12 +932,14 @@ function hdBuildRays(scene, recipe) {
 // lights, torches, turning gears and drifting islands
 function hdBuildProps(scene, p, rnd, low) {
     if (low && p.kind !== 'torch') return;
-    const worldW = currentLevel.worldWidth;
-    const reach = 800 + Math.max(0, worldW - 800) * p.f;
+    const endless = hdEndless();
+    const reach = endless ? 2400 : 800 + Math.max(0, currentLevel.worldWidth - 800) * p.f;
+    const start = endless ? scene.cameras.main.scrollX * p.f - 200 : 0;
+    const loop = obj => { if (endless) hdLoop(obj, p.f, reach); };
     let key = null;
     if (p.kind === 'gear') key = hdGearTexture(scene, 'hd_gear_' + p.radius + '_' + p.color.toString(16), p.radius, p.color);
     if (p.kind === 'island') key = hdIslandTexture(scene, 'hd_island');
-    for (let x = 60 + rnd() * p.spacing[0]; x < reach; x += p.spacing[0] + rnd() * (p.spacing[1] - p.spacing[0])) {
+    for (let x = start + 60 + rnd() * p.spacing[0]; x < start + reach; x += p.spacing[0] + rnd() * (p.spacing[1] - p.spacing[0])) {
         const y = p.y[0] + rnd() * (p.y[1] - p.y[0]);
         if (p.kind === 'glow') {
             const tint = p.tint[Math.floor(rnd() * p.tint.length)];
@@ -773,18 +952,23 @@ function hdBuildProps(scene, p, rnd, low) {
                 scene.tweens.add({ targets: g, alpha: p.alpha * 0.4, scale: s * 0.85, duration: 1600 + rnd() * 1400, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
             }
             hdOptional.push(g);
+            loop(g);
         } else if (p.kind === 'torch') {
-            scene.add.image(x, y, 'hd_torch').setScrollFactor(p.f, 0).setDepth(p.depth);
+            const torch = scene.add.image(x, y, 'hd_torch').setScrollFactor(p.f, 0).setDepth(p.depth);
             const g = scene.add.image(x, y - 12, 'hd_glow').setScale(0.9).setTint(0xff9a3a)
                 .setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.7).setScrollFactor(p.f, 0).setDepth(66);
             scene.tweens.add({ targets: g, alpha: 0.45, scale: 0.8, duration: 90 + rnd() * 120, yoyo: true, repeat: -1, repeatDelay: rnd() * 200 });
+            loop(torch);
+            loop(g);
         } else if (p.kind === 'gear') {
             const gear = scene.add.image(x, y, key).setScrollFactor(p.f, 0).setDepth(p.depth);
             scene.tweens.add({ targets: gear, angle: rnd() < 0.5 ? 360 : -360, duration: 9000 + p.radius * 120, repeat: -1 });
+            loop(gear);
         } else if (p.kind === 'island') {
             const s = p.scale[0] + rnd() * (p.scale[1] - p.scale[0]);
             const isl = scene.add.image(x, y, key).setScale(s).setAlpha(p.alpha).setScrollFactor(p.f, 0).setDepth(p.depth);
             scene.tweens.add({ targets: isl, y: y - 10, duration: 3000 + rnd() * 2000, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+            loop(isl);
         }
     }
 }
@@ -792,7 +976,7 @@ function hdBuildProps(scene, p, rnd, low) {
 // Screen-space atmosphere. Each particle kind moves by its own rule in
 // hdUpdateParticles; the level's weather setting adds to the recipe.
 function hdBuildAmbient(scene, fx, rnd, low) {
-    const weather = (currentLevel.theme || {}).weather;
+    const weather = hdEndless() ? null : (currentLevel.theme || {}).weather;
     const f = Object.assign({}, fx);
     if (weather === 'embers' && !f.embers && !f.sparks) f.embers = true;
     if (weather === 'snow') f.snow = true;
@@ -869,8 +1053,12 @@ function hdBuildAmbient(scene, fx, rnd, low) {
         }
     }
     if (f.butterflies) {
+        // World-space, each circling a home spot; in endless the homes hop
+        // ahead of the camera as it passes them
+        const from = hdEndless() ? scene.cameras.main.scrollX : 0;
+        const spread = hdEndless() ? 1600 : currentLevel.worldWidth - 500;
         for (let i = 0; i < 4; i++) {
-            const hx = 300 + (i / 4) * (currentLevel.worldWidth - 500) + rnd() * 200;
+            const hx = from + 300 + (i / 4) * spread + rnd() * 200;
             const b = scene.add.image(hx, 520, hdButterflyTexture(scene, f.butterflies[i % f.butterflies.length]))
                 .setDepth(4).setScale(0.9);
             hdCritters.push({ kind: 'butterfly', obj: b, hx: hx, hy: 505 + rnd() * 30, t: rnd() * 100, seed: rnd() * 10 });
@@ -889,7 +1077,6 @@ function hdBuildAmbient(scene, fx, rnd, low) {
 
 // Called after coins, checkpoints, the flag and the start text exist
 function decorateHdLevel(scene) {
-    coinRects.forEach(c => hdAttachCoinGlow(scene, c.rect));
     checkpointRects.forEach(cp => {
         // The banner is part of the classic image, so the pole stays under it
         // and only its length adapts to the surface below
@@ -909,34 +1096,63 @@ function decorateHdLevel(scene) {
     // Hidden platforms: world-styled art that fades in with the classic
     // rectangle (which keeps driving the reveal)
     (typeof invisiblePlatforms !== 'undefined' ? invisiblePlatforms : []).forEach(ip => {
-        ip.hdImg = hdTerrainBlock(scene, ip.x, ip.y, ip.width, ip.height, 0, false)[0];
+        ip.hdImg = hdTerrainBlock(scene, ip.x, ip.y, ip.width, ip.height, 0, false, 'hidden')[0];
         ip.hdImg.setAlpha(ip.rect.alpha);
         ip.rect.setVisible(false);
     });
     hdBuildGoal(scene);
 }
 
-function hdAttachCoinGlow(scene, rect) {
-    if (!rect) return;
-    const glow = scene.add.image(rect.x, rect.y, 'hd_glow')
-        .setScale(0.42).setTint(0xffcf4a).setBlendMode(Phaser.BlendModes.ADD)
-        .setAlpha(0.5).setDepth(rect.depth - 0.1);
-    hdCoinGlows.push({ glow: glow, rect: rect });
+// Coins get a glow as soon as they exist, including ones spawned later
+// (endless chunks, crates)
+function hdAttachCoinGlows(scene) {
+    coinRects.forEach(c => {
+        const rect = c.rect;
+        if (!rect || !rect.scene || rect.hdGlowAttached) return;
+        rect.hdGlowAttached = true;
+        const glow = scene.add.image(rect.x, rect.y, 'hd_glow')
+            .setScale(0.42).setTint(0xffcf4a).setBlendMode(Phaser.BlendModes.ADD)
+            .setAlpha(0.5).setDepth(rect.depth - 0.1);
+        hdCoinGlows.push({ glow: glow, rect: rect });
+    });
 }
 
 // Replaces drawTerrainBlock while the HD look is active. Ground blocks
 // return nothing: one continuous strip covers the whole floor instead.
+// Floating platforms come back with the soft shadow they cast on the ground,
+// so anything that fades or destroys a block's parts handles both.
 function hdTerrainBlock(scene, x, y, w, h, color, isGround, kind) {
     if (isGround) return [];
+    // Endless mode rolls random sizes; rounding them (more coarsely there)
+    // lets platforms share textures. Level platforms already sit on 10/4 px
+    // steps, so they are drawn exactly.
+    const step = hdEndless() ? 20 : 10;
+    const qw = Math.max(20, Math.round(w / step) * step);
+    const qh = hdEndless() ? 20 : Math.max(8, Math.round(h / 4) * 4);
     const variant = Math.abs(Math.round(x * 7 + y * 13)) % 3;
-    const key = hdPlatformTexture(scene, w, h, variant, hdBiome.platform, kind === 'crumbling');
+    const crumbling = kind === 'crumbling';
+    const key = hdPlatformTexture(scene, qw, qh, variant, hdBiome.platform, crumbling);
     const img = scene.add.image(x, y, key);
     img.setOrigin(
-        (HD_PLAT_PAD_X + w / 2) / (w + HD_PLAT_PAD_X * 2),
-        (HD_PLAT_PAD_TOP + h / 2) / (h + HD_PLAT_PAD_TOP + HD_PLAT_PAD_BOTTOM)
+        (HD_PLAT_PAD_X + qw / 2) / (qw + HD_PLAT_PAD_X * 2),
+        (HD_PLAT_PAD_TOP + qh / 2) / (qh + HD_PLAT_PAD_TOP + HD_PLAT_PAD_BOTTOM)
     );
+    if (qw !== w || qh !== h) img.setScale(w / qw, h / qh);
     img.setDepth(typeof DEPTH_TERRAIN !== 'undefined' ? DEPTH_TERRAIN : -2);
-    return [img];
+    img.hdPlat = { w: qw, h: qh, variant: variant, crumbling: crumbling };
+    const parts = [img];
+
+    // Crumbling blocks shake by repositioning their parts, and hidden ones
+    // must not give themselves away, so neither casts a shadow
+    const height = 560 - (y + h / 2);
+    if (!crumbling && kind !== 'hidden' && w >= 40 && height > 0 && height <= 260 &&
+        scene.textures.exists('tex_shadow')) {
+        const t = 1 - height / 260;
+        const strength = hdBiome.light ? 0.6 : 1;
+        parts.push(scene.add.image(x - 12 - height * 0.08, 562, 'tex_shadow')
+            .setScale(w / 40, 0.9).setAlpha((0.18 + t * 0.3) * strength).setDepth(-1));
+    }
+    return parts;
 }
 
 // ========================
@@ -1145,6 +1361,9 @@ function hdPostUpdate() {
     }
 
     if (hdDarkness && player) hdDarkness.setPosition(player.x, player.y - 10);
+    if (hdStrips.length) hdUpdateStrips(scene);
+    hdUpdateLoopers(scene, dt, running);
+    hdAttachCoinGlows(scene);
 
     // Coin glows follow their coin; the coin darkens as it turns edge-on
     hdCoinGlows = hdCoinGlows.filter(cg => {
@@ -1178,7 +1397,11 @@ function hdPostUpdate() {
     });
 
     if (!running) return;
-    hdDrifters.forEach(d => { d.strip.tilePositionX += dt * d.speed; });
+    if (hdEndless()) hdUpdateEndless(scene);
+    hdDrifters.forEach(d => {
+        d.strip.hdDrift += dt * d.speed;
+        d.strip.tilePositionX = d.strip.x + d.strip.hdDrift;
+    });
     hdUpdateCritters(scene, dt);
     if (!low) hdUpdateParticles(scene, dt);
 }
@@ -1332,6 +1555,7 @@ function hdUpdateCritters(scene, dt) {
             if (c.obj.x < -20) { c.obj.x = 820; c.baseY = 110 + Math.random() * 100; }
         } else if (c.kind === 'butterfly') {
             c.t += dt;
+            if (hdEndless() && c.hx < scene.cameras.main.scrollX - 300) c.hx += 1600;
             const x = c.hx + Math.sin(c.t * 0.7 + c.seed) * 60 + Math.sin(c.t * 1.9) * 14;
             const y = c.hy + Math.sin(c.t * 1.3 + c.seed * 2) * 22 + Math.sin(c.t * 4.1) * 5;
             c.obj.setFlipX(x < c.obj.x);
