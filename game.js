@@ -651,9 +651,10 @@ function generateGameTextures(scene) {
     });
 }
 
-// The HD look (hdlook.js) swaps in its own art for some textures
-function artKey(key) {
-    return typeof hdTextureKey === 'function' ? hdTextureKey(key) : key;
+// The HD look (hdlook.js) swaps in its own art for some textures. Sized
+// textures (moving planks) pass their size so nothing is stretched.
+function artKey(key, w, h) {
+    return typeof hdTextureKey === 'function' ? hdTextureKey(key, w, h) : key;
 }
 
 // Draws a platform/ground block as an extruded 2.5D solid, baked into a
@@ -661,9 +662,9 @@ function artKey(key) {
 // of game objects so they can fade or destroy a block as a unit.
 //
 // Falls back to the original flat rectangles if visuals.js is absent.
-function drawTerrainBlock(scene, x, y, w, h, color, isGround) {
+function drawTerrainBlock(scene, x, y, w, h, color, isGround, kind) {
     if (typeof hdLookActive !== 'undefined' && hdLookActive) {
-        return hdTerrainBlock(scene, x, y, w, h, color, isGround);
+        return hdTerrainBlock(scene, x, y, w, h, color, isGround, kind);
     }
     if (typeof placeTerrainBlock === 'function') {
         // A few variants per size keep repeated ground sections from looking
@@ -1057,7 +1058,7 @@ function loadLevel(levelIndex) {
     obstacles = this.physics.add.staticGroup();
     currentLevel.obstacles.forEach(obstacle => {
         obstacles.create(obstacle.x, obstacle.y, null).setDisplaySize(30, 30).setVisible(false).refreshBody();
-        this.add.image(obstacle.x, obstacle.y, 'tex_spike');
+        this.add.image(obstacle.x, obstacle.y, artKey('tex_spike'));
     });
 
     // Coins from level data
@@ -1230,7 +1231,7 @@ function loadLevel(levelIndex) {
             if (!config) return;
             const pu = powerUps.create(puData.x, puData.y, null).setDisplaySize(25, 25).setVisible(false).refreshBody();
             pu.powerUpType = puData.type;
-            const puRect = this.add.image(puData.x, puData.y, 'tex_gem').setTint(config.color);
+            const puRect = this.add.image(puData.x, puData.y, artKey('tex_gem')).setTint(config.color);
             powerUpRects.push({ rect: puRect, body: pu });
         });
     }
@@ -1243,7 +1244,7 @@ function loadLevel(levelIndex) {
             const h = bbData.height || 40;
             const bb = breakableBlocks.create(bbData.x, bbData.y, null).setDisplaySize(w, h).setVisible(false).refreshBody();
             bb.contains = bbData.contains || null;
-            const bbRect = this.add.image(bbData.x, bbData.y, 'tex_crate').setDisplaySize(w, h);
+            const bbRect = this.add.image(bbData.x, bbData.y, artKey('tex_crate')).setDisplaySize(w, h);
             breakableBlockRects.push({ rect: bbRect, body: bb, x1: null, x2: null });
         });
     }
@@ -1267,7 +1268,7 @@ function loadLevel(levelIndex) {
             const w = cp.width || 90;
             const h = cp.height || 20;
             const body = platforms.create(cp.x, cp.y, null).setDisplaySize(w, h).setVisible(false).refreshBody();
-            const parts = drawTerrainBlock(this, cp.x, cp.y, w, h, shadeColor(platformColor, -0.15), false);
+            const parts = drawTerrainBlock(this, cp.x, cp.y, w, h, shadeColor(platformColor, -0.15), false, 'crumbling');
             crumblingPlatforms.push({
                 body: body, parts: parts, x: cp.x, y: cp.y, w: w, h: h,
                 state: 'solid', timer: 0
@@ -1303,13 +1304,13 @@ function loadLevel(levelIndex) {
         currentLevel.timedGates.forEach(gate => {
             const gh = gate.height || 90;
             const body = platforms.create(gate.x, gate.y, null).setDisplaySize(30, gh).setVisible(false).refreshBody();
-            const rect = this.add.image(gate.x, gate.y, 'tex_gate').setDisplaySize(30, gh).setDepth(5);
+            const rect = this.add.image(gate.x, gate.y, artKey('tex_gate')).setDisplaySize(30, gh).setDepth(5);
             timedGates.push({ id: gate.id, body: body, rect: rect, open: false, timer: 0, x: gate.x, y: gate.y });
         });
     }
     if (currentLevel.keys) {
         currentLevel.keys.forEach(k => {
-            const rect = this.add.image(k.x, k.y, 'tex_key').setDepth(6);
+            const rect = this.add.image(k.x, k.y, artKey('tex_key')).setDepth(6);
             levelKeys.push({ id: k.opens, rect: rect, x: k.x, y: k.y, taken: false, baseY: k.y });
         });
     }
@@ -1386,7 +1387,7 @@ function loadLevel(levelIndex) {
             spu.powerUpType = spuData.type;
             spu.setAlpha(0);
             spu.body.enable = false;
-            const spuRect = this.add.image(spuData.x, spuData.y, 'tex_gem').setTint(puConfig.color);
+            const spuRect = this.add.image(spuData.x, spuData.y, artKey('tex_gem')).setTint(puConfig.color);
             spuRect.setAlpha(0);
             powerUpRects.push({ rect: spuRect, body: spu });
             secretPowerUpRects.push({ rect: spuRect, body: spu, trigger: spuData.revealTrigger, revealed: false });
@@ -1434,7 +1435,7 @@ function loadLevel(levelIndex) {
             platform.body.setImmovable(true);
             platform.body.setAllowGravity(false);
 
-            const rect = this.add.image(mp.x, mp.y, artKey('tex_plank')).setDisplaySize(mp.width, mp.height);
+            const rect = this.add.image(mp.x, mp.y, artKey('tex_plank', mp.width, mp.height)).setDisplaySize(mp.width, mp.height);
 
             movingPlatforms.push({
                 sprite: platform,
@@ -3749,7 +3750,7 @@ function breakBlock(block) {
     } else if (contains && POWERUP_TYPES[contains]) {
         const pu = powerUps.create(bx, by - 30, null).setDisplaySize(25, 25).setVisible(false).refreshBody();
         pu.powerUpType = contains;
-        const puRect = this.add.image(bx, by - 30, 'tex_gem').setTint(POWERUP_TYPES[contains].color);
+        const puRect = this.add.image(bx, by - 30, artKey('tex_gem')).setTint(POWERUP_TYPES[contains].color);
         powerUpRects.push({ rect: puRect, body: pu });
     }
 }

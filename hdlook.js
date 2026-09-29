@@ -1,44 +1,50 @@
 // ========================
-// HD look — prototype presentation for Level 1
+// HD look — richer presentation for every level
 // ========================
-// A richer art pass that sits entirely on the presentation side, like
+// A code-drawn art pass that sits entirely on the presentation side, like
 // visuals.js. Physics bodies, level data and tuning are untouched: every
 // object here either replaces a texture or follows an existing visual.
 //
-// Everything is drawn in code with the Canvas 2D API (gradients, curves,
-// soft blur), then cached as textures, so it works in both renderers and
+// Files: hdlook.js (assembly, player rig, per-frame animation),
+// hdscenery.js (painters), hdbiomes.js (one recipe per world) and
+// hdcreatures.js (enemies, boss, hazards). Everything is drawn with the
+// Canvas 2D API and cached as textures, so it works in both renderers and
 // needs no image files.
 //
-// Active on Level 1 only. Add ?look=classic to the URL to compare against
-// the original art.
+// Add ?look=classic to the URL to compare against the original art.
 
 let hdLookActive = false;
+let hdBiome = null;        // the current world's recipe from hdbiomes.js
+let hdBiomeName = null;
 
 // Everything animated per frame, rebuilt on every level load
 let hdRig = null;
 let hdCoinGlows = [];
-let hdButterflies = [];
-let hdBirds = [];
-let hdMotes = [];
-let hdLeaves = [];
-let hdMist = null;
-let hdOptional = [];      // decoration hidden when low-FX mode kicks in
+let hdParticles = [];      // screen-space ambient particles
+let hdCritters = [];       // butterflies, birds and bats
+let hdDrifters = [];       // layers that drift sideways (mist)
+let hdOptional = [];       // decoration hidden when low-FX mode kicks in
+let hdDarkness = null;
+let hdGoal = null;
+let hdBoss = null;
+let hdBubbles = [];
+let hdGlowFollowers = [];
+let hdNextShootingStar = 0;
 
-// Late-afternoon palette. The sun sits upper-right, so every lit face in
-// every texture leans that way.
-const HD_SUN = { x: 640, y: 92 };
-const HD_HORIZON = '#f3dfb4';
-
-function shouldUseHdLook(levelIndex) {
+function shouldUseHdLook() {
     const params = new URLSearchParams(window.location.search);
     if (params.get('look') === 'classic') return false;
     if (typeof endlessMode !== 'undefined' && endlessMode) return false;
-    return levelIndex === 0;
+    return true;
 }
 
 // Swaps a classic texture key for its HD counterpart when one exists.
-function hdTextureKey(key) {
+// Moving planks pass their size and get a texture drawn to fit it.
+function hdTextureKey(key, w, h) {
     if (!hdLookActive) return key;
+    if (key === 'tex_plank' && w && h) {
+        return hdPlankTexture(game.scene.scenes[0], w, h, hdBiome.plank || 'wood');
+    }
     return game.textures.exists('hd_' + key) ? 'hd_' + key : key;
 }
 
@@ -75,7 +81,8 @@ function hdRgba(c, a) {
 
 // Draws into a cached canvas texture. `blur` softens the result by drawing at
 // reduced resolution and scaling back up, which works on every browser
-// (ctx.filter is not universal).
+// (ctx.filter is not universal). Painters that write pixels directly must
+// not use it: putImageData ignores the scale.
 function hdTexture(scene, key, w, h, draw, blur) {
     if (scene.textures.exists(key)) return key;
     const tex = scene.textures.createCanvas(key, w, h);
@@ -133,693 +140,35 @@ function hdSoftDot(ctx, x, y, r, color, alpha) {
     ctx.fillRect(x - r, y - r, r * 2, r * 2);
 }
 
-// ========================
-// Scenery textures
-// ========================
-
-// Sky with the sun and its halo baked in. The sun is far enough away that
-// it would barely move with the camera anyway, and one full-screen image is
-// much cheaper to draw than a stack of large additive glows.
-function hdSkyTexture(scene) {
-    return hdTexture(scene, 'hd_sky', 800, 600, (ctx, w, h) => {
-        const g = ctx.createLinearGradient(0, 0, 0, h);
-        g.addColorStop(0, '#3a78c2');
-        g.addColorStop(0.35, '#74b0e3');
-        g.addColorStop(0.62, '#c3dcea');
-        g.addColorStop(0.78, HD_HORIZON);
-        g.addColorStop(1, '#eed3a0');
-        ctx.fillStyle = g;
-        ctx.fillRect(0, 0, w, h);
-        ctx.globalCompositeOperation = 'lighter';
-        const halo = ctx.createRadialGradient(HD_SUN.x, HD_SUN.y, 0, HD_SUN.x, HD_SUN.y, 300);
-        halo.addColorStop(0, 'rgba(255,244,210,0.6)');
-        halo.addColorStop(0.1, 'rgba(255,232,176,0.35)');
-        halo.addColorStop(0.35, 'rgba(255,214,140,0.1)');
-        halo.addColorStop(1, 'rgba(255,200,120,0)');
-        ctx.fillStyle = halo;
-        ctx.fillRect(0, 0, w, h);
-        ctx.globalCompositeOperation = 'source-over';
-        const sun = ctx.createRadialGradient(HD_SUN.x, HD_SUN.y, 0, HD_SUN.x, HD_SUN.y, 36);
-        sun.addColorStop(0, 'rgba(255,255,250,1)');
-        sun.addColorStop(0.55, 'rgba(255,250,225,1)');
-        sun.addColorStop(0.72, 'rgba(255,236,170,0.55)');
-        sun.addColorStop(1, 'rgba(255,230,160,0)');
-        ctx.fillStyle = sun;
-        ctx.fillRect(HD_SUN.x - 36, HD_SUN.y - 36, 72, 72);
-    });
-}
-
-function hdGlowTexture(scene) {
-    return hdTexture(scene, 'hd_glow', 128, 128, (ctx) => {
-        const g = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
-        g.addColorStop(0, 'rgba(255,255,255,1)');
-        g.addColorStop(0.25, 'rgba(255,255,255,0.45)');
-        g.addColorStop(0.6, 'rgba(255,255,255,0.1)');
-        g.addColorStop(1, 'rgba(255,255,255,0)');
-        ctx.fillStyle = g;
-        ctx.fillRect(0, 0, 128, 128);
-    });
-}
-
-// One soft beam, reused at several angles for the god rays
-function hdRayTexture(scene) {
-    hdTexture(scene, 'hd_ray', 64, 512, (ctx) => {
-        const across = ctx.createLinearGradient(0, 0, 64, 0);
-        across.addColorStop(0, 'rgba(255,240,200,0)');
-        across.addColorStop(0.5, 'rgba(255,240,200,1)');
-        across.addColorStop(1, 'rgba(255,240,200,0)');
-        ctx.fillStyle = across;
-        ctx.fillRect(0, 0, 64, 512);
-        ctx.globalCompositeOperation = 'destination-in';
-        const along = ctx.createLinearGradient(0, 0, 0, 512);
-        along.addColorStop(0, 'rgba(0,0,0,0.9)');
-        along.addColorStop(0.5, 'rgba(0,0,0,0.35)');
-        along.addColorStop(1, 'rgba(0,0,0,0)');
-        ctx.fillStyle = along;
-        ctx.fillRect(0, 0, 64, 512);
-    }, 2);
-}
-
-// Cumulus: puffs scattered under a dome-shaped envelope, kept nearly flat
-// white individually, then shaded as one mass (bright sunlit top, cool
-// underside) so the cloud reads as a single volume rather than a stack of
-// outlined circles.
-function hdCloudTexture(scene, variant) {
-    const key = 'hd_cloud_' + variant;
-    return hdTexture(scene, key, 300, 130, (ctx, w, h) => {
-        const rnd = hdRandom(900 + variant * 31);
-        const base = 104;
-        const puffs = [];
-        for (let i = 0; i < 34; i++) {
-            const t = rnd();
-            const x = 36 + t * 228;
-            const dome = Math.sin(t * Math.PI);
-            const r = 10 + dome * (14 + rnd() * 16);
-            const y = base - r * 0.55 - dome * rnd() * 34;
-            puffs.push({ x: x, y: y, r: r });
-        }
-        puffs.sort((a, b) => b.y - a.y);
-        puffs.forEach(p => {
-            const g = ctx.createRadialGradient(p.x + p.r * 0.3, p.y - p.r * 0.35, 0, p.x, p.y, p.r);
-            g.addColorStop(0, '#ffffff');
-            g.addColorStop(0.8, '#f6f6f4');
-            g.addColorStop(1, '#e9ecf1');
-            ctx.fillStyle = g;
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-            ctx.fill();
-        });
-        ctx.fillStyle = '#e9ecf1';
-        ctx.beginPath();
-        ctx.ellipse(150, base - 4, 118, 9, 0, 0, Math.PI * 2);
-        ctx.fill();
-        // Shade the whole mass: warm sunlit top, cool flat underside
-        ctx.globalCompositeOperation = 'source-atop';
-        const mass = ctx.createLinearGradient(0, 20, 0, base + 6);
-        mass.addColorStop(0, 'rgba(255,240,210,0.35)');
-        mass.addColorStop(0.45, 'rgba(255,255,255,0)');
-        mass.addColorStop(0.8, 'rgba(150,165,195,0.28)');
-        mass.addColorStop(1, 'rgba(120,138,172,0.5)');
-        ctx.fillStyle = mass;
-        ctx.fillRect(0, 0, w, h);
-        const side = ctx.createLinearGradient(0, 0, w, 0);
-        side.addColorStop(0, 'rgba(120,138,172,0.18)');
-        side.addColorStop(0.6, 'rgba(120,138,172,0)');
-        ctx.fillStyle = side;
-        ctx.fillRect(0, 0, w, h);
-        ctx.globalCompositeOperation = 'source-over';
-    }, 2);
-}
-
-// Mountain range, shaded per pixel. Each ridge point is lit by its slope
-// (faces descending to the right face the sun), and that light spreads
-// diagonally downhill, so faces fan out from the peaks as they would on real
-// rock. Snow collects on gentle high ground; haze fades the base into the
-// horizon (atmospheric perspective).
-function hdMountainTexture(scene, key, opts) {
-    const W = 1024;
-    const H = opts.height;
-    return hdTexture(scene, key, W, H, (ctx) => {
-        const ridge = hdRidge(opts.seed, W, true);
-        const soft = hdRidge(opts.seed + 7, W, false);
-        const heights = new Float32Array(W);
-        for (let x = 0; x < W; x++) {
-            const v = ridge(x) * 0.65 + soft(x) * 0.35;
-            heights[x] = opts.base - (v * 0.5 + 0.5) * opts.amp;
-        }
-        const faceLight = new Float32Array(W);
-        const steepness = new Float32Array(W);
-        for (let x = 0; x < W; x++) {
-            const slope = (heights[(x + 3) % W] - heights[(x - 3 + W) % W]) / 6;
-            faceLight[x] = Math.max(0, Math.min(1, 0.45 + slope * 1.6));
-            steepness[x] = Math.min(1, Math.abs(slope) * 0.9);
-        }
-        const rgb = c => [(c >> 16) & 255, (c >> 8) & 255, c & 255];
-        const lit = rgb(opts.lit), shade = rgb(opts.shade), haze = rgb(opts.haze);
-        const snowLit = rgb(0xfbfcff), snowShade = rgb(0xbfcadf);
-        const hazeTop = opts.base - opts.amp;
-        const wrap = x => ((Math.round(x) % W) + W) % W;
-        const img = ctx.createImageData(W, H);
-        const d = img.data;
-        for (let x = 0; x < W; x++) {
-            const top = heights[x];
-            for (let y = Math.max(0, Math.floor(top)); y < H; y++) {
-                const below = y - top;
-                const cover = Math.max(0, Math.min(1, below + 1));
-                const spread = below * 0.75;
-                const fanned = (faceLight[wrap(x - spread)] + faceLight[wrap(x + spread)]) * 0.5;
-                const settle = Math.min(1, below / 110);
-                const grain = Math.sin(x * 0.9 + y * 0.35) * Math.sin(y * 1.3 - x * 0.27) * 0.05;
-                const light = fanned + (0.45 - fanned) * settle + grain;
-                let r = shade[0] + (lit[0] - shade[0]) * light;
-                let g = shade[1] + (lit[1] - shade[1]) * light;
-                let b = shade[2] + (lit[2] - shade[2]) * light;
-                if (opts.snowLine) {
-                    const patch = Math.sin(x * 0.061 + y * 0.09) * Math.sin(x * 0.023 - y * 0.071);
-                    const amt = Math.max(0, Math.min(1, (opts.snowLine - y) / 14 + patch * 0.9)) *
-                        (1 - steepness[x] * 0.6);
-                    if (amt > 0) {
-                        r += (snowShade[0] + (snowLit[0] - snowShade[0]) * light - r) * amt;
-                        g += (snowShade[1] + (snowLit[1] - snowShade[1]) * light - g) * amt;
-                        b += (snowShade[2] + (snowLit[2] - snowShade[2]) * light - b) * amt;
-                    }
-                }
-                const h = Math.max(0, Math.min(1, (y - hazeTop) / (H - hazeTop))) * opts.hazeAlpha;
-                const i = (y * W + x) * 4;
-                d[i] = r + (haze[0] - r) * h;
-                d[i + 1] = g + (haze[1] - g) * h;
-                d[i + 2] = b + (haze[2] - b) * h;
-                d[i + 3] = cover * 255;
-            }
-        }
-        ctx.putImageData(img, 0, 0);
-    });
-}
-
-// Canopy blob with a lit crown and a shaded underside
-function hdCanopy(ctx, x, y, r, lit, shade, rnd) {
-    const g = ctx.createRadialGradient(x + r * 0.35, y - r * 0.4, r * 0.1, x, y, r);
-    g.addColorStop(0, hdHex(lit));
-    g.addColorStop(1, hdHex(shade));
-    ctx.fillStyle = g;
+function hdStar(ctx, cx, cy, outer, inner) {
     ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
-    ctx.fill();
-    // Leaf clumps break up the perfect circle
-    const clumps = Math.floor(r / 3);
-    for (let i = 0; i < clumps; i++) {
-        const a = rnd() * Math.PI * 2;
-        const d = r * (0.6 + rnd() * 0.35);
-        const cr = r * (0.18 + rnd() * 0.14);
-        const up = Math.sin(a) < 0 && Math.cos(a) > -0.3;
-        ctx.fillStyle = hdHex(up ? hdMix(lit, 0xffffff, 0.08) : hdMix(shade, lit, 0.3));
-        ctx.beginPath();
-        ctx.arc(x + Math.cos(a) * d, y + Math.sin(a) * d, cr, 0, Math.PI * 2);
-        ctx.fill();
+    for (let i = 0; i < 10; i++) {
+        const r = i % 2 ? inner : outer;
+        const a = -Math.PI / 2 + i * Math.PI / 5;
+        if (i === 0) ctx.moveTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r);
+        else ctx.lineTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r);
     }
-}
-
-// A low bush: a row of overlapping clumps, wider than tall
-function hdBush(ctx, x, y, r, lit, shade, rnd) {
-    const n = 3 + Math.floor(rnd() * 3);
-    for (let i = 0; i < n; i++) {
-        const t = n === 1 ? 0.5 : i / (n - 1);
-        const cr = r * (0.55 + Math.sin(t * Math.PI) * 0.45);
-        hdCanopy(ctx, x + (t - 0.5) * r * 2.4, y - Math.sin(t * Math.PI) * r * 0.35, cr, lit, shade, rnd);
-    }
-}
-
-function hdTree(ctx, x, groundY, size, lit, shade, trunk, rnd) {
-    const trunkH = size * 0.9;
-    const tg = ctx.createLinearGradient(x - size * 0.08, 0, x + size * 0.08, 0);
-    tg.addColorStop(0, hdHex(hdMix(trunk, 0x000000, 0.35)));
-    tg.addColorStop(1, hdHex(trunk));
-    ctx.fillStyle = tg;
-    ctx.beginPath();
-    ctx.moveTo(x - size * 0.09, groundY);
-    ctx.quadraticCurveTo(x - size * 0.04, groundY - trunkH * 0.5, x - size * 0.05, groundY - trunkH);
-    ctx.lineTo(x + size * 0.05, groundY - trunkH);
-    ctx.quadraticCurveTo(x + size * 0.05, groundY - trunkH * 0.5, x + size * 0.1, groundY);
     ctx.closePath();
     ctx.fill();
-    const cy = groundY - trunkH - size * 0.25;
-    hdCanopy(ctx, x - size * 0.28, cy + size * 0.12, size * 0.38, lit, shade, rnd);
-    hdCanopy(ctx, x + size * 0.3, cy + size * 0.1, size * 0.36, lit, shade, rnd);
-    hdCanopy(ctx, x, cy - size * 0.12, size * 0.46, lit, shade, rnd);
 }
 
-function hdRollingHills(ctx, W, H, opts) {
-    const f = hdRidge(opts.seed, W, false);
-    const heights = new Float32Array(W);
-    for (let x = 0; x < W; x++) heights[x] = opts.base - (f(x) * 0.5 + 0.5) * opts.amp;
-    for (let x = 0; x < W; x++) {
-        const y = heights[x];
-        const slope = (heights[(x + 4) % W] - heights[(x - 4 + W) % W]) / 8;
-        const light = Math.max(0, Math.min(1, 0.5 + slope * 2.2));
-        const g = ctx.createLinearGradient(0, y, 0, H);
-        g.addColorStop(0, hdHex(hdMix(opts.shade, opts.lit, light)));
-        g.addColorStop(1, hdHex(opts.deep));
-        ctx.fillStyle = g;
-        ctx.fillRect(x, y, 2, H - y);
-    }
-    return heights;
-}
-
-function hdFarForestTexture(scene) {
-    return hdTexture(scene, 'hd_far_forest', 1024, 200, (ctx, W, H) => {
-        const rnd = hdRandom(4401);
-        const heights = hdRollingHills(ctx, W, H, {
-            seed: 77, base: 120, amp: 60, lit: 0x86a869, shade: 0x5d8156, deep: 0x5b7f58
-        });
-        // Dense tree line hugging the crest
-        for (let x = 0; x < W; x += 5 + rnd() * 7) {
-            const top = heights[Math.floor(x) % W];
-            const r = 6 + rnd() * 9;
-            hdWrap(W, off => hdCanopy(ctx, x + off, top + r * 0.4, r, 0x7a9d62, 0x4a6e4a, rnd));
-        }
-        ctx.globalCompositeOperation = 'source-atop';
-        const haze = ctx.createLinearGradient(0, 40, 0, H);
-        haze.addColorStop(0, 'rgba(214,222,206,0.35)');
-        haze.addColorStop(1, 'rgba(214,222,206,0.15)');
-        ctx.fillStyle = haze;
-        ctx.fillRect(0, 0, W, H);
-        ctx.globalCompositeOperation = 'source-over';
-    }, 1.4);
-}
-
-function hdNearHillsTexture(scene) {
-    return hdTexture(scene, 'hd_near_hills', 1024, 240, (ctx, W, H) => {
-        const rnd = hdRandom(5507);
-        const heights = hdRollingHills(ctx, W, H, {
-            seed: 131, base: 170, amp: 70, lit: 0x8fc158, shade: 0x5c9140, deep: 0x4f8338
-        });
-        // Mown stripes across the meadow catch the low sun
-        ctx.globalCompositeOperation = 'source-atop';
-        for (let i = 0; i < 9; i++) {
-            ctx.fillStyle = i % 2 ? 'rgba(255,255,200,0.05)' : 'rgba(30,60,20,0.05)';
-            ctx.fillRect(0, 120 + i * 14, W, 14);
-        }
-        ctx.globalCompositeOperation = 'source-over';
-        // Scattered trees and bushes standing on the hill line
-        for (let x = 30; x < W; x += 90 + rnd() * 160) {
-            const gy = heights[Math.floor(x) % W] + 6;
-            const size = 34 + rnd() * 30;
-            hdWrap(W, off => hdTree(ctx, x + off, gy, size, 0x9ccb62, 0x3f7236, 0x6b4a2f, rnd));
-        }
-        for (let x = 10; x < W; x += 40 + rnd() * 70) {
-            const gy = heights[Math.floor(x) % W];
-            const r = 5 + rnd() * 6;
-            hdWrap(W, off => hdBush(ctx, x + off, gy + r * 0.9, r, 0x93c35c, 0x467a37, rnd));
-        }
-        // Wildflower specks
-        for (let i = 0; i < 260; i++) {
-            const x = rnd() * W;
-            const top = heights[Math.floor(x) % W];
-            const y = top + 8 + rnd() * (H - top - 8);
-            const c = [0xfff4d0, 0xffd34d, 0xf29bc6, 0xb9a6ff][Math.floor(rnd() * 4)];
-            ctx.fillStyle = hdRgba(c, 0.8);
-            ctx.fillRect(x, y, 1.6, 1.6);
-        }
-    });
-}
-
-// Bushes and tall grass peeking just above the ground line
-function hdBushLineTexture(scene) {
-    return hdTexture(scene, 'hd_bushes', 1024, 110, (ctx, W, H) => {
-        const rnd = hdRandom(6203);
-        for (let x = 0; x < W; x += 40 + rnd() * 70) {
-            const r = 9 + rnd() * 10;
-            hdWrap(W, off => hdBush(ctx, x + off, H - r * 0.5, r, 0x6ea648, 0x2f5a27, rnd));
-        }
-        for (let i = 0; i < 380; i++) {
-            const x = rnd() * W;
-            const bh = 10 + rnd() * 26;
-            const lean = (rnd() - 0.4) * 8;
-            const c = hdMix(0x2e5a24, 0x78b04c, rnd());
-            hdWrap(W, off => {
-                ctx.strokeStyle = hdHex(c);
-                ctx.lineWidth = 1.2;
-                ctx.beginPath();
-                ctx.moveTo(x + off, H);
-                ctx.quadraticCurveTo(x + off + lean * 0.3, H - bh * 0.6, x + off + lean, H - bh);
-                ctx.stroke();
-            });
-        }
-    });
-}
-
-function hdMistTexture(scene) {
-    return hdTexture(scene, 'hd_mist', 1024, 120, (ctx, W) => {
-        const rnd = hdRandom(7717);
-        for (let i = 0; i < 70; i++) {
-            const x = rnd() * W;
-            const y = 50 + (rnd() - 0.5) * 50;
-            const rx = 60 + rnd() * 120;
-            const ry = 12 + rnd() * 16;
-            hdWrap(W, off => {
-                const g = ctx.createRadialGradient(x + off, y, 0, x + off, y, rx);
-                g.addColorStop(0, 'rgba(255,250,238,0.35)');
-                g.addColorStop(1, 'rgba(255,250,238,0)');
-                ctx.fillStyle = g;
-                ctx.save();
-                ctx.translate(x + off, y);
-                ctx.scale(1, ry / rx);
-                ctx.translate(-(x + off), -y);
-                ctx.fillRect(x + off - rx, y - rx, rx * 2, rx * 2);
-                ctx.restore();
-            });
-        }
-    }, 2);
-}
-
-// Grass-topped earth for the main ground. The playable surface is at y=14 in
-// the texture; blades rise above it and sit behind the player.
-const HD_GROUND_LIP = 14;
-
-function hdGroundTexture(scene) {
-    return hdTexture(scene, 'hd_ground', 512, 60, (ctx, W, H) => {
-        const rnd = hdRandom(8101);
-        const top = HD_GROUND_LIP;
-        const dirt = ctx.createLinearGradient(0, top, 0, H);
-        dirt.addColorStop(0, '#7d5733');
-        dirt.addColorStop(0.5, '#5f4027');
-        dirt.addColorStop(1, '#3e2918');
-        ctx.fillStyle = dirt;
-        ctx.fillRect(0, top + 4, W, H - top);
-        // Strata bands
-        for (let i = 0; i < 3; i++) {
-            const y0 = top + 18 + i * 11;
-            ctx.strokeStyle = 'rgba(40,24,12,0.35)';
-            ctx.lineWidth = 1.5;
-            ctx.beginPath();
-            for (let x = 0; x <= W; x += 8) {
-                const y = y0 + Math.sin((x / W) * Math.PI * 2 * (2 + i) + i) * 2;
-                if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-            }
-            ctx.stroke();
-        }
-        // Pebbles, lit from the upper right
-        for (let i = 0; i < 46; i++) {
-            const x = rnd() * W;
-            const y = top + 12 + rnd() * (H - top - 14);
-            const rx = 1.5 + rnd() * 3.5;
-            const ry = rx * (0.55 + rnd() * 0.3);
-            hdWrap(W, off => {
-                ctx.fillStyle = hdHex(hdMix(0x6f6456, 0xa39684, rnd()));
-                ctx.beginPath();
-                ctx.ellipse(x + off, y, rx, ry, 0, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.fillStyle = 'rgba(255,240,210,0.35)';
-                ctx.beginPath();
-                ctx.ellipse(x + off + rx * 0.3, y - ry * 0.35, rx * 0.45, ry * 0.35, 0, 0, Math.PI * 2);
-                ctx.fill();
-            });
-        }
-        // Roots threading through the soil
-        ctx.strokeStyle = 'rgba(52,34,18,0.55)';
-        ctx.lineWidth = 1;
-        for (let i = 0; i < 12; i++) {
-            const x = rnd() * W;
-            hdWrap(W, off => {
-                ctx.beginPath();
-                ctx.moveTo(x + off, top + 6);
-                ctx.bezierCurveTo(x + off + 6, top + 14, x + off - 5, top + 20, x + off + 3, top + 26 + rnd() * 8);
-                ctx.stroke();
-            });
-        }
-        // Turf cap with a ragged edge hanging over the soil
-        const turf = ctx.createLinearGradient(0, top - 2, 0, top + 9);
-        turf.addColorStop(0, '#9bd156');
-        turf.addColorStop(1, '#4d8a2c');
-        ctx.fillStyle = turf;
-        ctx.beginPath();
-        ctx.moveTo(0, top - 2);
-        ctx.lineTo(W, top - 2);
-        ctx.lineTo(W, top + 6);
-        for (let x = W; x >= 0; x -= 6) {
-            const drip = 5 + Math.abs(Math.sin(x * 0.37) * Math.sin(x * 0.11)) * 6;
-            ctx.lineTo(x, top + drip);
-        }
-        ctx.closePath();
-        ctx.fill();
-        // Blades
-        for (let i = 0; i < 520; i++) {
-            const x = rnd() * W;
-            const bh = 4 + rnd() * 10;
-            const lean = (rnd() - 0.35) * 5;
-            const base = hdMix(0x3f7a26, 0x8cc84e, rnd());
-            const tip = hdMix(base, 0xe6f2a0, 0.45);
-            hdWrap(W, off => {
-                const g = ctx.createLinearGradient(0, top + 2, 0, top - bh);
-                g.addColorStop(0, hdHex(base));
-                g.addColorStop(1, hdHex(tip));
-                ctx.fillStyle = g;
-                ctx.beginPath();
-                ctx.moveTo(x + off - 1.1, top + 2);
-                ctx.quadraticCurveTo(x + off + lean * 0.4, top - bh * 0.6, x + off + lean, top - bh);
-                ctx.quadraticCurveTo(x + off + lean * 0.4 + 0.6, top - bh * 0.5, x + off + 1.1, top + 2);
-                ctx.fill();
-            });
-        }
-        // A few flowers on the tips
-        for (let i = 0; i < 14; i++) {
-            const x = rnd() * W;
-            const y = top - 4 - rnd() * 6;
-            const c = [0xffffff, 0xffe066, 0xf6a5d0][Math.floor(rnd() * 3)];
-            hdWrap(W, off => {
-                ctx.fillStyle = hdHex(c);
-                for (let p = 0; p < 5; p++) {
-                    const a = p / 5 * Math.PI * 2;
-                    ctx.beginPath();
-                    ctx.arc(x + off + Math.cos(a) * 1.6, y + Math.sin(a) * 1.6, 1.2, 0, Math.PI * 2);
-                    ctx.fill();
-                }
-                ctx.fillStyle = '#f2b233';
-                ctx.beginPath();
-                ctx.arc(x + off, y, 1, 0, Math.PI * 2);
-                ctx.fill();
-            });
-        }
-    });
-}
-
-// Short tufts drawn IN FRONT of the player, so feet sink into the grass.
-// Kept under 12px so they never hide what the player is landing on.
-function hdTuftTexture(scene, variant) {
-    return hdTexture(scene, 'hd_tuft_' + variant, 28, 14, (ctx, W, H) => {
-        const rnd = hdRandom(300 + variant);
-        for (let i = 0; i < 14; i++) {
-            const x = 4 + rnd() * (W - 8);
-            const bh = 5 + rnd() * 7;
-            const lean = (rnd() - 0.4) * 5;
-            const c = hdMix(0x4a8a2c, 0xa6d964, rnd());
-            ctx.fillStyle = hdHex(c);
-            ctx.beginPath();
-            ctx.moveTo(x - 1.2, H);
-            ctx.quadraticCurveTo(x + lean * 0.4, H - bh * 0.6, x + lean, H - bh);
-            ctx.quadraticCurveTo(x + lean * 0.4 + 0.6, H - bh * 0.5, x + 1.2, H);
-            ctx.fill();
-        }
-    });
-}
-
-// Blurred near-camera grass along the bottom edge: the depth-of-field layer
-function hdForegroundTexture(scene) {
-    return hdTexture(scene, 'hd_foreground', 1024, 46, (ctx, W, H) => {
-        const rnd = hdRandom(9901);
-        ctx.fillStyle = '#1c3314';
-        ctx.fillRect(0, H - 10, W, 10);
-        for (let i = 0; i < 160; i++) {
-            const x = rnd() * W;
-            const bh = 12 + rnd() * 30;
-            const lean = (rnd() - 0.5) * 14;
-            const c = hdMix(0x14260f, 0x2f5423, rnd());
-            hdWrap(W, off => {
-                ctx.fillStyle = hdHex(c);
-                ctx.beginPath();
-                ctx.moveTo(x + off - 3, H);
-                ctx.quadraticCurveTo(x + off + lean * 0.3, H - bh * 0.6, x + off + lean, H - bh);
-                ctx.quadraticCurveTo(x + off + lean * 0.3 + 1, H - bh * 0.5, x + off + 3, H);
-                ctx.fill();
-            });
-        }
-    }, 3);
-}
-
-// Out-of-focus leaves hanging into the top of the frame
-function hdBranchTexture(scene) {
-    return hdTexture(scene, 'hd_branch', 360, 110, (ctx) => {
-        const rnd = hdRandom(1212);
-        ctx.strokeStyle = '#2a1c10';
-        ctx.lineWidth = 7;
-        ctx.beginPath();
-        ctx.moveTo(-10, 8);
-        ctx.quadraticCurveTo(160, 40, 350, 18);
-        ctx.stroke();
-        for (let i = 0; i < 70; i++) {
-            const t = rnd();
-            const x = t * 340;
-            const y = 14 + Math.sin(t * Math.PI) * 26 + rnd() * 50;
-            const r = 8 + rnd() * 12;
-            ctx.fillStyle = hdHex(hdMix(0x13260f, 0x2e5a22, rnd()));
-            ctx.beginPath();
-            ctx.ellipse(x, y, r, r * 0.55, rnd() * Math.PI, 0, Math.PI * 2);
-            ctx.fill();
-        }
-    }, 4);
-}
-
-// ========================
-// Terrain
-// ========================
-
-// Floating earth island. The front face matches the physics rect exactly;
-// only the receding top, grass overhang and thin roots draw outside it.
-const HD_PLAT_PAD_X = 8;
-const HD_PLAT_PAD_TOP = 12;
-const HD_PLAT_PAD_BOTTOM = 22;
-const HD_PLAT_DEPTH = 6;
-
-function hdPlatformTexture(scene, w, h, seed) {
-    const key = `hd_plat_${w}x${h}_${seed}`;
-    const W = w + HD_PLAT_PAD_X * 2;
-    const H = h + HD_PLAT_PAD_TOP + HD_PLAT_PAD_BOTTOM;
-    return hdTexture(scene, key, W, H, (ctx) => {
-        const rnd = hdRandom(seed);
-        const x0 = HD_PLAT_PAD_X;
-        const y0 = HD_PLAT_PAD_TOP;
-        const d = HD_PLAT_DEPTH;
-
-        // Hanging roots and a vine, drawn first so the block covers their tops
-        for (let i = 0; i < Math.max(3, w / 30); i++) {
-            const rx = x0 + 8 + rnd() * (w - 16);
-            const len = 6 + rnd() * 14;
-            ctx.strokeStyle = 'rgba(70,46,26,0.9)';
-            ctx.lineWidth = 1.4;
-            ctx.beginPath();
-            ctx.moveTo(rx, y0 + h - 2);
-            ctx.bezierCurveTo(rx + 3, y0 + h + len * 0.3, rx - 3, y0 + h + len * 0.6, rx + 1, y0 + h + len);
-            ctx.stroke();
-        }
-        const vx = x0 + 10 + rnd() * (w - 20);
-        const vlen = 10 + rnd() * 10;
-        ctx.strokeStyle = '#3f7a2a';
-        ctx.lineWidth = 1.2;
-        ctx.beginPath();
-        ctx.moveTo(vx, y0 + h - 3);
-        ctx.quadraticCurveTo(vx + 4, y0 + h + vlen * 0.5, vx, y0 + h + vlen);
-        ctx.stroke();
-        ctx.fillStyle = '#5fa33b';
-        for (let l = 3; l < vlen; l += 4) {
-            ctx.beginPath();
-            ctx.ellipse(vx + (l % 8 ? 2 : -2), y0 + h + l, 2.2, 1.2, 0.5, 0, Math.PI * 2);
-            ctx.fill();
-        }
-
-        // Receding side face
-        ctx.fillStyle = '#4a3322';
-        ctx.beginPath();
-        ctx.moveTo(x0 + w, y0);
-        ctx.lineTo(x0 + w + d, y0 - d);
-        ctx.lineTo(x0 + w + d, y0 + h - d - 2);
-        ctx.lineTo(x0 + w, y0 + h);
-        ctx.closePath();
-        ctx.fill();
-
-        // Front face: soil and stone
-        const soil = ctx.createLinearGradient(0, y0, 0, y0 + h);
-        soil.addColorStop(0, '#8a6441');
-        soil.addColorStop(1, '#553824');
-        ctx.fillStyle = soil;
-        ctx.beginPath();
-        ctx.moveTo(x0, y0);
-        ctx.lineTo(x0 + w, y0);
-        ctx.lineTo(x0 + w, y0 + h - 4);
-        ctx.quadraticCurveTo(x0 + w, y0 + h, x0 + w - 4, y0 + h);
-        ctx.lineTo(x0 + 4, y0 + h);
-        ctx.quadraticCurveTo(x0, y0 + h, x0, y0 + h - 4);
-        ctx.closePath();
-        ctx.fill();
-        for (let i = 0; i < w / 14; i++) {
-            const sx = x0 + 4 + rnd() * (w - 8);
-            const sy = y0 + 8 + rnd() * Math.max(1, h - 11);
-            const r = 1.5 + rnd() * 2.5;
-            ctx.fillStyle = hdHex(hdMix(0x6b6052, 0x9a8c78, rnd()));
-            ctx.beginPath();
-            ctx.ellipse(sx, sy, r, r * 0.7, 0, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.fillStyle = 'rgba(255,240,210,0.35)';
-            ctx.beginPath();
-            ctx.ellipse(sx + r * 0.3, sy - r * 0.3, r * 0.45, r * 0.3, 0, 0, Math.PI * 2);
-            ctx.fill();
-        }
-        // Soft occlusion along the underside
-        const ao = ctx.createLinearGradient(0, y0 + h - 6, 0, y0 + h);
-        ao.addColorStop(0, 'rgba(20,10,4,0)');
-        ao.addColorStop(1, 'rgba(20,10,4,0.4)');
-        ctx.fillStyle = ao;
-        ctx.fillRect(x0, y0 + h - 6, w, 6);
-
-        // Grass top face, receding up-right
-        const topG = ctx.createLinearGradient(0, y0 - d, 0, y0);
-        topG.addColorStop(0, '#a9d866');
-        topG.addColorStop(1, '#78b545');
-        ctx.fillStyle = topG;
-        ctx.beginPath();
-        ctx.moveTo(x0, y0);
-        ctx.lineTo(x0 + d, y0 - d);
-        ctx.lineTo(x0 + w + d, y0 - d);
-        ctx.lineTo(x0 + w, y0);
-        ctx.closePath();
-        ctx.fill();
-
-        // Turf band over the front face, with a ragged hanging edge
-        const turf = ctx.createLinearGradient(0, y0, 0, y0 + 7);
-        turf.addColorStop(0, '#86c24c');
-        turf.addColorStop(1, '#4a862b');
-        ctx.fillStyle = turf;
-        ctx.beginPath();
-        ctx.moveTo(x0 - 3, y0 - 0.5);
-        ctx.lineTo(x0 + w + 2, y0 - 0.5);
-        for (let x = x0 + w + 2; x >= x0 - 3; x -= 5) {
-            const drip = 4 + Math.abs(Math.sin(x * 0.53 + seed)) * 5;
-            ctx.lineTo(x, y0 + drip);
-        }
-        ctx.closePath();
-        ctx.fill();
-        // Sun-catching rim right at the standing edge
-        ctx.fillStyle = 'rgba(230,255,170,0.7)';
-        ctx.fillRect(x0, y0 - 0.5, w, 1.2);
-
-        // Blades along the top
-        for (let i = 0; i < w / 2.5; i++) {
-            const bx = x0 + rnd() * (w + d);
-            const by = y0 - rnd() * d * 0.8;
-            const bh = 2 + rnd() * 6;
-            const lean = (rnd() - 0.35) * 4;
-            ctx.fillStyle = hdHex(hdMix(0x5c9a34, 0xc2e57f, rnd()));
-            ctx.beginPath();
-            ctx.moveTo(bx - 0.9, by + 1);
-            ctx.quadraticCurveTo(bx + lean * 0.4, by - bh * 0.6, bx + lean, by - bh);
-            ctx.lineTo(bx + 0.9, by + 1);
-            ctx.fill();
-        }
-    });
-}
-
-// Replaces drawTerrainBlock while the HD look is active. Ground blocks
-// return nothing: one continuous strip covers the whole floor instead.
-function hdTerrainBlock(scene, x, y, w, h, color, isGround) {
-    if (isGround) return [];
-    const seed = Math.round(x * 13 + y * 7 + w);
-    const key = hdPlatformTexture(scene, w, h, seed);
-    const img = scene.add.image(x, y, key);
-    img.setOrigin(
-        (HD_PLAT_PAD_X + w / 2) / (w + HD_PLAT_PAD_X * 2),
-        (HD_PLAT_PAD_TOP + h / 2) / (h + HD_PLAT_PAD_TOP + HD_PLAT_PAD_BOTTOM)
-    );
-    img.setDepth(typeof DEPTH_TERRAIN !== 'undefined' ? DEPTH_TERRAIN : -2);
-    return [img];
+// Where a pole-mounted object (goal, checkpoint) should stand: the surface
+// nearest the object's own base, and never far from it, so the art always
+// sits where the trigger actually is. Returns { x, y } with x nudged back
+// onto the surface if the pole would hang just past its edge.
+function hdPoleFooting(x, baseY) {
+    let best = null;
+    const consider = (top, left, right) => {
+        if (Math.abs(top - baseY) > 35) return;
+        if (x < left - 20 || x > right + 20) return;
+        if (!best || Math.abs(top - baseY) < Math.abs(best.top - baseY)) best = { top, left, right };
+    };
+    consider(560, 0, currentLevel.worldWidth);
+    [currentLevel.platforms, currentLevel.secretPlatforms].forEach(list => (list || []).forEach(p => {
+        consider(p.y - p.height / 2, p.x - p.width / 2, p.x + p.width / 2);
+    }));
+    if (!best) return { x: x, y: baseY };
+    return { x: Phaser.Math.Clamp(x, best.left + 6, best.right - 6), y: best.top };
 }
 
 // ========================
@@ -842,7 +191,6 @@ function hdObjectTextures(scene) {
         ctx.beginPath(); ctx.arc(11, 11, 7, 0, Math.PI * 2); ctx.stroke();
         ctx.strokeStyle = 'rgba(255,245,190,0.7)';
         ctx.beginPath(); ctx.arc(11, 11, 7, Math.PI * 1.1, Math.PI * 1.7); ctx.stroke();
-        // Embossed star
         ctx.fillStyle = 'rgba(150,95,10,0.8)';
         hdStar(ctx, 11.6, 11.6, 4.2, 1.8);
         ctx.fillStyle = '#ffeaa0';
@@ -882,65 +230,6 @@ function hdObjectTextures(scene) {
     hdTexture(scene, 'hd_tex_spring', 32, 24, ctx => drawSpring(ctx, false));
     hdTexture(scene, 'hd_tex_spring_compressed', 32, 24, ctx => drawSpring(ctx, true));
 
-    // Moving plank: weathered boards with iron straps and a moss fringe
-    hdTexture(scene, 'hd_tex_plank', 120, 20, (ctx, W, H) => {
-        const rnd = hdRandom(4242);
-        for (let b = 0; b < 3; b++) {
-            const bx = b * 40;
-            const g = ctx.createLinearGradient(0, 0, 0, H);
-            g.addColorStop(0, '#b98a5a'); g.addColorStop(1, '#6e4a2c');
-            ctx.fillStyle = g;
-            ctx.fillRect(bx + 0.5, 0, 39, H);
-            ctx.strokeStyle = 'rgba(70,42,20,0.45)'; ctx.lineWidth = 0.8;
-            for (let i = 0; i < 4; i++) {
-                const gy = 4 + i * 4 + rnd() * 2;
-                ctx.beginPath();
-                ctx.moveTo(bx + 2, gy);
-                ctx.bezierCurveTo(bx + 14, gy + 1.5, bx + 26, gy - 1.5, bx + 38, gy);
-                ctx.stroke();
-            }
-            ctx.fillStyle = 'rgba(40,22,10,0.6)';
-            ctx.fillRect(bx, 0, 1, H);
-        }
-        ctx.fillStyle = 'rgba(255,230,190,0.35)'; ctx.fillRect(0, 0, W, 1.5);
-        [18, 100].forEach(sx => {
-            ctx.fillStyle = '#4a4d55'; ctx.fillRect(sx, 0, 5, H);
-            ctx.fillStyle = '#8d929c'; ctx.fillRect(sx, 0, 1, H);
-            ctx.fillStyle = '#23252b';
-            ctx.fillRect(sx + 1.5, 4, 2, 2); ctx.fillRect(sx + 1.5, 14, 2, 2);
-        });
-        ctx.fillStyle = 'rgba(96,150,60,0.85)';
-        for (let x = 2; x < W; x += 3 + rnd() * 5) {
-            ctx.beginPath(); ctx.arc(x, H - 0.5, 1 + rnd() * 1.4, 0, Math.PI * 2); ctx.fill();
-        }
-    });
-
-    // Goal flag. Same 40x60 footprint as the classic flag (its physics body
-    // comes from the image size); the ground line sits at y=35.
-    hdTexture(scene, 'hd_tex_flag', 40, 60, (ctx) => {
-        ctx.fillStyle = 'rgba(0,0,0,0.25)';
-        ctx.beginPath(); ctx.ellipse(8, 36, 9, 2.2, 0, 0, Math.PI * 2); ctx.fill();
-        const pole = ctx.createLinearGradient(3, 0, 8, 0);
-        pole.addColorStop(0, '#5a3a20'); pole.addColorStop(0.5, '#b88a58'); pole.addColorStop(1, '#6e4a2c');
-        ctx.fillStyle = pole; ctx.fillRect(4, 3, 4, 33);
-        const knob = ctx.createRadialGradient(5, 2, 0.5, 6, 3, 3.5);
-        knob.addColorStop(0, '#fff3b8'); knob.addColorStop(1, '#b8860b');
-        ctx.fillStyle = knob; ctx.beginPath(); ctx.arc(6, 3, 3.2, 0, Math.PI * 2); ctx.fill();
-        // Cloth with two soft folds
-        const cloth = ctx.createLinearGradient(8, 0, 38, 0);
-        cloth.addColorStop(0, '#e0a410'); cloth.addColorStop(0.3, '#ffd23f');
-        cloth.addColorStop(0.55, '#e3a817'); cloth.addColorStop(0.8, '#ffd84f'); cloth.addColorStop(1, '#d3960c');
-        ctx.fillStyle = cloth;
-        ctx.beginPath();
-        ctx.moveTo(8, 5);
-        ctx.quadraticCurveTo(22, 2, 37, 10);
-        ctx.quadraticCurveTo(28, 14, 36, 20);
-        ctx.quadraticCurveTo(22, 17, 8, 22);
-        ctx.closePath(); ctx.fill();
-        ctx.fillStyle = '#fff4c0';
-        hdStar(ctx, 19, 12.5, 3.6, 1.5);
-    });
-
     // Checkpoint: the tinted rect draws only the banner, so the wooden pole
     // (a separate untinted image) keeps its natural colour.
     hdTexture(scene, 'hd_tex_checkpoint', 20, 50, (ctx) => {
@@ -954,14 +243,18 @@ function hdObjectTextures(scene) {
         ctx.quadraticCurveTo(12, 12, 6, 16);
         ctx.closePath(); ctx.fill();
     });
-    hdTexture(scene, 'hd_checkpoint_pole', 20, 50, (ctx) => {
+    hdTexture(scene, 'hd_checkpoint_pole', 8, 64, (ctx) => {
         const pole = ctx.createLinearGradient(2, 0, 6, 0);
         pole.addColorStop(0, '#5a3a20'); pole.addColorStop(0.5, '#a97c4f'); pole.addColorStop(1, '#6e4a2c');
-        ctx.fillStyle = pole; ctx.fillRect(3, 1, 3, 40);
-        ctx.fillStyle = '#8f949e';
-        ctx.beginPath(); ctx.ellipse(4.5, 41, 5, 2.5, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = pole; ctx.fillRect(2.5, 2, 3, 62);
         ctx.fillStyle = '#c9ced8';
-        ctx.beginPath(); ctx.arc(4.5, 1.5, 2, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(4, 2.5, 2.2, 0, Math.PI * 2); ctx.fill();
+    });
+    hdTexture(scene, 'hd_checkpoint_base', 14, 6, (ctx) => {
+        ctx.fillStyle = '#8f949e';
+        ctx.beginPath(); ctx.ellipse(7, 3.5, 6.5, 2.5, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = 'rgba(255,255,255,0.35)';
+        ctx.fillRect(3, 2, 8, 1);
     });
 
     // Wooden start sign
@@ -980,114 +273,179 @@ function hdObjectTextures(scene) {
         ctx.fillText('START', 6, 14.5);
     });
 
-    // Soft round mote / pollen
     hdTexture(scene, 'hd_mote', 16, 16, (ctx) => hdSoftDot(ctx, 8, 8, 8, 0xffffff, 1));
 
-    // Colours are baked in rather than tinted: the Canvas renderer ignores tint
-    ['#9cc45a', '#d9b44a', '#c7783a'].forEach((color, i) => {
-        hdTexture(scene, 'hd_leaf_' + i, 12, 7, (ctx) => {
-            ctx.fillStyle = color;
-            ctx.beginPath();
-            ctx.moveTo(0.5, 3.5);
-            ctx.quadraticCurveTo(6, -1.5, 11.5, 3.5);
-            ctx.quadraticCurveTo(6, 8.5, 0.5, 3.5);
-            ctx.fill();
-            ctx.strokeStyle = 'rgba(0,0,0,0.25)'; ctx.lineWidth = 0.6;
-            ctx.beginPath(); ctx.moveTo(1, 3.5); ctx.lineTo(11, 3.5); ctx.stroke();
-        });
+    // A streak for shooting stars and sparks
+    hdTexture(scene, 'hd_streak', 64, 4, (ctx) => {
+        const g = ctx.createLinearGradient(0, 0, 64, 0);
+        g.addColorStop(0, 'rgba(255,255,255,0)');
+        g.addColorStop(1, 'rgba(255,255,255,1)');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 1, 64, 2);
     });
 
-    ['#ffa24a', '#fff6e0', '#8fb8ff'].forEach((color, i) => {
-        hdTexture(scene, 'hd_butterfly_' + i, 14, 10, (ctx) => {
-            ctx.fillStyle = color;
-            ctx.beginPath(); ctx.ellipse(4, 3.5, 3.8, 3.2, -0.4, 0, Math.PI * 2); ctx.fill();
-            ctx.beginPath(); ctx.ellipse(10, 3.5, 3.8, 3.2, 0.4, 0, Math.PI * 2); ctx.fill();
-            ctx.beginPath(); ctx.ellipse(4.5, 7.2, 2.4, 2, 0.3, 0, Math.PI * 2); ctx.fill();
-            ctx.beginPath(); ctx.ellipse(9.5, 7.2, 2.4, 2, -0.3, 0, Math.PI * 2); ctx.fill();
-            ctx.fillStyle = '#2a2018'; ctx.fillRect(6.5, 2, 1, 7);
-        });
+    hdTexture(scene, 'hd_drip', 3, 8, (ctx) => {
+        ctx.fillStyle = 'rgba(170,220,255,0.85)';
+        ctx.beginPath(); ctx.moveTo(1.5, 0); ctx.quadraticCurveTo(3, 6, 1.5, 8); ctx.quadraticCurveTo(0, 6, 1.5, 0); ctx.fill();
     });
 
-    hdTexture(scene, 'hd_bird', 14, 6, (ctx) => {
-        ctx.strokeStyle = '#3c4658'; ctx.lineWidth = 1.4; ctx.lineCap = 'round';
+    hdTexture(scene, 'hd_bat', 18, 8, (ctx) => {
+        ctx.fillStyle = '#0a0610';
+        ctx.beginPath();
+        ctx.moveTo(9, 3);
+        ctx.quadraticCurveTo(5, -1, 0, 2); ctx.quadraticCurveTo(3, 3, 2, 6); ctx.quadraticCurveTo(6, 4, 9, 6);
+        ctx.quadraticCurveTo(12, 4, 16, 6); ctx.quadraticCurveTo(15, 3, 18, 2); ctx.quadraticCurveTo(13, -1, 9, 3);
+        ctx.fill();
+        ctx.beginPath(); ctx.arc(9, 4.5, 1.8, 0, Math.PI * 2); ctx.fill();
+    });
+
+    hdGoalTextures(scene);
+}
+
+// Colours are baked in rather than tinted: the Canvas renderer ignores tint
+function hdLeafTexture(scene, color) {
+    return hdTexture(scene, 'hd_leaf_' + color.toString(16), 12, 7, (ctx) => {
+        ctx.fillStyle = hdHex(color);
+        ctx.beginPath();
+        ctx.moveTo(0.5, 3.5);
+        ctx.quadraticCurveTo(6, -1.5, 11.5, 3.5);
+        ctx.quadraticCurveTo(6, 8.5, 0.5, 3.5);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(0,0,0,0.25)'; ctx.lineWidth = 0.6;
+        ctx.beginPath(); ctx.moveTo(1, 3.5); ctx.lineTo(11, 3.5); ctx.stroke();
+    });
+}
+
+function hdButterflyTexture(scene, color) {
+    return hdTexture(scene, 'hd_butterfly_' + color.toString(16), 14, 10, (ctx) => {
+        ctx.fillStyle = hdHex(color);
+        ctx.beginPath(); ctx.ellipse(4, 3.5, 3.8, 3.2, -0.4, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(10, 3.5, 3.8, 3.2, 0.4, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(4.5, 7.2, 2.4, 2, 0.3, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(9.5, 7.2, 2.4, 2, -0.3, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#2a2018'; ctx.fillRect(6.5, 2, 1, 7);
+    });
+}
+
+function hdBirdTexture(scene, color) {
+    return hdTexture(scene, 'hd_bird_' + color.toString(16), 14, 6, (ctx) => {
+        ctx.strokeStyle = hdHex(color); ctx.lineWidth = 1.4; ctx.lineCap = 'round';
         ctx.beginPath();
         ctx.moveTo(1, 2); ctx.quadraticCurveTo(4, 0, 7, 4); ctx.quadraticCurveTo(10, 0, 13, 2);
         ctx.stroke();
     });
-
-    hdWalkerTextures(scene);
-    hdPlayerTextures(scene);
 }
 
-function hdStar(ctx, cx, cy, outer, inner) {
-    ctx.beginPath();
-    for (let i = 0; i < 10; i++) {
-        const r = i % 2 ? inner : outer;
-        const a = -Math.PI / 2 + i * Math.PI / 5;
-        if (i === 0) ctx.moveTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r);
-        else ctx.lineTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r);
-    }
-    ctx.closePath();
-    ctx.fill();
-}
+// ========================
+// Goal flag
+// ========================
+// The classic flag was small and gold, and melted into grass. The goal is now
+// a tall pole with a big red banner that really waves (eight cloth frames),
+// a golden light beacon rising from its base and sparkles drifting up.
 
-// Walker: a glossy red beetle. Four walk frames, facing right like the
-// classic art so the existing flip logic still applies.
-function hdWalkerTextures(scene) {
-    for (let f = 0; f < 4; f++) {
-        const key = f === 0 ? 'hd_tex_enemy_walker' : 'hd_tex_enemy_walker_' + f;
-        hdTexture(scene, key, 34, 32, (ctx) => {
-            const p = f * Math.PI / 2;
-            const bob = Math.abs(Math.sin(p)) * 1.2;
-            // Feet (back pair first)
-            const feet = [
-                { x: 12 + Math.sin(p + Math.PI) * 3.5, lift: Math.max(0, Math.cos(p + Math.PI)) * 2, back: true },
-                { x: 22 + Math.sin(p) * 3.5, lift: Math.max(0, Math.cos(p)) * 2, back: false }
-            ];
-            feet.forEach(ft => {
-                ctx.fillStyle = ft.back ? '#3d0808' : '#5c0d0d';
-                ctx.beginPath();
-                ctx.ellipse(ft.x, 29 - ft.lift, 4.5, 2.6, 0, 0, Math.PI * 2);
-                ctx.fill();
-            });
-            // Shell
-            const by = 3 + bob;
-            const g = ctx.createRadialGradient(22, by + 5, 1, 17, by + 13, 19);
-            g.addColorStop(0, '#ff8a6a');
-            g.addColorStop(0.45, '#e2311f');
-            g.addColorStop(1, '#7a0c0c');
-            ctx.fillStyle = g;
-            ctx.beginPath();
-            ctx.moveTo(2, by + 24);
-            ctx.quadraticCurveTo(1, by + 2, 17, by + 1);
-            ctx.quadraticCurveTo(33, by + 2, 32, by + 24);
-            ctx.quadraticCurveTo(17, by + 27, 2, by + 24);
-            ctx.fill();
-            ctx.strokeStyle = 'rgba(70,6,6,0.8)'; ctx.lineWidth = 1; ctx.stroke();
-            // Belly shadow
-            ctx.fillStyle = 'rgba(60,0,0,0.35)';
-            ctx.beginPath(); ctx.ellipse(17, by + 23, 14, 3, 0, 0, Math.PI * 2); ctx.fill();
-            // Specular
-            ctx.fillStyle = 'rgba(255,255,255,0.6)';
-            ctx.beginPath(); ctx.ellipse(23, by + 5.5, 5, 2.2, -0.25, 0, Math.PI * 2); ctx.fill();
-            // Eyes looking ahead, under angry brows
-            [[14, by + 13], [23, by + 13]].forEach(([ex, ey]) => {
-                ctx.fillStyle = '#ffffff';
-                ctx.beginPath(); ctx.ellipse(ex, ey, 3.6, 4.2, 0, 0, Math.PI * 2); ctx.fill();
-                ctx.fillStyle = '#1a0505';
-                ctx.beginPath(); ctx.ellipse(ex + 1.4, ey + 0.8, 1.9, 2.5, 0, 0, Math.PI * 2); ctx.fill();
-                ctx.fillStyle = '#ffffff'; ctx.fillRect(ex + 1.6, ey - 0.8, 1, 1);
-            });
-            ctx.strokeStyle = '#3a0404'; ctx.lineWidth = 2; ctx.lineCap = 'round';
-            ctx.beginPath(); ctx.moveTo(10.5, by + 7.5); ctx.lineTo(16.5, by + 9.5); ctx.stroke();
-            ctx.beginPath(); ctx.moveTo(20, by + 9.5); ctx.lineTo(26.5, by + 7.5); ctx.stroke();
-            // Fang
-            ctx.fillStyle = '#fff6ea';
-            ctx.beginPath(); ctx.moveTo(21, by + 19); ctx.lineTo(24, by + 19); ctx.lineTo(22.5, by + 22); ctx.fill();
+const HD_GOAL_POLE = 150;
+const HD_GOAL_FRAMES = 8;
+
+function hdGoalTextures(scene) {
+    hdTexture(scene, 'hd_goal_pole', 12, HD_GOAL_POLE, (ctx, w, h) => {
+        const pole = ctx.createLinearGradient(2, 0, 10, 0);
+        pole.addColorStop(0, '#3a2a1a'); pole.addColorStop(0.45, '#c8a070'); pole.addColorStop(1, '#5a3e24');
+        ctx.fillStyle = pole;
+        ctx.fillRect(3.5, 8, 5, h - 8);
+        ctx.fillStyle = 'rgba(0,0,0,0.25)';
+        for (let y = 30; y < h; y += 34) ctx.fillRect(3.5, y, 5, 2);
+        const knob = ctx.createRadialGradient(4.5, 3.5, 0.5, 6, 5.5, 5.5);
+        knob.addColorStop(0, '#fffbe0'); knob.addColorStop(0.5, '#ffd23a'); knob.addColorStop(1, '#a06a00');
+        ctx.fillStyle = knob;
+        ctx.beginPath(); ctx.arc(6, 5.5, 5.2, 0, Math.PI * 2); ctx.fill();
+    });
+    hdTexture(scene, 'hd_goal_base', 40, 16, (ctx) => {
+        const g = ctx.createLinearGradient(0, 2, 0, 16);
+        g.addColorStop(0, '#d8dce4'); g.addColorStop(1, '#6a6e7a');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.moveTo(4, 16); ctx.lineTo(8, 4); ctx.lineTo(32, 4); ctx.lineTo(36, 16);
+        ctx.fill();
+        ctx.fillStyle = '#ffd23a';
+        ctx.fillRect(8, 4, 24, 2);
+    });
+    // Flat banner art first, then each frame slices it into columns and
+    // offsets them along a travelling wave, shading by the wave's slope.
+    const CW = 64, CH = 42;
+    const art = document.createElement('canvas');
+    art.width = CW; art.height = CH;
+    const a = art.getContext('2d');
+    const cloth = a.createLinearGradient(0, 0, 0, CH);
+    cloth.addColorStop(0, '#ff4a3a'); cloth.addColorStop(1, '#b0141e');
+    a.fillStyle = cloth;
+    a.beginPath();
+    a.moveTo(0, 0); a.lineTo(CW, 0); a.lineTo(CW - 10, CH / 2); a.lineTo(CW, CH); a.lineTo(0, CH);
+    a.closePath(); a.fill();
+    a.strokeStyle = '#ffd23a'; a.lineWidth = 3;
+    a.beginPath();
+    a.moveTo(0, 2); a.lineTo(CW - 2, 2); a.lineTo(CW - 12, CH / 2); a.lineTo(CW - 2, CH - 2); a.lineTo(0, CH - 2);
+    a.stroke();
+    a.fillStyle = '#ffe070';
+    hdStar(a, 24, CH / 2, 11, 4.5);
+    a.fillStyle = '#fff6c8';
+    hdStar(a, 23, CH / 2 - 1, 5, 2);
+    for (let f = 0; f < HD_GOAL_FRAMES; f++) {
+        hdTexture(scene, 'hd_goal_cloth_' + f, CW + 4, CH + 12, (ctx) => {
+            const phase = f / HD_GOAL_FRAMES * Math.PI * 2;
+            for (let x = 0; x < CW; x++) {
+                const u = x / CW;
+                const amp = 1.5 + u * 5;
+                const dy = Math.sin(phase - u * 7) * amp;
+                const slope = Math.cos(phase - u * 7);
+                ctx.drawImage(art, x, 0, 1, CH, x, 6 + dy, 1, CH);
+                ctx.fillStyle = slope > 0 ? `rgba(255,240,220,${slope * 0.22})` : `rgba(40,0,10,${-slope * 0.3})`;
+                ctx.globalCompositeOperation = 'source-atop';
+                ctx.fillRect(x, 0, 1, CH + 12);
+                ctx.globalCompositeOperation = 'source-over';
+            }
         });
     }
 }
 
+// Built in decorateHdLevel once the classic flag exists. The classic image
+// stays as the physics body (hidden); every part here mirrors its alpha, so
+// boss levels that hide the flag until victory still work.
+function hdBuildGoal(scene) {
+    if (!endFlag) return;
+    const footing = hdPoleFooting(endFlag.x - 14, endFlag.y + 30);
+    const ground = footing.y;
+    const poleX = footing.x;
+    const top = ground - HD_GOAL_POLE;
+    endFlag.setVisible(false);
+
+    // The ray texture is brightest at its origin and fades along its length;
+    // turned upside down it rises from the base and fades into the sky
+    const beam = scene.add.image(poleX, ground, 'hd_ray').setOrigin(0.5, 0).setRotation(Math.PI)
+        .setScale(1.3, 0.75).setTint(0xffd86a).setBlendMode(Phaser.BlendModes.ADD).setDepth(1).setAlpha(0.45);
+    const pool = scene.add.image(poleX, ground, 'hd_glow').setScale(1.6, 0.45)
+        .setTint(0xffd86a).setBlendMode(Phaser.BlendModes.ADD).setDepth(1).setAlpha(0.7);
+    const pole = scene.add.image(poleX, ground, 'hd_goal_pole').setOrigin(0.5, 1).setDepth(2);
+    const cloth = scene.add.image(poleX + 3, top + 6, 'hd_goal_cloth_0').setOrigin(0, 0).setDepth(2);
+    const base = scene.add.image(poleX, ground + 2, 'hd_goal_base').setOrigin(0.5, 1).setDepth(2);
+    const knobGlow = scene.add.image(poleX, top + 5, 'hd_glow').setScale(0.35)
+        .setTint(0xffe28a).setBlendMode(Phaser.BlendModes.ADD).setDepth(66).setAlpha(0.8);
+    scene.tweens.add({ targets: [beam, pool], alpha: { from: 0.3, to: 0.6 }, duration: 1100, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+
+    const sparks = [];
+    for (let i = 0; i < 10; i++) {
+        const s = scene.add.image(poleX, ground, 'hd_mote').setScale(0.25)
+            .setTint(0xffe070).setBlendMode(Phaser.BlendModes.ADD).setDepth(66);
+        sparks.push({ obj: s, t: Math.random() });
+    }
+    hdGoal = {
+        parts: [beam, pool, pole, cloth, base, knobGlow], cloth: cloth, sparks: sparks,
+        x: poleX, ground: ground, height: HD_GOAL_POLE
+    };
+}
+
+// ========================
+// Player art
+// ========================
 // Player parts. The body is drawn in greys so the cosmetic tint shades it;
 // the shine layer sits on top untinted, keeping highlights white.
 function hdPlayerBodyPath(ctx, x, y, s, r) {
@@ -1223,12 +581,16 @@ function hdPlayerTextures(scene) {
 function hdResetState() {
     hdRig = null;
     hdCoinGlows = [];
-    hdButterflies = [];
-    hdBirds = [];
-    hdMotes = [];
-    hdLeaves = [];
-    hdMist = null;
+    hdParticles = [];
+    hdCritters = [];
+    hdDrifters = [];
     hdOptional = [];
+    hdDarkness = null;
+    hdGoal = null;
+    hdBoss = null;
+    hdBubbles = [];
+    hdGlowFollowers = [];
+    hdNextShootingStar = 0;
 }
 
 // A tiled strip that scrolls with the camera at `factor`, sized so it always
@@ -1242,161 +604,102 @@ function hdLayer(scene, key, y, height, factor, depth, alpha) {
     return strip;
 }
 
-// Builds the sky, parallax, weather, lighting and ground. Called from
-// loadLevel in place of the classic backdrop.
+// Builds the sky, parallax, props, weather, lighting and ground for the
+// current level's world. Called from loadLevel in place of the classic
+// backdrop.
 function buildHdLook(scene) {
     hdLookActive = true;
     hdResetState();
+    hdBiomeName = hdBiomeFor(currentLevel);
+    hdBiome = HD_BIOMES[hdBiomeName];
+    const recipe = hdBiome;
     const worldW = currentLevel.worldWidth;
     const low = typeof lowFxMode !== 'undefined' && lowFxMode;
 
-    // Textures (cached after the first build)
-    hdSkyTexture(scene);
     hdGlowTexture(scene);
     hdRayTexture(scene);
-    for (let i = 0; i < 3; i++) hdCloudTexture(scene, i);
-    hdMountainTexture(scene, 'hd_mtn_far', {
-        seed: 11, height: 300, base: 250, amp: 190, snowLine: 150,
-        lit: 0xbccade, shade: 0x7486aa, haze: 0xeee2c6, hazeAlpha: 0.55
-    });
-    hdMountainTexture(scene, 'hd_mtn_mid', {
-        seed: 23, height: 260, base: 200, amp: 120,
-        lit: 0x94b596, shade: 0x547379, haze: 0xe4e1c8, hazeAlpha: 0.4
-    });
-    hdMistTexture(scene);
-    hdFarForestTexture(scene);
-    hdNearHillsTexture(scene);
-    hdBushLineTexture(scene);
-    hdGroundTexture(scene);
-    for (let i = 0; i < 3; i++) hdTuftTexture(scene, i);
-    hdForegroundTexture(scene);
-    hdBranchTexture(scene);
+    hdDarknessTexture(scene);
     hdObjectTextures(scene);
+    hdCreatureTextures(scene);
+    hdBossPartTextures(scene);
+    hdPlayerTextures(scene);
 
-    // Sky (with the sun baked in) stays fixed: it is "infinitely" far away
-    scene.add.image(0, 0, 'hd_sky').setOrigin(0, 0).setScrollFactor(0).setDepth(-40);
-
-    // Clouds at a few depths, drifting
-    const rnd = hdRandom(2024);
-    const cloudCount = low ? 3 : Math.max(4, Math.floor(worldW / 560));
-    for (let i = 0; i < cloudCount; i++) {
-        const far = i % 2 === 0;
-        const factor = far ? 0.03 + rnd() * 0.03 : 0.08 + rnd() * 0.06;
-        const x = (i + rnd() * 0.6) / cloudCount * (800 + worldW * factor);
-        const y = 40 + rnd() * (far ? 110 : 150);
-        const scale = far ? 0.45 + rnd() * 0.25 : 0.65 + rnd() * 0.35;
-        const cloud = scene.add.image(x, y, 'hd_cloud_' + (i % 3))
-            .setScale(scale).setAlpha(far ? 0.75 : 0.95)
-            .setScrollFactor(factor, 0).setDepth(far ? -38 : -36);
-        scene.tweens.add({
-            targets: cloud, x: x + 30 + rnd() * 50, duration: 14000 + rnd() * 10000,
-            yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
-        });
+    // Sky (with sun or moon baked in) stays fixed: it is "infinitely" far
+    // away. Worlds whose back wall covers the whole screen skip it.
+    if (!recipe.coveredSky) {
+        scene.add.image(0, 0, hdSkyTexture(scene, 'hd_sky_' + hdBiomeName, recipe.sky))
+            .setOrigin(0, 0).setScrollFactor(0).setDepth(-40);
     }
 
-    // Distant birds crossing the sky
-    if (!low) {
-        for (let i = 0; i < 5; i++) {
-            const b = scene.add.image(rnd() * 800, 120 + rnd() * 90, 'hd_bird')
-                .setScrollFactor(0).setDepth(-37).setScale(0.5 + rnd() * 0.4).setAlpha(0.7);
-            hdBirds.push({ obj: b, speed: 10 + rnd() * 8, phase: rnd() * 6, baseY: b.y });
-            hdOptional.push(b);
-        }
-    }
+    const rnd = hdRandom(2024 + currentLevelIndex);
+    if (recipe.clouds) hdBuildClouds(scene, recipe.clouds, rnd, low);
 
     // Parallax stack, far to near
-    hdLayer(scene, 'hd_mtn_far', 180, 300, 0.05, -35);
-    if (!low) hdLayer(scene, 'hd_mtn_mid', 280, 260, 0.1, -33);
-    if (!low) hdMist = hdLayer(scene, 'hd_mist', 405, 120, 0.13, -32, 0.5);
-    hdLayer(scene, 'hd_far_forest', 360, 200, 0.2, -30);
-    hdLayer(scene, 'hd_near_hills', 350, 240, 0.35, -26);
-    if (!low) hdLayer(scene, 'hd_bushes', 462, 110, 0.6, -20);
-
-    // God rays fanning down-left from the sun
-    if (!low) {
-        [[0.66, 1.3, 0.1], [0.9, 1.5, 0.08], [1.14, 1.2, 0.07]].forEach(([angle, len, alpha], i) => {
-            const ray = scene.add.image(HD_SUN.x, HD_SUN.y, 'hd_ray')
-                .setOrigin(0.5, 0).setRotation(angle).setScale(1 + i * 0.2, len)
-                .setScrollFactor(0.02, 0).setDepth(-29).setBlendMode(Phaser.BlendModes.ADD).setAlpha(alpha);
-            scene.tweens.add({
-                targets: ray, alpha: alpha * 0.35, duration: 3500 + i * 900,
-                yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
-            });
-            hdOptional.push(ray);
-        });
-    }
+    recipe.layers.forEach(L => {
+        if (low && L.low) return;
+        const strip = hdLayer(scene, L.tex(scene), L.y, L.h, L.f, L.depth, L.alpha);
+        if (L.drift) hdDrifters.push({ strip: strip, speed: L.drift });
+    });
+    (recipe.props || []).forEach(p => hdBuildProps(scene, p, rnd, low));
+    if (recipe.rays && !low) hdBuildRays(scene, recipe);
 
     // Ground: one continuous strip, surface at y=560
-    scene.add.tileSprite(0, 560 - HD_GROUND_LIP, worldW, 600 - 560 + HD_GROUND_LIP, 'hd_ground')
+    scene.add.tileSprite(0, 560 - HD_GROUND_LIP, worldW, 600 - 560 + HD_GROUND_LIP,
+        hdGroundTexture(scene, 'hd_ground_' + hdBiomeName, recipe.ground))
         .setOrigin(0, 0).setDepth(-3);
 
-    // Soft shadows cast onto the ground by the floating platforms (sun is
-    // upper-right, so they fall slightly left)
+    // Soft shadows cast onto the ground by the floating platforms
     if (currentLevel.platforms && scene.textures.exists('tex_shadow')) {
+        const strength = recipe.light ? 0.6 : 1;
         currentLevel.platforms.forEach(p => {
             const height = 560 - (p.y + p.height / 2);
-            if (height <= 0 || height > 260) return;
+            if (height <= 0 || height > 260 || p.width < 40) return;
             const t = 1 - height / 260;
             scene.add.image(p.x - 12 - height * 0.08, 562, 'tex_shadow')
-                .setScale(p.width / 40, 0.9).setAlpha(0.18 + t * 0.3).setDepth(-1);
+                .setScale(p.width / 40, 0.9).setAlpha((0.18 + t * 0.3) * strength).setDepth(-1);
         });
     }
 
-    // Grass tufts in front of the player
-    const trnd = hdRandom(515);
-    for (let x = 30 + trnd() * 60; x < worldW; x += 70 + trnd() * 110) {
-        const tuft = scene.add.image(x, 562, 'hd_tuft_' + Math.floor(trnd() * 3))
-            .setOrigin(0.5, 1).setDepth(11).setFlipX(trnd() < 0.5);
-        hdOptional.push(tuft);
+    // Grass tufts in front of the player, so feet sink into the grass
+    if (recipe.tufts) {
+        for (let i = 0; i < 3; i++) hdTuftTexture(scene, 'hd_tuft_' + hdBiomeName + '_' + i, recipe.tufts, i);
+        const trnd = hdRandom(515);
+        for (let x = 30 + trnd() * 60; x < worldW; x += 70 + trnd() * 110) {
+            const tuft = scene.add.image(x, 562, 'hd_tuft_' + hdBiomeName + '_' + Math.floor(trnd() * 3))
+                .setOrigin(0.5, 1).setDepth(11).setFlipX(trnd() < 0.5);
+            hdOptional.push(tuft);
+        }
     }
 
-    // Foreground depth-of-field layers
-    if (!low) {
-        hdOptional.push(hdLayer(scene, 'hd_foreground', 556, 46, 1.3, 70, 0.95));
-        const branchSpots = [[900, 0], [2300, 1], [3500, 0]];
-        branchSpots.forEach(([x, flip]) => {
-            if (x > 800 + Math.max(0, worldW - 800) * 1.25) return;
-            const b = scene.add.image(x, -8, 'hd_branch').setOrigin(0.5, 0)
-                .setScrollFactor(1.25, 0).setDepth(70).setFlipX(!!flip).setAlpha(0.95);
+    // Depth of field: a blurred strip along the bottom and out-of-focus
+    // shapes hanging into the top of the frame
+    if (!low && recipe.foreground) {
+        const key = hdForegroundTexture(scene, 'hd_fg_' + hdBiomeName, recipe.foreground);
+        hdOptional.push(hdLayer(scene, key, 556, 46, 1.3, 70, 0.95));
+    }
+    if (!low && recipe.overhang) {
+        const key = hdOverhangTexture(scene, 'hd_overhang_' + recipe.overhang, recipe.overhang);
+        const reach = 800 + Math.max(0, worldW - 800) * 1.25;
+        for (let x = 900, i = 0; x < reach; x += 1300 + rnd() * 900, i++) {
+            const b = scene.add.image(x, -8, key).setOrigin(0.5, 0)
+                .setScrollFactor(1.25, 0).setDepth(70).setFlipX(i % 2 === 1).setAlpha(0.95);
             hdOptional.push(b);
-        });
+        }
     }
 
-    // Atmosphere: pollen drifting through the light, butterflies, leaves
-    if (!low) {
-        for (let i = 0; i < 26; i++) {
-            const m = scene.add.image(rnd() * 800, rnd() * 520, 'hd_mote')
-                .setScale(0.2 + rnd() * 0.25).setDepth(-4)
-                .setBlendMode(Phaser.BlendModes.ADD).setTint(0xfff2c0);
-            hdMotes.push({ obj: m, vx: (rnd() - 0.3) * 14, vy: (rnd() - 0.6) * 8, phase: rnd() * 6, base: 0.35 + rnd() * 0.45 });
-            hdOptional.push(m);
-        }
-        for (let i = 0; i < 4; i++) {
-            const hx = 300 + (i / 4) * (worldW - 500) + rnd() * 200;
-            const b = scene.add.image(hx, 520, 'hd_butterfly_' + (i % 3)).setDepth(4).setScale(0.9);
-            hdButterflies.push({ obj: b, hx: hx, hy: 505 + rnd() * 30, t: rnd() * 100, seed: rnd() * 10 });
-            hdOptional.push(b);
-        }
-        for (let i = 0; i < 12; i++) {
-            const near = i < 2;
-            const l = scene.add.image(rnd() * 800, rnd() * 600, 'hd_leaf_' + (i % 3))
-                .setScrollFactor(0).setDepth(near ? 71 : 58)
-                .setScale(near ? 2.6 : 0.8 + rnd() * 0.5)
-                .setAlpha(near ? 0.55 : 0.9);
-            hdLeaves.push({
-                obj: l, x: l.x, y: l.y, near: near,
-                vx: -20 - rnd() * 30 - (near ? 40 : 0), vy: 22 + rnd() * 26 + (near ? 20 : 0),
-                sway: rnd() * 6, spin: (rnd() - 0.5) * 3
-            });
-            hdOptional.push(l);
-        }
+    hdBuildAmbient(scene, recipe.fx || {}, rnd, low);
+
+    // Dark worlds: everything away from the player falls into shadow
+    if (recipe.light && recipe.light.darkness) {
+        hdDarkness = scene.add.image(0, 0, 'hd_darkness').setScale(8, 6.5)
+            .setDepth(65).setAlpha(recipe.light.darkness);
     }
 
     // Vignette, WebGL only (same cost as the classic look's)
     const cam = scene.cameras.main;
     if (cam.postFX && !low) {
         cam.postFX.clear();
-        cam.postFX.addVignette(0.5, 0.5, 0.95, 0.28);
+        cam.postFX.addVignette(0.5, 0.5, 0.95, recipe.light ? 0.4 : 0.28);
     }
 
     scene.events.on('postupdate', hdPostUpdate, scene);
@@ -1407,16 +710,210 @@ function buildHdLook(scene) {
     });
 }
 
-// Called after coins, checkpoints and the start text exist
+function hdBuildClouds(scene, c, rnd, low) {
+    for (let i = 0; i < 3; i++) hdCloudTexture(scene, i, c.pal);
+    const worldW = currentLevel.worldWidth;
+    const count = low ? 3 : Math.max(4, Math.floor(worldW / c.per));
+    const stretch = c.stretch || [1, 1];
+    for (let i = 0; i < count; i++) {
+        const far = i % 2 === 0;
+        const factor = far ? 0.03 + rnd() * 0.03 : 0.08 + rnd() * 0.06;
+        const x = (i + rnd() * 0.6) / count * (800 + worldW * factor);
+        const y = c.y[0] + rnd() * (c.y[1] - c.y[0]);
+        const scale = far ? 0.45 + rnd() * 0.25 : 0.65 + rnd() * 0.35;
+        const cloud = scene.add.image(x, y, 'hd_cloud_' + c.pal + '_' + (i % 3))
+            .setScale(scale * stretch[0], scale * stretch[1]).setAlpha(far ? 0.75 : 0.95)
+            .setScrollFactor(factor, 0).setDepth(far ? -38 : -36);
+        scene.tweens.add({
+            targets: cloud, x: x + 30 + rnd() * 50, duration: 14000 + rnd() * 10000,
+            yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
+        });
+    }
+}
+
+// Light shafts: fanning down-left from the sun, or falling through a
+// canopy from above
+function hdBuildRays(scene, recipe) {
+    const sun = recipe.sky.sun;
+    const rays = recipe.rays.fromTop
+        ? [[120, -0.25, 1.4, 0.12], [330, -0.2, 1.6, 0.09], [560, -0.3, 1.3, 0.11], [740, -0.22, 1.5, 0.08]]
+        : [[sun.x, 0.66, 1.3, 0.1], [sun.x, 0.9, 1.5, 0.08], [sun.x, 1.14, 1.2, 0.07]];
+    rays.forEach(([x, angle, len, alpha], i) => {
+        const ray = scene.add.image(x, recipe.rays.fromTop ? -20 : sun.y, 'hd_ray')
+            .setOrigin(0.5, 0).setRotation(angle).setScale(1 + i * 0.2, len)
+            .setScrollFactor(recipe.rays.fromTop ? 0.1 : 0.02, 0).setDepth(-29)
+            .setBlendMode(Phaser.BlendModes.ADD).setAlpha(alpha).setTint(recipe.rays.color);
+        scene.tweens.add({
+            targets: ray, alpha: alpha * 0.35, duration: 3500 + i * 900,
+            yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
+        });
+        hdOptional.push(ray);
+    });
+}
+
+// Animated scenery placed along a parallax band: glowing crystals, warning
+// lights, torches, turning gears and drifting islands
+function hdBuildProps(scene, p, rnd, low) {
+    if (low && p.kind !== 'torch') return;
+    const worldW = currentLevel.worldWidth;
+    const reach = 800 + Math.max(0, worldW - 800) * p.f;
+    let key = null;
+    if (p.kind === 'gear') key = hdGearTexture(scene, 'hd_gear_' + p.radius + '_' + p.color.toString(16), p.radius, p.color);
+    if (p.kind === 'island') key = hdIslandTexture(scene, 'hd_island');
+    for (let x = 60 + rnd() * p.spacing[0]; x < reach; x += p.spacing[0] + rnd() * (p.spacing[1] - p.spacing[0])) {
+        const y = p.y[0] + rnd() * (p.y[1] - p.y[0]);
+        if (p.kind === 'glow') {
+            const tint = p.tint[Math.floor(rnd() * p.tint.length)];
+            const s = p.scale[0] + rnd() * (p.scale[1] - p.scale[0]);
+            const g = scene.add.image(x, y, 'hd_glow').setScale(s).setTint(tint)
+                .setBlendMode(Phaser.BlendModes.ADD).setAlpha(p.alpha).setScrollFactor(p.f, 0).setDepth(p.depth);
+            if (p.anim === 'blink') {
+                scene.tweens.add({ targets: g, alpha: 0.05, duration: 380, yoyo: true, repeat: -1, hold: 380, delay: rnd() * 800 });
+            } else {
+                scene.tweens.add({ targets: g, alpha: p.alpha * 0.4, scale: s * 0.85, duration: 1600 + rnd() * 1400, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+            }
+            hdOptional.push(g);
+        } else if (p.kind === 'torch') {
+            scene.add.image(x, y, 'hd_torch').setScrollFactor(p.f, 0).setDepth(p.depth);
+            const g = scene.add.image(x, y - 12, 'hd_glow').setScale(0.9).setTint(0xff9a3a)
+                .setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.7).setScrollFactor(p.f, 0).setDepth(66);
+            scene.tweens.add({ targets: g, alpha: 0.45, scale: 0.8, duration: 90 + rnd() * 120, yoyo: true, repeat: -1, repeatDelay: rnd() * 200 });
+        } else if (p.kind === 'gear') {
+            const gear = scene.add.image(x, y, key).setScrollFactor(p.f, 0).setDepth(p.depth);
+            scene.tweens.add({ targets: gear, angle: rnd() < 0.5 ? 360 : -360, duration: 9000 + p.radius * 120, repeat: -1 });
+        } else if (p.kind === 'island') {
+            const s = p.scale[0] + rnd() * (p.scale[1] - p.scale[0]);
+            const isl = scene.add.image(x, y, key).setScale(s).setAlpha(p.alpha).setScrollFactor(p.f, 0).setDepth(p.depth);
+            scene.tweens.add({ targets: isl, y: y - 10, duration: 3000 + rnd() * 2000, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+        }
+    }
+}
+
+// Screen-space atmosphere. Each particle kind moves by its own rule in
+// hdUpdateParticles; the level's weather setting adds to the recipe.
+function hdBuildAmbient(scene, fx, rnd, low) {
+    const weather = (currentLevel.theme || {}).weather;
+    const f = Object.assign({}, fx);
+    if (weather === 'embers' && !f.embers && !f.sparks) f.embers = true;
+    if (weather === 'snow') f.snow = true;
+    if (weather === 'leaves' && !f.leaves) f.leaves = [0x9cc45a, 0xd9b44a, 0xc7783a];
+
+    if (!low && f.birds !== undefined) {
+        const key = hdBirdTexture(scene, f.birds);
+        for (let i = 0; i < 5; i++) {
+            const b = scene.add.image(rnd() * 800, 110 + rnd() * 100, key)
+                .setScrollFactor(0).setDepth(-37).setScale(0.5 + rnd() * 0.4).setAlpha(0.7);
+            hdCritters.push({ kind: 'bird', obj: b, speed: 10 + rnd() * 8, phase: rnd() * 6, baseY: b.y });
+        }
+    }
+    if (low) return;
+
+    const add = (kind, obj, extra) => {
+        hdParticles.push(Object.assign({ kind: kind, obj: obj, x: obj.x, y: obj.y, t: rnd() * 10 }, extra));
+        hdOptional.push(obj);
+    };
+    if (f.motes) {
+        for (let i = 0; i < f.motes.count; i++) {
+            const m = scene.add.image(rnd() * 800, rnd() * 520, 'hd_mote').setScrollFactor(0)
+                .setScale(0.2 + rnd() * 0.25).setDepth(f.motes.add ? 66 : -4).setTint(f.motes.color);
+            if (f.motes.add) m.setBlendMode(Phaser.BlendModes.ADD);
+            add('mote', m, { vx: (rnd() - 0.3) * 14, vy: (rnd() - 0.6) * 8, base: 0.35 + rnd() * 0.45 });
+        }
+    }
+    if (f.dust) {
+        for (let i = 0; i < f.dust.count; i++) {
+            const m = scene.add.image(rnd() * 800, 200 + rnd() * 380, 'hd_mote').setScrollFactor(0)
+                .setScale(0.12 + rnd() * 0.12).setDepth(58).setTint(f.dust.color).setAlpha(0.6);
+            add('dust', m, { vx: 60 + rnd() * 80, vy: (rnd() - 0.5) * 10 });
+        }
+    }
+    if (f.leaves) {
+        for (let i = 0; i < 12; i++) {
+            const near = i < 2;
+            const l = scene.add.image(rnd() * 800, rnd() * 600, hdLeafTexture(scene, f.leaves[i % f.leaves.length]))
+                .setScrollFactor(0).setDepth(near ? 71 : 58).setScale(near ? 2.6 : 0.8 + rnd() * 0.5)
+                .setAlpha(near ? 0.55 : 0.9);
+            add('leaf', l, {
+                near: near, vx: -20 - rnd() * 30 - (near ? 40 : 0), vy: 22 + rnd() * 26 + (near ? 20 : 0),
+                spin: (rnd() - 0.5) * 3
+            });
+        }
+    }
+    if (f.snow) {
+        for (let i = 0; i < 40; i++) {
+            const near = i < 5;
+            const s = scene.add.image(rnd() * 800, rnd() * 600, 'hd_mote').setScrollFactor(0)
+                .setScale(near ? 0.55 : 0.12 + rnd() * 0.18).setDepth(near ? 71 : 58).setAlpha(near ? 0.6 : 0.9);
+            add('snow', s, { vx: -10 + rnd() * 10, vy: near ? 70 : 25 + rnd() * 30 });
+        }
+    }
+    if (f.embers) {
+        for (let i = 0; i < 26; i++) {
+            const e = scene.add.image(rnd() * 800, rnd() * 600, 'hd_mote').setScrollFactor(0)
+                .setScale(0.12 + rnd() * 0.18).setDepth(66).setTint(rnd() < 0.5 ? 0xff8a2a : 0xffc04a)
+                .setBlendMode(Phaser.BlendModes.ADD);
+            add('ember', e, { vx: 8 + rnd() * 20, vy: -30 - rnd() * 40 });
+        }
+    }
+    if (f.sparks) {
+        for (let i = 0; i < 14; i++) {
+            const s = scene.add.image(-50, -50, 'hd_streak').setScrollFactor(0).setDepth(66)
+                .setScale(0.25, 0.8).setTint(0xffb040).setBlendMode(Phaser.BlendModes.ADD);
+            add('spark', s, { vx: 0, vy: 0, life: 0, delay: rnd() * 3 });
+        }
+    }
+    if (f.drips) {
+        for (let i = 0; i < 8; i++) {
+            const d = scene.add.image(rnd() * 800, -20, 'hd_drip').setScrollFactor(0).setDepth(58).setAlpha(0.8);
+            add('drip', d, { vy: 0, delay: rnd() * 4 });
+        }
+    }
+    if (f.butterflies) {
+        for (let i = 0; i < 4; i++) {
+            const hx = 300 + (i / 4) * (currentLevel.worldWidth - 500) + rnd() * 200;
+            const b = scene.add.image(hx, 520, hdButterflyTexture(scene, f.butterflies[i % f.butterflies.length]))
+                .setDepth(4).setScale(0.9);
+            hdCritters.push({ kind: 'butterfly', obj: b, hx: hx, hy: 505 + rnd() * 30, t: rnd() * 100, seed: rnd() * 10 });
+            hdOptional.push(b);
+        }
+    }
+    if (f.bats) {
+        for (let i = 0; i < 4; i++) {
+            const b = scene.add.image(-60, 0, 'hd_bat').setScrollFactor(0).setDepth(-21).setScale(0.8 + rnd() * 0.5);
+            hdCritters.push({ kind: 'bat', obj: b, t: rnd() * 10, delay: 2 + rnd() * 8, active: false });
+            hdOptional.push(b);
+        }
+    }
+    if (f.shootingStars) hdNextShootingStar = 3;
+}
+
+// Called after coins, checkpoints, the flag and the start text exist
 function decorateHdLevel(scene) {
     coinRects.forEach(c => hdAttachCoinGlow(scene, c.rect));
     checkpointRects.forEach(cp => {
-        scene.add.image(cp.rect.x, cp.rect.y, 'hd_checkpoint_pole').setDepth(cp.rect.depth - 0.1);
+        // The banner is part of the classic image, so the pole stays under it
+        // and only its length adapts to the surface below
+        const footing = hdPoleFooting(cp.rect.x - 6, cp.rect.y + 25);
+        const ground = Math.abs(footing.x - (cp.rect.x - 6)) < 1 ? footing.y : cp.rect.y + 25;
+        const top = cp.rect.y - 23;
+        scene.add.image(cp.rect.x - 6, ground, 'hd_checkpoint_pole').setOrigin(0.5, 1)
+            .setDisplaySize(8, Math.max(10, ground - top)).setDepth(cp.rect.depth - 0.1);
+        scene.add.image(cp.rect.x - 6, ground + 2, 'hd_checkpoint_base').setOrigin(0.5, 1).setDepth(cp.rect.depth - 0.1);
     });
     if (startText) {
         startText.setVisible(false);
-        scene.add.image(22, 562, 'hd_sign_start').setOrigin(0.5, 1).setDepth(-1);
+        const start = currentLevel.playerStart;
+        const footing = hdPoleFooting(Math.max(20, start.x - 38), start.y + 16);
+        scene.add.image(footing.x, footing.y + 2, 'hd_sign_start').setOrigin(0.5, 1).setDepth(-1);
     }
+    // Hidden platforms: world-styled art that fades in with the classic
+    // rectangle (which keeps driving the reveal)
+    (typeof invisiblePlatforms !== 'undefined' ? invisiblePlatforms : []).forEach(ip => {
+        ip.hdImg = hdTerrainBlock(scene, ip.x, ip.y, ip.width, ip.height, 0, false)[0];
+        ip.hdImg.setAlpha(ip.rect.alpha);
+        ip.rect.setVisible(false);
+    });
+    hdBuildGoal(scene);
 }
 
 function hdAttachCoinGlow(scene, rect) {
@@ -1425,6 +922,21 @@ function hdAttachCoinGlow(scene, rect) {
         .setScale(0.42).setTint(0xffcf4a).setBlendMode(Phaser.BlendModes.ADD)
         .setAlpha(0.5).setDepth(rect.depth - 0.1);
     hdCoinGlows.push({ glow: glow, rect: rect });
+}
+
+// Replaces drawTerrainBlock while the HD look is active. Ground blocks
+// return nothing: one continuous strip covers the whole floor instead.
+function hdTerrainBlock(scene, x, y, w, h, color, isGround, kind) {
+    if (isGround) return [];
+    const variant = Math.abs(Math.round(x * 7 + y * 13)) % 3;
+    const key = hdPlatformTexture(scene, w, h, variant, hdBiome.platform, kind === 'crumbling');
+    const img = scene.add.image(x, y, key);
+    img.setOrigin(
+        (HD_PLAT_PAD_X + w / 2) / (w + HD_PLAT_PAD_X * 2),
+        (HD_PLAT_PAD_TOP + h / 2) / (h + HD_PLAT_PAD_TOP + HD_PLAT_PAD_BOTTOM)
+    );
+    img.setDepth(typeof DEPTH_TERRAIN !== 'undefined' ? DEPTH_TERRAIN : -2);
+    return [img];
 }
 
 // ========================
@@ -1627,8 +1139,12 @@ function hdPostUpdate() {
     if (low && hdOptional.length) {
         hdOptional.forEach(o => o.setVisible(false));
         hdOptional = [];
+        hdParticles = [];
+        hdCritters = hdCritters.filter(c => c.kind === 'bird');
         if (scene.cameras.main.postFX) scene.cameras.main.postFX.clear();
     }
+
+    if (hdDarkness && player) hdDarkness.setPosition(player.x, player.y - 10);
 
     // Coin glows follow their coin; the coin darkens as it turns edge-on
     hdCoinGlows = hdCoinGlows.filter(cg => {
@@ -1640,22 +1156,18 @@ function hdPostUpdate() {
         return true;
     });
 
-    // Walker walk cycle, stepped by distance so feet never skate
-    if (enemies && enemies.children) {
-        enemies.children.entries.forEach(e => {
-            if (!e.active || !e.visual || e.enemyType !== 'walker' || !e.visual.setTexture) return;
-            const moving = Math.abs(e.body.velocity.x) > 5;
-            const f = moving ? Math.floor(Math.abs(e.x) / 5) % 4 : 0;
-            const key = f === 0 ? 'hd_tex_enemy_walker' : 'hd_tex_enemy_walker_' + f;
-            if (e.visual.texture.key !== key) e.visual.setTexture(key);
-        });
-    }
+    hdUpdateEnemies(scene, t);
+    hdUpdateBoss(scene, t);
+    hdUpdateGlowFollowers(scene);
+    hdUpdateGoal(dt, t);
 
-    // Lit checkpoints get a warm glow once reached
+    invisiblePlatforms.forEach(ip => { if (ip.hdImg) ip.hdImg.setAlpha(ip.rect.alpha); });
+
+    // Lit checkpoints get a glow once reached
     checkpointRects.forEach(cp => {
         if (cp.activated && !cp.hdGlow && cp.rect.scene) {
             cp.hdGlow = scene.add.image(cp.rect.x + 6, cp.rect.y - 15, 'hd_glow')
-                .setTint(0x9cff9c).setBlendMode(Phaser.BlendModes.ADD).setDepth(cp.rect.depth - 0.2)
+                .setTint(0x9cff9c).setBlendMode(Phaser.BlendModes.ADD).setDepth(66)
                 .setScale(0.2).setAlpha(0);
             scene.tweens.add({ targets: cp.hdGlow, scale: 0.7, alpha: 0.55, duration: 400, ease: 'Sine.easeOut' });
             scene.tweens.add({
@@ -1665,50 +1177,271 @@ function hdPostUpdate() {
         }
     });
 
-    if (low || !running) return;
+    if (!running) return;
+    hdDrifters.forEach(d => { d.strip.tilePositionX += dt * d.speed; });
+    hdUpdateCritters(scene, dt);
+    if (!low) hdUpdateParticles(scene, dt);
+}
 
-    if (hdMist) hdMist.tilePositionX += dt * 6;
+// Picks each enemy's animation frame from its movement and AI state
+function hdEnemyFrame(e, t) {
+    const type = e.enemyType || 'walker';
+    const vx = e.body ? e.body.velocity.x : 0;
+    const vy = e.body ? e.body.velocity.y : 0;
+    const step = Math.floor(Math.abs(e.x) / 5) % 4;
+    const walk = base => (Math.abs(vx) > 5 && step) ? base + '_' + step : base;
+    switch (type) {
+        case 'walker': return walk('hd_tex_enemy_walker');
+        case 'shield': return walk('hd_tex_enemy_shield');
+        case 'charger':
+            if (e.chargeState === 'windup') return 'hd_tex_enemy_charger_windup';
+            if (e.chargeState === 'charge') return 'hd_tex_enemy_charger_run' + (Math.floor(Math.abs(e.x) / 7) % 4);
+            return walk('hd_tex_enemy_charger');
+        case 'jumper': {
+            const grounded = e.body && (e.body.blocked.down || e.body.touching.down);
+            if (grounded) return 'hd_tex_enemy_jumper';
+            return vy < 0 ? 'hd_tex_enemy_jumper_rise' : 'hd_tex_enemy_jumper_fall';
+        }
+        case 'flyer': {
+            const f = Math.floor((t + e.x * 3) / 90) % 4;
+            return ['hd_tex_enemy_flyer', 'hd_tex_enemy_flyer_1', 'hd_tex_enemy_flyer_2', 'hd_tex_enemy_flyer_1'][f];
+        }
+        case 'diver':
+            if (e.diveState === 'telegraph') return 'hd_tex_enemy_diver_spread';
+            if (e.diveState === 'dive') return 'hd_tex_enemy_diver_tuck';
+            return Math.floor((t + e.x * 3) / 110) % 2 ? 'hd_tex_enemy_diver_down' : 'hd_tex_enemy_diver';
+        case 'shooter': return e.telegraphing ? 'hd_tex_enemy_shooter_charge' : 'hd_tex_enemy_shooter';
+        default: return null;
+    }
+}
 
-    hdBirds.forEach(b => {
-        b.phase += dt * 9;
-        b.obj.x -= b.speed * dt;
-        b.obj.y = b.baseY + Math.sin(b.phase * 0.15) * 4;
-        b.obj.scaleY = Math.abs(b.obj.scaleX) * (0.55 + Math.abs(Math.sin(b.phase)) * 0.6);
-        if (b.obj.x < -20) { b.obj.x = 820; b.baseY = 110 + Math.random() * 100; }
+function hdUpdateEnemies(scene, t) {
+    if (!enemies || !enemies.children) return;
+    enemies.children.entries.forEach(e => {
+        const v = e.visual;
+        if (!e.active || !v || !v.setTexture) return;
+        const key = hdEnemyFrame(e, t);
+        if (key && v.texture.key !== key && scene.textures.exists(key)) v.setTexture(key);
+        // Shield: a soft bubble instead of the classic square outline
+        if (v.shieldBorder && !v.hdBubble) {
+            v.hdBubble = scene.add.image(v.x, v.y, 'hd_bubble').setDepth(v.depth + 0.1);
+            hdBubbles.push(v);
+        }
     });
-
-    const view = scene.cameras.main.worldView;
-    hdMotes.forEach(m => {
-        m.phase += dt;
-        m.obj.x += (m.vx + Math.sin(m.phase * 0.7) * 6) * dt;
-        m.obj.y += (m.vy + Math.cos(m.phase * 0.9) * 5) * dt;
-        m.obj.setAlpha(m.base * (0.6 + Math.sin(m.phase * 2.3) * 0.4));
-        if (m.obj.x < view.x - 10) m.obj.x = view.right + 8;
-        if (m.obj.x > view.right + 10) m.obj.x = view.x - 8;
-        if (m.obj.y < view.y - 10) m.obj.y = view.y + 520;
-        if (m.obj.y > view.y + 540) m.obj.y = view.y - 8;
+    hdBubbles = hdBubbles.filter(v => {
+        const b = v.hdBubble;
+        const border = v.shieldBorder;
+        if (v.scene && border && border.scene) {
+            border.setVisible(false);
+            b.setPosition(v.x, v.y).setScale(1 + Math.sin(t * 0.006) * 0.04);
+            return true;
+        }
+        // Shield broken (or its owner gone): pop the bubble
+        v.hdBubble = null;
+        scene.tweens.add({ targets: b, scale: 1.6, alpha: 0, duration: 220, onComplete: () => b.destroy() });
+        return false;
     });
+}
 
-    // Butterflies wander around a home spot, wings beating
-    hdButterflies.forEach(b => {
-        b.t += dt;
-        const x = b.hx + Math.sin(b.t * 0.7 + b.seed) * 60 + Math.sin(b.t * 1.9) * 14;
-        const y = b.hy + Math.sin(b.t * 1.3 + b.seed * 2) * 22 + Math.sin(b.t * 4.1) * 5;
-        b.obj.setFlipX(x < b.obj.x);
-        b.obj.setPosition(x, y);
-        b.obj.scaleY = 0.9 * (0.25 + Math.abs(Math.sin(b.t * 16)) * 0.75);
-    });
+// Boss: the classic rectangles keep driving the fight (position, flashes,
+// phase colours, the defeat fade); they are hidden and mirrored by a sculpted
+// body, glowing eyes and a pulsing core.
+function hdUpdateBoss(scene, t) {
+    const rect = typeof bossRect !== 'undefined' ? bossRect : null;
+    if (!rect || !rect.scene) {
+        if (hdBoss) {
+            hdBoss.parts.forEach(p => p.destroy());
+            hdBoss = null;
+        }
+        return;
+    }
+    if (!hdBoss) {
+        const body = scene.add.image(rect.x, rect.y, hdBossTexture(scene, bossConfig.color)).setDepth(rect.depth + 0.1);
+        const eyes = scene.add.image(rect.x, rect.y, 'hd_boss_eyes').setDepth(rect.depth + 0.2);
+        const coreGlow = scene.add.image(rect.x, rect.y, 'hd_glow').setBlendMode(Phaser.BlendModes.ADD).setDepth(rect.depth + 0.2);
+        const core = scene.add.image(rect.x, rect.y, 'hd_boss_core').setDepth(rect.depth + 0.3);
+        const eyeGlow = scene.add.image(rect.x, rect.y, 'hd_glow').setBlendMode(Phaser.BlendModes.ADD).setDepth(rect.depth + 0.2).setScale(0.5, 0.2);
+        hdBoss = { body, eyes, coreGlow, core, eyeGlow, parts: [body, eyes, coreGlow, core, eyeGlow] };
+    }
+    const b = hdBoss;
+    const coreRect = typeof bossCoreRect !== 'undefined' ? bossCoreRect : null;
+    rect.setVisible(false);
+    if (coreRect && coreRect.scene) coreRect.setVisible(false);
 
-    hdLeaves.forEach(l => {
-        l.sway += dt * 2.2;
-        l.x += (l.vx + Math.sin(l.sway) * 22) * dt;
-        l.y += l.vy * dt;
-        if (l.y > 620) { l.y = -20; l.x = Math.random() * 900; }
-        if (l.x < -30) l.x = 830;
-        l.obj.setPosition(l.x, l.y);
-        l.obj.rotation += l.spin * dt;
-        // Flutter: the leaf turning over reads as a change in width
-        const base = l.near ? 2.6 : 1;
-        l.obj.scaleX = base * (0.3 + Math.abs(Math.sin(l.sway * 1.3)) * 0.7);
+    const moving = bossSprite && bossSprite.body && Math.abs(bossSprite.body.velocity.x) > 5;
+    const bob = moving ? Math.abs(Math.sin(t * 0.012)) * -3 : Math.sin(t * 0.003) * 1.5;
+    const facing = player && player.x < rect.x ? -1 : 1;
+    const s = rect.scaleX;
+    const x = rect.x, y = rect.y + bob;
+    const alpha = rect.alpha;
+    b.body.setPosition(x, y).setScale(s * facing, s).setAlpha(alpha);
+    // Damage and defeat flashes recolour the rectangle; carry that onto the body
+    if (rect.fillColor !== bossConfig.color) b.body.setTint(hdMix(rect.fillColor, 0xffffff, 0.35));
+    else b.body.clearTint();
+    const eyeColor = rect.strokeColor || bossConfig.strokeColor;
+    b.eyes.setPosition(x, y - 27 * s).setScale(s).setTint(eyeColor).setAlpha(alpha);
+    b.eyeGlow.setPosition(x, y - 27 * s).setTint(eyeColor).setAlpha(alpha * 0.8);
+    const coreColor = coreRect && coreRect.scene ? coreRect.fillColor : bossConfig.coreColor;
+    const pulse = coreRect && coreRect.scene ? coreRect.scaleX : 1;
+    b.core.setPosition(x, y + 2 * s).setScale(pulse * s * 0.9).setTint(coreColor).setAlpha(alpha);
+    b.coreGlow.setPosition(x, y + 2 * s).setScale(0.45 * pulse * s).setTint(coreColor).setAlpha(alpha * 0.9);
+}
+
+// Projectiles get a soft glow that follows them until they are gone
+function hdUpdateGlowFollowers(scene) {
+    const attach = (list, tint) => list.forEach(p => {
+        if (p.rect && p.rect.scene && !p.rect.hdGlow) {
+            p.rect.hdGlow = scene.add.image(p.rect.x, p.rect.y, 'hd_glow').setScale(0.28)
+                .setTint(tint).setBlendMode(Phaser.BlendModes.ADD).setDepth(66);
+            hdGlowFollowers.push(p.rect);
+        }
     });
+    if (typeof projectileRects !== 'undefined') attach(projectileRects, 0xffe040);
+    if (typeof bossProjectiles !== 'undefined') attach(bossProjectiles, 0xff5a20);
+    hdGlowFollowers = hdGlowFollowers.filter(r => {
+        if (!r.scene || !r.active) { r.hdGlow.destroy(); return false; }
+        r.hdGlow.setPosition(r.x, r.y);
+        return true;
+    });
+}
+
+function hdUpdateGoal(dt, t) {
+    const g = hdGoal;
+    if (!g || !endFlag) return;
+    const alpha = endFlag.alpha;
+    g.parts.forEach(p => { if (p !== g.parts[0] && p !== g.parts[1]) p.setAlpha(alpha); });
+    g.parts[0].setVisible(alpha > 0);
+    g.parts[1].setVisible(alpha > 0);
+    g.cloth.setTexture('hd_goal_cloth_' + (Math.floor(t / 80) % HD_GOAL_FRAMES));
+    g.sparks.forEach(s => {
+        s.t += dt * 0.35;
+        if (s.t > 1) s.t -= 1;
+        const rise = s.t * g.height;
+        s.obj.setPosition(g.x + Math.sin(s.t * 9 + s.obj.depth) * 12, g.ground - rise);
+        s.obj.setAlpha(alpha * Math.sin(s.t * Math.PI) * 0.9);
+    });
+}
+
+function hdUpdateCritters(scene, dt) {
+    hdCritters.forEach(c => {
+        if (c.kind === 'bird') {
+            c.phase += dt * 9;
+            c.obj.x -= c.speed * dt;
+            c.obj.y = c.baseY + Math.sin(c.phase * 0.15) * 4;
+            c.obj.scaleY = Math.abs(c.obj.scaleX) * (0.55 + Math.abs(Math.sin(c.phase)) * 0.6);
+            if (c.obj.x < -20) { c.obj.x = 820; c.baseY = 110 + Math.random() * 100; }
+        } else if (c.kind === 'butterfly') {
+            c.t += dt;
+            const x = c.hx + Math.sin(c.t * 0.7 + c.seed) * 60 + Math.sin(c.t * 1.9) * 14;
+            const y = c.hy + Math.sin(c.t * 1.3 + c.seed * 2) * 22 + Math.sin(c.t * 4.1) * 5;
+            c.obj.setFlipX(x < c.obj.x);
+            c.obj.setPosition(x, y);
+            c.obj.scaleY = 0.9 * (0.25 + Math.abs(Math.sin(c.t * 16)) * 0.75);
+        } else if (c.kind === 'bat') {
+            // Bats burst across the screen now and then, in a loose group
+            if (!c.active) {
+                c.delay -= dt;
+                if (c.delay <= 0) {
+                    c.active = true;
+                    c.dir = Math.random() < 0.5 ? 1 : -1;
+                    c.obj.setPosition(c.dir > 0 ? -30 : 830, 60 + Math.random() * 200).setFlipX(c.dir < 0);
+                    c.speed = 160 + Math.random() * 90;
+                }
+                return;
+            }
+            c.t += dt;
+            c.obj.x += c.dir * c.speed * dt;
+            c.obj.y += Math.sin(c.t * 7) * 40 * dt;
+            c.obj.scaleY = Math.abs(c.obj.scaleX) * (0.4 + Math.abs(Math.sin(c.t * 22)) * 0.7);
+            if (c.obj.x < -40 || c.obj.x > 840) { c.active = false; c.delay = 5 + Math.random() * 9; }
+        }
+    });
+}
+
+function hdUpdateParticles(scene, dt) {
+    for (let i = 0; i < hdParticles.length; i++) {
+        const p = hdParticles[i];
+        const o = p.obj;
+        p.t += dt;
+        switch (p.kind) {
+            case 'mote':
+                p.x += (p.vx + Math.sin(p.t * 0.7) * 6) * dt;
+                p.y += (p.vy + Math.cos(p.t * 0.9) * 5) * dt;
+                o.setAlpha(p.base * (0.6 + Math.sin(p.t * 2.3) * 0.4));
+                break;
+            case 'dust':
+                p.x += p.vx * dt;
+                p.y += (p.vy + Math.sin(p.t * 1.7) * 12) * dt;
+                break;
+            case 'leaf': {
+                p.x += (p.vx + Math.sin(p.t * 2.2) * 22) * dt;
+                p.y += p.vy * dt;
+                o.rotation += p.spin * dt;
+                const base = p.near ? 2.6 : 1;
+                o.scaleX = base * (0.3 + Math.abs(Math.sin(p.t * 2.9)) * 0.7);
+                break;
+            }
+            case 'snow':
+                p.x += (p.vx + Math.sin(p.t * 1.3) * 14) * dt;
+                p.y += p.vy * dt;
+                break;
+            case 'ember':
+                p.x += (p.vx + Math.sin(p.t * 3) * 10) * dt;
+                p.y += p.vy * dt;
+                o.setAlpha(0.5 + Math.sin(p.t * 9) * 0.4);
+                break;
+            case 'spark':
+                // Short bursts from somewhere overhead, falling under gravity
+                if (p.life <= 0) {
+                    p.delay -= dt;
+                    o.setVisible(false);
+                    if (p.delay <= 0) {
+                        p.x = 40 + Math.random() * 720; p.y = 40 + Math.random() * 160;
+                        p.vx = (Math.random() - 0.5) * 160; p.vy = -60 - Math.random() * 80;
+                        p.life = 0.9 + Math.random() * 0.6; p.delay = 1 + Math.random() * 3;
+                        o.setVisible(true);
+                    }
+                    continue;
+                }
+                p.life -= dt;
+                p.vy += 420 * dt;
+                p.x += p.vx * dt; p.y += p.vy * dt;
+                o.setRotation(Math.atan2(p.vy, p.vx)).setAlpha(Math.min(1, p.life * 2));
+                break;
+            case 'drip':
+                if (p.delay > 0) {
+                    p.delay -= dt;
+                    o.setVisible(false);
+                    if (p.delay <= 0) { p.x = 20 + Math.random() * 760; p.y = -10; p.vy = 0; o.setVisible(true); }
+                    continue;
+                }
+                p.vy += 500 * dt;
+                p.y += p.vy * dt;
+                if (p.y > 620) p.delay = 1 + Math.random() * 4;
+                break;
+        }
+        // Wrap drifting particles around the screen
+        if (p.kind !== 'spark' && p.kind !== 'drip') {
+            if (p.y > 620) { p.y = -20; p.x = Math.random() * 900; }
+            if (p.y < -30) { p.y = 610; p.x = Math.random() * 800; }
+            if (p.x < -30) p.x = 830;
+            if (p.x > 840) p.x = -20;
+        }
+        o.setPosition(p.x, p.y);
+    }
+
+    // An occasional shooting star over night skies
+    if (hdNextShootingStar > 0) {
+        hdNextShootingStar -= dt;
+        if (hdNextShootingStar <= 0) {
+            hdNextShootingStar = 5 + Math.random() * 7;
+            const sx = 150 + Math.random() * 500, sy = 30 + Math.random() * 110;
+            const star = scene.add.image(sx, sy, 'hd_streak').setScrollFactor(0).setDepth(-37)
+                .setBlendMode(Phaser.BlendModes.ADD).setRotation(Math.PI * 0.85).setScale(1.2, 0.6);
+            scene.tweens.add({
+                targets: star, x: sx - 220, y: sy + 90, alpha: 0, duration: 900, ease: 'Quad.easeIn',
+                onComplete: () => star.destroy()
+            });
+        }
+    }
 }
