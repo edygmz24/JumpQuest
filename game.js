@@ -651,12 +651,20 @@ function generateGameTextures(scene) {
     });
 }
 
+// The HD look (hdlook.js) swaps in its own art for some textures
+function artKey(key) {
+    return typeof hdTextureKey === 'function' ? hdTextureKey(key) : key;
+}
+
 // Draws a platform/ground block as an extruded 2.5D solid, baked into a
 // cached texture and placed as a single image. Callers still receive an array
 // of game objects so they can fade or destroy a block as a unit.
 //
 // Falls back to the original flat rectangles if visuals.js is absent.
 function drawTerrainBlock(scene, x, y, w, h, color, isGround) {
+    if (typeof hdLookActive !== 'undefined' && hdLookActive) {
+        return hdTerrainBlock(scene, x, y, w, h, color, isGround);
+    }
     if (typeof placeTerrainBlock === 'function') {
         // A few variants per size keep repeated ground sections from looking
         // stamped, without giving up texture caching.
@@ -882,28 +890,9 @@ function create() {
     }
 }
 
-function loadLevel(levelIndex) {
-    // Get level data
-    currentLevel = levels[levelIndex];
-
-    // Set world bounds based on level
-    this.physics.world.setBounds(0, 0, currentLevel.worldWidth, currentLevel.worldHeight);
-
-    // Setup camera to follow player
-    this.cameras.main.setBounds(0, 0, currentLevel.worldWidth, currentLevel.worldHeight);
-    this.cameras.main.setZoom(1);
-
-    // Theme colors (with defaults)
-    const theme = currentLevel.theme || {};
-    const skyColor = theme.skyColor ?? 0x1a1a2e;
-    const groundColor = theme.groundColor ?? 0x00aa00;
-    const platformColor = theme.platformColor ?? 0x8B4513;
-    const bgColor1 = theme.bgColor1 ?? 0x16213e;
-    const bgColor2 = theme.bgColor2 ?? 0x0f3460;
-
-    // Generate all procedural textures (no-op if already created)
-    generateGameTextures(this);
-
+// Sky, parallax hills, props, weather and ambient particles for the classic
+// look. Called with the scene as `this`.
+function buildClassicBackdrop(theme, skyColor, groundColor, bgColor1, bgColor2) {
     // Sky: vertical gradient (theme color fading toward a lighter horizon)
     const skyKey = 'sky_' + skyColor.toString(16);
     if (!this.textures.exists(skyKey)) {
@@ -1004,7 +993,6 @@ function loadLevel(levelIndex) {
     }
 
     // Ambient floating particles (fireflies at night, dust motes by day)
-    ambientParticles = [];
     const ambColor = isNight ? 0xffe28a : 0xffffff;
     const ambientCount = (typeof lowFxMode !== 'undefined' && lowFxMode) ? 0 : 14;
     for (let i = 0; i < ambientCount; i++) {
@@ -1017,6 +1005,36 @@ function loadLevel(levelIndex) {
             vy: (Math.random() - 0.5) * 12,
             phase: Math.random() * Math.PI * 2
         });
+    }
+}
+
+function loadLevel(levelIndex) {
+    // Get level data
+    currentLevel = levels[levelIndex];
+
+    // Set world bounds based on level
+    this.physics.world.setBounds(0, 0, currentLevel.worldWidth, currentLevel.worldHeight);
+
+    // Setup camera to follow player
+    this.cameras.main.setBounds(0, 0, currentLevel.worldWidth, currentLevel.worldHeight);
+    this.cameras.main.setZoom(1);
+
+    // Theme colors (with defaults)
+    const theme = currentLevel.theme || {};
+    const skyColor = theme.skyColor ?? 0x1a1a2e;
+    const groundColor = theme.groundColor ?? 0x00aa00;
+    const platformColor = theme.platformColor ?? 0x8B4513;
+    const bgColor1 = theme.bgColor1 ?? 0x16213e;
+    const bgColor2 = theme.bgColor2 ?? 0x0f3460;
+
+    // Generate all procedural textures (no-op if already created)
+    generateGameTextures(this);
+
+    ambientParticles = [];
+    if (typeof shouldUseHdLook === 'function' && shouldUseHdLook(levelIndex)) {
+        buildHdLook(this);
+    } else {
+        buildClassicBackdrop.call(this, theme, skyColor, groundColor, bgColor1, bgColor2);
     }
 
     // Create platform group
@@ -1048,7 +1066,7 @@ function loadLevel(levelIndex) {
     if (currentLevel.coins) {
         currentLevel.coins.forEach(coinData => {
             const coin = coins.create(coinData.x, coinData.y, null).setDisplaySize(20, 20).setVisible(false).refreshBody();
-            const coinRect = this.add.image(coinData.x, coinData.y, 'tex_coin');
+            const coinRect = this.add.image(coinData.x, coinData.y, artKey('tex_coin'));
             coinRects.push({ rect: coinRect, body: coin });
         });
     }
@@ -1058,7 +1076,7 @@ function loadLevel(levelIndex) {
     if (currentLevel.checkpoints) {
         currentLevel.checkpoints.forEach(cpData => {
             const checkpoint = checkpoints.create(cpData.x, cpData.y, null).setDisplaySize(20, 50).setVisible(false).refreshBody();
-            const cpRect = this.add.image(cpData.x, cpData.y, 'tex_checkpoint').setTint(0x999999); // Gray = inactive
+            const cpRect = this.add.image(cpData.x, cpData.y, artKey('tex_checkpoint')).setTint(0x999999); // Gray = inactive
             checkpointRects.push({ rect: cpRect, body: checkpoint, activated: false });
         });
     }
@@ -1072,11 +1090,12 @@ function loadLevel(levelIndex) {
     if (typeof drawPlayerHat === 'function') {
         playerHatObjects = drawPlayerHat(this, playerRect);
     }
+    if (typeof hdLookActive !== 'undefined' && hdLookActive) createHdPlayerRig(this);
 
     // Ghost sprite (translucent player copy showing best-time replay)
     if (ghostReplay && ghostEnabled && ghostReplay.length > 0) {
         const ghostAlpha = typeof getGhostReplayAlpha === 'function' ? getGhostReplayAlpha() : 0.25;
-        ghostSprite = this.add.image(ghostReplay[0]?.x || 100, ghostReplay[0]?.y || 500, 'tex_player').setAlpha(ghostAlpha);
+        ghostSprite = this.add.image(ghostReplay[0]?.x || 100, ghostReplay[0]?.y || 500, artKey('tex_player')).setAlpha(ghostAlpha);
         ghostSprite.setDepth(50);
         // The ghost wears the same hat, faded to match
         if (typeof drawPlayerHat === 'function') {
@@ -1103,7 +1122,7 @@ function loadLevel(levelIndex) {
 
         const enemy = enemies.create(enemyData.x, enemyData.y, null).setDisplaySize(size, height).setVisible(false);
         const enemyTexKey = this.textures.exists('tex_enemy_' + type) ? 'tex_enemy_' + type : 'tex_enemy_walker';
-        const enemyRect = this.add.sprite(enemyData.x, enemyData.y, enemyTexKey);
+        const enemyRect = this.add.sprite(enemyData.x, enemyData.y, artKey(enemyTexKey));
 
         // Shield enemies get a visible border
         if (type === 'shield') {
@@ -1236,7 +1255,7 @@ function loadLevel(levelIndex) {
         currentLevel.springs.forEach(sData => {
             const s = springs.create(sData.x, sData.y, null).setDisplaySize(32, 20).setVisible(false).refreshBody();
             s.lastBounce = 0;
-            const sRect = this.add.image(sData.x, sData.y, 'tex_spring');
+            const sRect = this.add.image(sData.x, sData.y, artKey('tex_spring'));
             springRects.push({ rect: sRect, body: s });
         });
     }
@@ -1349,7 +1368,7 @@ function loadLevel(levelIndex) {
             const sc = coins.create(scData.x, scData.y, null).setDisplaySize(20, 20).setVisible(false).refreshBody();
             sc.setAlpha(0);
             sc.body.enable = false;
-            const scRect = this.add.image(scData.x, scData.y, 'tex_coin');
+            const scRect = this.add.image(scData.x, scData.y, artKey('tex_coin'));
             scRect.setAlpha(0);
             coinRects.push({ rect: scRect, body: sc });
             secretCoinRects.push({ rect: scRect, body: sc, trigger: scData.revealTrigger, revealed: false });
@@ -1375,7 +1394,7 @@ function loadLevel(levelIndex) {
     }
 
     // End flag at the position from level data
-    endFlag = this.add.image(currentLevel.flagPosition.x, currentLevel.flagPosition.y, 'tex_flag');
+    endFlag = this.add.image(currentLevel.flagPosition.x, currentLevel.flagPosition.y, artKey('tex_flag'));
     this.physics.add.existing(endFlag, true);
     // Gentle waving animation
     this.tweens.add({
@@ -1393,6 +1412,7 @@ function loadLevel(levelIndex) {
 
     // Start indicator
     startText = this.add.text(50, 450, 'START', { fontSize: '20px', fill: '#fff' });
+    if (typeof hdLookActive !== 'undefined' && hdLookActive) decorateHdLevel(this);
 
     // Collisions
     this.physics.add.collider(player, platforms);
@@ -1414,7 +1434,7 @@ function loadLevel(levelIndex) {
             platform.body.setImmovable(true);
             platform.body.setAllowGravity(false);
 
-            const rect = this.add.image(mp.x, mp.y, 'tex_plank').setDisplaySize(mp.width, mp.height);
+            const rect = this.add.image(mp.x, mp.y, artKey('tex_plank')).setDisplaySize(mp.width, mp.height);
 
             movingPlatforms.push({
                 sprite: platform,
@@ -1761,7 +1781,7 @@ function update() {
             // Dash trail particles
             spawnParticles(this, player.x - dashDirection * 10, player.y, 0x00ccff, 1, 10);
             // Afterimage trail
-            const after = this.add.image(player.x, player.y, 'tex_player')
+            const after = this.add.image(player.x, player.y, artKey('tex_player'))
                 .setAlpha(0.35).setTint(0x66e0ff).setFlipX(playerRect.flipX).setDepth(9);
             this.tweens.add({
                 targets: after, alpha: 0, duration: 180,
@@ -2737,9 +2757,9 @@ function hitSpring(playerObj, spring) {
 
     const sr = springRects.find(s => s.body === spring);
     if (sr) {
-        sr.rect.setTexture('tex_spring_compressed');
+        sr.rect.setTexture(artKey('tex_spring_compressed'));
         this.time.delayedCall(140, () => {
-            if (sr.rect && sr.rect.scene) sr.rect.setTexture('tex_spring');
+            if (sr.rect && sr.rect.scene) sr.rect.setTexture(artKey('tex_spring'));
         });
     }
 
@@ -3724,7 +3744,7 @@ function breakBlock(block) {
     // Spawn contents
     if (contains === 'coin') {
         const coin = coins.create(bx, by - 30, null).setDisplaySize(20, 20).setVisible(false).refreshBody();
-        const coinRect = this.add.image(bx, by - 30, 'tex_coin');
+        const coinRect = this.add.image(bx, by - 30, artKey('tex_coin'));
         coinRects.push({ rect: coinRect, body: coin });
     } else if (contains && POWERUP_TYPES[contains]) {
         const pu = powerUps.create(bx, by - 30, null).setDisplaySize(25, 25).setVisible(false).refreshBody();
