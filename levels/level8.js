@@ -17,12 +17,12 @@ const level8 = {
         // Starting jungle floor
         { x: 80, y: 500, width: 180, height: 20 },
         { x: 300, y: 440, width: 120, height: 20 },
-        { x: 460, y: 500, width: 100, height: 20 },
+        { x: 430, y: 500, width: 100, height: 20 },
 
         // Lower path (easier, fewer secrets)
         { x: 620, y: 500, width: 140, height: 20 },
         { x: 820, y: 460, width: 100, height: 20 },
-        { x: 980, y: 500, width: 120, height: 20 },
+        { x: 1060, y: 500, width: 280, height: 20 },
 
         // Upper path (more secrets via breakable blocks)
         { x: 620, y: 380, width: 100, height: 20 },
@@ -30,7 +30,6 @@ const level8 = {
         { x: 940, y: 380, width: 100, height: 20 },
 
         // Convergence area
-        { x: 1120, y: 500, width: 160, height: 20 },
         { x: 1340, y: 440, width: 100, height: 20 },
         { x: 1500, y: 380, width: 100, height: 20 },
 
@@ -87,7 +86,7 @@ const level8 = {
 
     obstacles: [
         // Jungle floor spikes
-        { x: 550, y: 555 },
+        { x: 515, y: 555 },
         { x: 1050, y: 555 },
         { x: 1600, y: 555 },
         { x: 2480, y: 555 },
@@ -99,7 +98,7 @@ const level8 = {
         // Starting area
         { x: 120, y: 470 },
         { x: 300, y: 410 },
-        { x: 460, y: 470 },
+        { x: 430, y: 470 },
         // Lower path coins
         { x: 660, y: 470 },
         { x: 820, y: 430 },

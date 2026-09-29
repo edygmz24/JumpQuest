@@ -30,25 +30,22 @@ const level2 = {
         { x: 1180, y: 510, width: 140, height: 20 },
 
         // Merge point
-        { x: 1350, y: 480, width: 180, height: 20 },
+        { x: 1455, y: 480, width: 390, height: 20 },
 
         // Section 3 (1400-2000): Jumper enemies on wide platforms
-        { x: 1550, y: 480, width: 200, height: 20 },
-        { x: 1850, y: 470, width: 200, height: 20 },
+        { x: 1935, y: 470, width: 370, height: 20 },
 
         // Section 4 (2000-2600): Power-up area + moving platform section
-        { x: 2050, y: 490, width: 140, height: 20 },
-        { x: 2500, y: 480, width: 140, height: 20 },
+        { x: 2665, y: 490, width: 470, height: 20 },
 
         // Section 5 (2600-3200): Long platform with walkers, then flag area
-        { x: 2750, y: 490, width: 300, height: 20 },
         { x: 3100, y: 500, width: 120, height: 20 }
     ],
 
     movingPlatforms: [
         // Section 4: Two moving platforms in sequence
-        { x: 2230, y: 470, width: 100, height: 20, moveX: 120, moveY: 0, speed: 55 },
-        { x: 2400, y: 450, width: 100, height: 20, moveX: 0, moveY: -60, speed: 50 }
+        { x: 2230, y: 470, width: 100, height: 20, moveX: 60, moveY: 0, speed: 55 },
+        { x: 2400, y: 390, width: 100, height: 20, moveX: 0, moveY: 60, speed: 50 }
     ],
 
     enemies: [
@@ -91,7 +88,7 @@ const level2 = {
         { x: 1950, y: 440 },
 
         // Section 4: Coins on moving platforms
-        { x: 2280, y: 440 },
+        { x: 2268, y: 440 },
         { x: 2450, y: 420 },
 
         // Section 5: Coins along the long platform
@@ -109,13 +106,13 @@ const level2 = {
 
     powerUps: [
         // Speed boost before the moving platform section
-        { x: 2080, y: 460, type: 'speed' }
+        { x: 2080, y: 440, type: 'speed' }
     ],
 
     breakableBlocks: [
         // Hidden coins in breakable blocks
         { x: 1370, y: 450, width: 40, height: 20, contains: 'coin' },
-        { x: 2530, y: 450, width: 40, height: 20, contains: 'coin' }
+        { x: 2530, y: 460, width: 40, height: 20, contains: 'coin' }
     ],
 
     // Secret area: hidden coin stash underground near x:1200

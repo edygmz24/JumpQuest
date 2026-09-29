@@ -36,7 +36,7 @@ const level7 = {
 
         // Complex machinery area
         { x: 2520, y: 500, width: 150, height: 20 },
-        { x: 2720, y: 430, width: 100, height: 20 },
+        { x: 2740, y: 430, width: 100, height: 20 },
         { x: 2900, y: 370, width: 100, height: 20 },
         { x: 3080, y: 430, width: 110, height: 20 },
 
@@ -49,15 +49,11 @@ const level7 = {
 
     movingPlatforms: [
         // Horizontal - first timing gap
-        { x: 780, y: 420, width: 80, height: 20, moveX: 100, moveY: 0, speed: 60 },
+        { x: 780, y: 420, width: 80, height: 20, moveX: 70, moveY: 0, speed: 60 },
         // Vertical - rising/falling gear
         { x: 1050, y: 350, width: 80, height: 20, moveX: 0, moveY: 80, speed: 50 },
         // Horizontal - across shooter zone
-        { x: 1800, y: 380, width: 90, height: 20, moveX: 120, moveY: 0, speed: 70 },
-        // Diagonal movement - complex machinery
-        { x: 2620, y: 380, width: 80, height: 20, moveX: 60, moveY: 50, speed: 45 },
-        // Fast horizontal - final gauntlet
-        { x: 3380, y: 400, width: 80, height: 20, moveX: 100, moveY: 0, speed: 90 }
+        { x: 1800, y: 380, width: 90, height: 20, moveX: 120, moveY: 0, speed: 70 }
     ],
 
     enemies: [
@@ -81,7 +77,7 @@ const level7 = {
 
     // Crumbling conveyor plates
     crumblingPlatforms: [
-        { x: 1500, y: 420, width: 100, height: 20 },
+        { x: 1500, y: 470, width: 100, height: 20 },
         { x: 2600, y: 400, width: 100, height: 20 }
     ],
 
@@ -103,7 +99,7 @@ const level7 = {
         { x: 320, y: 420 },
         { x: 500, y: 470 },
         // First timing section
-        { x: 830, y: 390 },
+        { x: 808, y: 390 },
         { x: 950, y: 370 },
         // Shooter zone
         { x: 1350, y: 410 },
@@ -114,7 +110,7 @@ const level7 = {
         { x: 2100, y: 410 },
         { x: 2300, y: 350 },
         // Complex machinery
-        { x: 2720, y: 400 },
+        { x: 2740, y: 400 },
         { x: 2900, y: 340 },
         { x: 3080, y: 400 },
         // Final gauntlet
