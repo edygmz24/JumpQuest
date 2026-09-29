@@ -825,6 +825,7 @@ function hdSwitchWorld(scene, name) {
             hdBuildScenery(scene, name);
             hdRestylePlatforms(scene);
             hdReleaseWorld(scene, oldName, name);
+            if (typeof updateEndlessHudTitle === 'function') updateEndlessHudTitle();
             // Below the HUD and tutorial hints
             const title = scene.add.text(400, 225, hdBiome.title, {
                 fontSize: '26px', fill: '#ffffff', fontStyle: 'bold', stroke: '#000', strokeThickness: 5
