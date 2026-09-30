@@ -65,6 +65,8 @@ function startEndlessMode(scene) {
     scene.physics.world.setBounds(0, 0, 999999, 600);
     scene.cameras.main.setBounds(0, 0, 999999, 600);
 
+    updateEndlessHudTitle();
+
     // Distance HUD (top center)
     endlessDistanceText = scene.add.text(400, 10, 'Distance: 0m | Best: ' + endlessBest + 'm', {
         fontSize: '16px',
@@ -81,6 +83,15 @@ function startEndlessMode(scene) {
         generateEndlessChunk(scene, i * 400);
     }
     endlessLastGeneratedX = 2400;
+}
+
+// The HUD panel otherwise keeps the base level's "LEVEL 1 OF 10" title.
+// With the HD look, runs tour several worlds, so the title names the
+// current one (hdlook.js calls this again on every world switch).
+function updateEndlessHudTitle() {
+    if (!endlessMode || !levelNameText || !levelNameText.scene) return;
+    const world = (typeof hdLookActive !== 'undefined' && hdLookActive && hdBiome) ? hdBiome.title : null;
+    levelNameText.setText(world ? 'ENDLESS RUN - ' + world : 'ENDLESS RUN');
 }
 
 // ========================
@@ -287,6 +298,13 @@ function updateEndlessMode(scene) {
 // Cleanup offscreen objects
 // ========================
 
+// A game object that has not been destroyed yet. Collected coins, used
+// power-ups and stomped enemies are only disabled (inactive), so checking
+// `active` would skip them and leave their bodies behind for the whole run.
+function endlessIsAlive(obj) {
+    return !!(obj && obj.scene);
+}
+
 function cleanupEndlessObjects(thresholdX) {
     // Clean up tracked endless objects (coins, enemies, obstacles, powerups)
     for (let i = endlessObjects.length - 1; i >= 0; i--) {
@@ -295,11 +313,11 @@ function cleanupEndlessObjects(thresholdX) {
         const objX = (obj.body && obj.body.x) ? obj.body.x : obj.x;
         if (objX < thresholdX) {
             // Remove from physics group
-            if (obj.body && obj.body.active !== false) {
+            if (endlessIsAlive(obj.body)) {
                 obj.body.destroy();
             }
             // Remove visual rect
-            if (obj.rect && obj.rect.active !== false) {
+            if (endlessIsAlive(obj.rect)) {
                 obj.rect.destroy();
             }
             // Also remove from game.js tracking arrays
@@ -321,10 +339,10 @@ function cleanupEndlessObjects(thresholdX) {
     for (let i = endlessPlatformRects.length - 1; i >= 0; i--) {
         const p = endlessPlatformRects[i];
         if (p.x < thresholdX) {
-            if (p.body && p.body.active !== false) p.body.destroy();
+            if (endlessIsAlive(p.body)) p.body.destroy();
             if (Array.isArray(p.rect)) {
-                p.rect.forEach(r => { if (r && r.active !== false) r.destroy(); });
-            } else if (p.rect && p.rect.active !== false) {
+                p.rect.forEach(r => { if (endlessIsAlive(r)) r.destroy(); });
+            } else if (endlessIsAlive(p.rect)) {
                 p.rect.destroy();
             }
             endlessPlatformRects.splice(i, 1);
