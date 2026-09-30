@@ -53,7 +53,7 @@ const level6 = {
 
     movingPlatforms: [
         // Vertical cloud float near start
-        { x: 500, y: 320, width: 80, height: 20, moveX: 0, moveY: 80, speed: 40 },
+        { x: 500, y: 320, width: 80, height: 20, moveX: 0, moveY: 60, speed: 40 },
         // Vertical cloud float mid-level
         { x: 1950, y: 200, width: 80, height: 20, moveX: 0, moveY: 70, speed: 45 },
         // Vertical cloud float near end

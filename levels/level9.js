@@ -14,7 +14,7 @@ const level9 = {
 
     platforms: [
         // Starting runway
-        { x: 80, y: 500, width: 250, height: 20 },
+        { x: 65, y: 500, width: 220, height: 20 },
 
         // First speed section - long wide platforms
         { x: 400, y: 480, width: 280, height: 20 },
@@ -23,7 +23,7 @@ const level9 = {
 
         // Slight elevation change
         { x: 1340, y: 450, width: 260, height: 20 },
-        { x: 1670, y: 480, width: 220, height: 20 },
+        { x: 1655, y: 480, width: 190, height: 20 },
 
         // Second speed section after checkpoint
         { x: 1970, y: 460, width: 280, height: 20 },
@@ -32,10 +32,10 @@ const level9 = {
 
         // Brief vertical moment
         { x: 2930, y: 420, width: 180, height: 20 },
-        { x: 3170, y: 460, width: 200, height: 20 },
+        { x: 3160, y: 460, width: 180, height: 20 },
 
         // Third speed section - chain stomp paradise
-        { x: 3440, y: 480, width: 300, height: 20 },
+        { x: 3460, y: 480, width: 260, height: 20 },
         { x: 3810, y: 460, width: 280, height: 20 },
 
         // Final sprint
@@ -59,8 +59,8 @@ const level9 = {
         { x: 2070, y: 444, type: 'walker' },
         { x: 2140, y: 444, type: 'walker' },
         // Chain stomp group 3 - chain stomp paradise
-        { x: 3470, y: 464, type: 'walker' },
-        { x: 3550, y: 464, type: 'walker' },
+        { x: 3486, y: 464, type: 'walker' },
+        { x: 3555, y: 464, type: 'walker' },
         // Jumpers for variety
         { x: 1340, y: 434, type: 'jumper' },
         { x: 2930, y: 404, type: 'jumper' },
@@ -86,7 +86,7 @@ const level9 = {
 
     coins: [
         // Coins along the speed path - easy to grab while running
-        { x: 150, y: 470 },
+        { x: 127, y: 470 },
         { x: 220, y: 470 },
         { x: 450, y: 450 },
         { x: 550, y: 450 },
@@ -97,7 +97,7 @@ const level9 = {
         { x: 1200, y: 450 },
         { x: 1400, y: 420 },
         { x: 1500, y: 420 },
-        { x: 1700, y: 450 },
+        { x: 1681, y: 450 },
         { x: 1800, y: 450 },
         // After checkpoint 1
         { x: 2020, y: 430 },
@@ -107,10 +107,10 @@ const level9 = {
         { x: 2700, y: 430 },
         // Brief vertical
         { x: 2960, y: 390 },
-        { x: 3200, y: 430 },
+        { x: 3187, y: 430 },
         // Chain stomp section
-        { x: 3500, y: 450 },
-        { x: 3600, y: 450 },
+        { x: 3512, y: 450 },
+        { x: 3578, y: 450 },
         { x: 3850, y: 430 },
         // Final sprint
         { x: 4200, y: 450 },
@@ -118,8 +118,8 @@ const level9 = {
     ],
 
     checkpoints: [
-        { x: 1670, y: 455 },
-        { x: 3440, y: 455 }
+        { x: 1655, y: 455 },
+        { x: 3460, y: 455 }
     ],
 
     powerUps: [

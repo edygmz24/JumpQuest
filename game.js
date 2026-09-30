@@ -78,6 +78,7 @@ let bestTimes = JSON.parse(localStorage.getItem('jqBestTimes') || localStorage.g
 // Lives System
 let lives = 3;
 let livesText;
+let levelNameText;             // HUD title; endless mode rewrites it per world
 let gameplayHudObjects = [];
 let controlsPopupObjects = [];
 
@@ -1472,6 +1473,7 @@ function loadLevel(levelIndex) {
         fontSize: '14px', fill: '#ffff00', fontStyle: 'bold'
     });
     levelName.setScrollFactor(0).setDepth(100);
+    levelNameText = levelName;
     // Let each level title define the panel width, while retaining enough room
     // for the Dash/Flow row on shorter level names.
     const hudPanelWidth = Math.max(285, Math.ceil(levelName.width + 40));

@@ -28,8 +28,7 @@ const level4 = {
         // Landing from section 1
         { x: 900, y: 300, width: 140, height: 20 },
         // Patrol platforms for walkers
-        { x: 1050, y: 480, width: 200, height: 20 },
-        { x: 1300, y: 480, width: 200, height: 20 },
+        { x: 1175, y: 480, width: 450, height: 20 },
         // Upper walkway
         { x: 1100, y: 350, width: 150, height: 20 },
         { x: 1350, y: 350, width: 150, height: 20 },
@@ -41,10 +40,10 @@ const level4 = {
         { x: 1700, y: 220, width: 100, height: 20 },
         { x: 2050, y: 220, width: 100, height: 20 },
         // Lower running platforms (player dashes through)
-        { x: 1650, y: 470, width: 160, height: 20 },
-        { x: 1850, y: 470, width: 160, height: 20 },
-        { x: 2050, y: 470, width: 160, height: 20 },
-        { x: 2250, y: 470, width: 160, height: 20 },
+        { x: 1650, y: 470, width: 110, height: 20 },
+        { x: 1850, y: 470, width: 110, height: 20 },
+        { x: 2050, y: 470, width: 110, height: 20 },
+        { x: 2250, y: 470, width: 110, height: 20 },
 
         // === Section 4 (2400-3200): Vertical tower climb ===
         // Alternating left-right platforms for wall-jump style climbing
@@ -60,19 +59,17 @@ const level4 = {
 
         // === Section 5 (3200-4000): Boss area ===
         // Open arena floor
-        { x: 3300, y: 480, width: 250, height: 20 },
-        { x: 3600, y: 480, width: 250, height: 20 },
+        { x: 3280, y: 480, width: 210, height: 20 },
+        { x: 3600, y: 480, width: 210, height: 20 },
         // Elevated platform for hidden breakable block
         { x: 3500, y: 320, width: 100, height: 20 },
         // Flag platform
-        { x: 3850, y: 480, width: 150, height: 20 }
+        { x: 3865, y: 480, width: 120, height: 20 }
     ],
 
     movingPlatforms: [
         // Section 1: Horizontal moving platform bridging a gap
-        { x: 550, y: 440, width: 90, height: 20, moveX: 100, moveY: 0, speed: 60 },
-        // Section 4: Vertical moving platform in the tower
-        { x: 2600, y: 500, width: 90, height: 20, moveX: 0, moveY: 100, speed: 50 }
+        { x: 580, y: 440, width: 90, height: 20, moveX: 100, moveY: 0, speed: 60 }
     ],
 
     enemies: [
@@ -96,8 +93,8 @@ const level4 = {
         { x: 2960, y: 264, type: 'walker' },
 
         // Section 5: 2 shield enemies + 1 shooter + 1 flyer
-        { x: 3400, y: 464, type: 'shield' },
-        { x: 3650, y: 464, type: 'shield' },
+        { x: 3364, y: 464, type: 'shield' },
+        { x: 3642, y: 464, type: 'shield' },
         { x: 3500, y: 304, type: 'shooter' },
         { x: 3750, y: 380, type: 'flyer' }
     ],
@@ -120,7 +117,7 @@ const level4 = {
         { x: 2150, y: 555 },
         // Section 5: spikes in arena
         { x: 3450, y: 555 },
-        { x: 3700, y: 555 }
+        { x: 3755, y: 555 }
     ],
 
     coins: [
@@ -137,20 +134,20 @@ const level4 = {
         { x: 1130, y: 320 },
         { x: 1380, y: 320 },
         // Section 3 (4 coins)
-        { x: 1700, y: 440 },
-        { x: 1900, y: 440 },
-        { x: 2100, y: 440 },
-        { x: 2300, y: 440 },
+        { x: 1684, y: 440 },
+        { x: 1884, y: 440 },
+        { x: 2084, y: 440 },
+        { x: 2284, y: 440 },
         // Section 4 (4 coins)
         { x: 2500, y: 330 },
         { x: 2680, y: 260 },
         { x: 2500, y: 190 },
         { x: 2800, y: 190 },
         // Section 5 (4 coins)
-        { x: 3350, y: 450 },
+        { x: 3322, y: 450 },
         { x: 3500, y: 290 },
-        { x: 3650, y: 450 },
-        { x: 3850, y: 450 }
+        { x: 3642, y: 450 },
+        { x: 3865, y: 450 }
     ],
 
     checkpoints: [
@@ -180,12 +177,12 @@ const level4 = {
     // Secret area: hidden upper path above Section 4 tower climb
     // Invisible platforms leading to the very top of the screen with secret coins
     invisiblePlatforms: [
-        { x: 2500, y: 160, width: 80, height: 20 },
+        { x: 2500, y: 130, width: 80, height: 20 },
         { x: 2650, y: 100, width: 80, height: 20 },
         { x: 2800, y: 60, width: 80, height: 20 }
     ],
     secretCoins: [
-        { x: 2500, y: 130, revealTrigger: { x: 2500, y: 160, radius: 40 } },
+        { x: 2500, y: 100, revealTrigger: { x: 2500, y: 160, radius: 40 } },
         { x: 2650, y: 70, revealTrigger: { x: 2650, y: 100, radius: 40 } },
         { x: 2800, y: 30, revealTrigger: { x: 2800, y: 60, radius: 40 } },
         { x: 2730, y: 30, revealTrigger: { x: 2800, y: 60, radius: 40 } },

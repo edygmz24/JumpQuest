@@ -16,14 +16,13 @@ const level3 = {
     platforms: [
         // Section 1 (0-800): Normal platforms leading to vertical shaft
         { x: 150, y: 500, width: 160, height: 20 },
-        { x: 380, y: 460, width: 140, height: 20 },
+        { x: 380, y: 440, width: 140, height: 20 },
         // Vertical shaft - alternating wall platforms to climb ~200px
         { x: 550, y: 480, width: 100, height: 20 },   // shaft base
         { x: 620, y: 400, width: 80, height: 20 },     // right wall platform
         { x: 530, y: 320, width: 80, height: 20 },     // left wall platform
-        { x: 620, y: 250, width: 80, height: 20 },     // right wall - top of shaft
+        { x: 695, y: 250, width: 230, height: 20 },    // top of shaft, joined to the ledge beyond
         // Exit from shaft
-        { x: 750, y: 250, width: 120, height: 20 },
 
         // Section 2 (800-1600): Open area with flyers
         { x: 900, y: 300, width: 140, height: 20 },
@@ -42,10 +41,9 @@ const level3 = {
         // Section 4 (2400-3000): Shield enemy + breakable block
         { x: 2450, y: 480, width: 200, height: 20 },
         { x: 2700, y: 440, width: 160, height: 20 },
-        { x: 2900, y: 480, width: 140, height: 20 },
+        { x: 2960, y: 490, width: 220, height: 20 },
 
         // Section 5 (3000-3600): Vertical ascent with wall jumps
-        { x: 3050, y: 500, width: 120, height: 20 },   // base
         { x: 3100, y: 420, width: 80, height: 20 },     // right side
         { x: 3030, y: 340, width: 80, height: 20 },     // left side
         { x: 3100, y: 260, width: 80, height: 20 },     // right side
@@ -54,16 +52,11 @@ const level3 = {
         { x: 3250, y: 180, width: 160, height: 20 }
     ],
 
-    movingPlatforms: [
-        // Section 2: Moving platform to help cross the open area
-        { x: 1000, y: 330, width: 100, height: 20, moveX: 80, moveY: 0, speed: 45 },
-        // Section 5: Moving platform near the top to reach flag
-        { x: 3150, y: 200, width: 90, height: 20, moveX: 80, moveY: 0, speed: 40 }
-    ],
+    movingPlatforms: [],
 
     enemies: [
         // Section 1: Walkers on early platforms
-        { x: 400, y: 444, type: 'walker' },
+        { x: 400, y: 424, type: 'walker' },
         { x: 770, y: 234, type: 'walker' },
 
         // Section 2: Flyers in the open area (sine-wave movement)
@@ -76,7 +69,7 @@ const level3 = {
 
         // Section 4: Shield enemy guarding breakable block, plus a walker
         { x: 2720, y: 424, type: 'shield' },
-        { x: 2920, y: 464, type: 'walker' },
+        { x: 2921, y: 474, type: 'walker' },
 
         // Section 5: Flyer in vertical ascent
         { x: 3080, y: 300, type: 'flyer' }
@@ -84,9 +77,9 @@ const level3 = {
 
     // Crumbling ledges — the cave is coming apart
     crumblingPlatforms: [
-        { x: 1150, y: 430, width: 90, height: 20 },
+        { x: 1150, y: 470, width: 90, height: 20 },
         { x: 1900, y: 380, width: 90, height: 20 },
-        { x: 2750, y: 420, width: 90, height: 20 }
+        { x: 2830, y: 360, width: 90, height: 20 }
     ],
 
     obstacles: [
@@ -98,7 +91,7 @@ const level3 = {
     coins: [
         // Section 1: On early platforms and in shaft
         { x: 170, y: 470 },
-        { x: 400, y: 430 },
+        { x: 400, y: 410 },
         { x: 570, y: 450 },
         { x: 640, y: 370 },
         { x: 550, y: 290 },
@@ -123,7 +116,7 @@ const level3 = {
         // Section 4: Around the shield enemy area
         { x: 2480, y: 450 },
         { x: 2550, y: 450 },
-        { x: 2930, y: 450 },
+        { x: 2929, y: 460 },
 
         // Section 5: Vertical ascent coins
         { x: 3120, y: 390 },
@@ -145,7 +138,7 @@ const level3 = {
         // Section 2: Hidden coin in breakable block
         { x: 1150, y: 320, width: 40, height: 20, contains: 'coin' },
         // Section 4: doubleJump power-up guarded by shield enemy
-        { x: 2750, y: 410, width: 40, height: 20, contains: 'doubleJump' },
+        { x: 2830, y: 350, width: 40, height: 20, contains: 'doubleJump' },
         // Section 5: Coin in the vertical shaft
         { x: 3070, y: 370, width: 40, height: 20, contains: 'coin' }
     ],
