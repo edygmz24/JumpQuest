@@ -196,7 +196,7 @@ const level4 = {
 
     bumpBlocks: [
         { x: 2780, y: 440, contains: 'coins', count: 5 },
-        { x: 2820, y: 440, contains: 'coin' }
+        { x: 2820, y: 440, contains: 'claw' }
     ],
 
     ropes: [

@@ -142,7 +142,7 @@ const level7 = {
     // --- Interactables (see interact.js) ---
 
     bumpBlocks: [
-        { x: 210, y: 440, contains: 'coins', count: 5 }
+        { x: 210, y: 440, contains: 'rang' }
     ],
 
     // Three hidden gems (campaign.js)

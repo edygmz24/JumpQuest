@@ -145,7 +145,7 @@ const level2 = {
     // --- Interactables (see interact.js) ---
 
     bumpBlocks: [
-        { x: 320, y: 440, contains: 'coin' },
+        { x: 320, y: 440, contains: 'cape' },
         { x: 1820, y: 340, contains: 'coin' },
         { x: 1860, y: 340, contains: 'coins', count: 5 }
     ],
