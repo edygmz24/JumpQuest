@@ -127,6 +127,7 @@
         #btn-right { bottom: 20px; left: 110px; }
         #btn-down  { bottom: 20px; left: 200px; }
         #btn-dash  { bottom: 20px; right: 110px; }
+        #btn-action { bottom: 105px; right: 65px; }
         #btn-jump  { bottom: 20px; right: 20px; }
     </style>
 </head>
@@ -150,6 +151,7 @@
         <div class="touch-btn" id="btn-left">&#9664;</div>
         <div class="touch-btn" id="btn-right">&#9654;</div>
         <div class="touch-btn" id="btn-down">&#9660;</div>
+        <div class="touch-btn" id="btn-action" style="visibility:hidden">&#10022;</div>
         <div class="touch-btn" id="btn-dash">&#128168;</div>
         <div class="touch-btn" id="btn-jump">&#9650;</div>
     </div>
@@ -183,6 +185,7 @@
     <script src="hdbiomes.js"></script>
     <script src="hdcreatures.js"></script>
     <script src="interact.js"></script>
+    <script src="suits.js"></script>
     <script src="speedrun.js"></script>
     <script src="endless.js"></script>
     <script src="modifiers.js"></script>
@@ -212,6 +215,7 @@
             bindBtn('btn-jump',  function() { touchJump  = true;  }, function() { touchJump  = false; });
             bindBtn('btn-down',  function() { touchDown  = true;  }, function() { touchDown  = false; });
             bindBtn('btn-dash',  function() { touchDashPressed = true; }, function() {});
+            bindBtn('btn-action', function() { touchActionPressed = true; }, function() {});
 
             // Landscape suggestion: brief toast in portrait, never blocks play
             var rotateToast = document.getElementById('rotate-toast');

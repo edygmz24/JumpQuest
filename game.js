@@ -759,6 +759,7 @@ function create() {
     levelKeys = [];
     timedGates = [];
     if (typeof resetInteractState === 'function') resetInteractState();
+    if (typeof resetSuitLevelState === 'function') resetSuitLevelState();
     breakableBlockRects = [];
     fakeWalls = [];
     fakeWallRects = [];
@@ -1465,6 +1466,7 @@ function loadLevel(levelIndex) {
 
     // Star blocks, shells, doors, switches, cannons and ropes
     if (typeof buildInteractables === 'function') buildInteractables(this);
+    if (typeof buildSuits === 'function') buildSuits(this);
 
     // Start background music
     if (typeof startBackgroundMusic === 'function') {
@@ -1822,7 +1824,8 @@ function update() {
     if (isWallSliding) {
         wallSlideDir = touchingWallLeft ? -1 : 1;
         // Slow the fall
-        player.body.velocity.y = Math.min(player.body.velocity.y, 60);
+        // The claw suit grips: no slide at all
+        player.body.velocity.y = Math.min(player.body.velocity.y, suitClinging() ? 0 : 60);
         // Wall slide particles (occasional)
         if (Math.random() < 0.15) {
             spawnParticles(this, player.x + wallSlideDir * 16, player.y, 0xaaaaaa, 1, 10);
@@ -1884,14 +1887,14 @@ function update() {
     // --- Jump (with coyote time, buffer, double jump, wall jump) ---
     const jumpVelocity = activePowerUps.highJump ? -520 : JUMP_VELOCITY;
     const canJump = coyoteTimer > 0;
-    const canDoubleJump = activePowerUps.doubleJump && !hasDoubleJumped && !onGround && coyoteTimer <= 0;
+    const canDoubleJump = (activePowerUps.doubleJump || suitRiding()) && !hasDoubleJumped && !onGround && coyoteTimer <= 0;
     const canWallJump = isWallSliding;
     const wantsJump = jumpBufferTimer > 0 && !controlLocked;
 
     if (wantsJump) {
         if (canWallJump) {
             // Wall jump: launch away from wall
-            player.setVelocityY(-380);
+            player.setVelocityY(suitClinging() ? -450 : -380);
             player.setVelocityX(250 * -wallSlideDir);
             coyoteTimer = 0;
             jumpBufferTimer = 0;
@@ -1938,7 +1941,12 @@ function update() {
 
     // --- Fast Fall (snappier descent) ---
     if (player.body.velocity.y > 0 && !isWallSliding && !isDashing && !isPounding) {
-        player.body.velocity.y += BASE_GRAVITY * (FAST_FALL_MULTIPLIER - 1) * deltaS;
+        if (suitGliding(jumpPressed)) {
+            // Glide cape: holding jump caps the fall to a float
+            player.body.velocity.y = Math.min(player.body.velocity.y, GLIDE_FALL_SPEED);
+        } else {
+            player.body.velocity.y += BASE_GRAVITY * (FAST_FALL_MULTIPLIER - 1) * deltaS;
+        }
     }
 
     wasJumpPressed = jumpPressed;
@@ -2007,6 +2015,7 @@ function update() {
 
     // Interactables may take the player over (cannon, rope, door)
     if (typeof updateInteractables === 'function') updateInteractables(this, this.game.loop.delta);
+    if (typeof updateSuits === 'function') updateSuits(this, this.game.loop.delta);
 
     // --- Camera Look-Ahead ---
     const targetOffsetX = cursors.right.isDown ? -60 : (cursors.left.isDown ? 60 : 0);
@@ -2813,6 +2822,8 @@ function stompEnemy(enemy) {
 
 function hitEnemy() {
     if (gameOver) return;
+    // A suit or the Hopper takes the hit instead (suits.js)
+    if (typeof suitAbsorbHit === 'function' && suitAbsorbHit(this)) return;
 
     // Death tracking
     deathCount++;
@@ -2866,6 +2877,7 @@ function hitEnemy() {
 
         // Game over - no more lives
         gameOver = true;
+        if (typeof playerSuit !== 'undefined') playerSuit = null;
         this.physics.pause();
         if (typeof stopBackgroundMusic === 'function') stopBackgroundMusic();
         playerRect.setTint(0xff0000);

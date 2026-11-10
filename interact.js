@@ -493,6 +493,9 @@ function iaBumpBlock(scene, b, from) {
         iaPopCoin(scene, b.x, topY);
     } else if (b.contains === 'sprout') {
         iaGrowSprout(scene, b);
+    } else if (typeof SUIT_TYPES !== 'undefined' && SUIT_TYPES[b.contains]) {
+        spawnSuitPickup(scene, b.x, topY - 18, b.contains, true);
+        playSound('powerup');
     } else if (POWERUP_TYPES[b.contains]) {
         const pu = powerUps.create(b.x, topY - 16, null).setDisplaySize(25, 25).setVisible(false).refreshBody();
         pu.powerUpType = b.contains;
