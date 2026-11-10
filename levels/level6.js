@@ -99,6 +99,15 @@ const level6 = {
     ],
 
     coins: [
+        // Along the cannon arcs
+        { x: 1459, y: 360 },
+        { x: 1560, y: 290 },
+        { x: 1675, y: 268 },
+        { x: 2768, y: 420 },
+        { x: 2866, y: 273 },
+        { x: 2961, y: 158 },
+        { x: 3046, y: 98 },
+
         // Starting area
         { x: 120, y: 470 },
         { x: 280, y: 410 },
@@ -160,6 +169,18 @@ const level6 = {
     // Speed power-up behind the fake wall as a reward
     secretPowerUps: [
         { x: 2180, y: 400, type: 'speed', revealTrigger: { x: 2080, y: 380, radius: 50 } }
+    ],
+
+    // --- Interactables (see interact.js) ---
+
+    bumpBlocks: [
+        { x: 190, y: 440, contains: 'coins', count: 5 }
+    ],
+
+    cannons: [
+        // Sky cannons: each one skips a stretch and lands on a cloud
+        { x: 1345, y: 462, angle: -45 },
+        { x: 2700, y: 532, angle: -60, power: 950 }
     ],
 
     playerStart: { x: 100, y: 540 },

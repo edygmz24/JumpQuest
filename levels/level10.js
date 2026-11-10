@@ -82,6 +82,8 @@ const level10 = {
     ],
 
     enemies: [
+        { x: 3720, y: 484, type: 'roller' },
+
         // Gauntlet: the full roster
         { x: 1800, y: 300, type: 'diver' },
         { x: 3400, y: 464, type: 'charger' },
@@ -207,6 +209,13 @@ const level10 = {
         { x: 3310, y: 410, width: 40, height: 40, contains: null },
         // Section 5: Hidden reward
         { x: 4480, y: 460, width: 40, height: 40, contains: 'coin' }
+    ],
+
+    // --- Interactables (see interact.js) ---
+
+    bumpBlocks: [
+        { x: 1650, y: 440, contains: 'coins', count: 5 },
+        { x: 2900, y: 370, contains: 'coins', count: 3 }
     ],
 
     playerStart: { x: 100, y: 540 },

@@ -1577,6 +1577,7 @@ function hdEnemyFrame(e, t) {
     const walk = base => (Math.abs(vx) > 5 && step) ? base + '_' + step : base;
     switch (type) {
         case 'walker': return walk('hd_tex_enemy_walker');
+        case 'roller': return walk('hd_tex_enemy_roller');
         case 'shield': return walk('hd_tex_enemy_shield');
         case 'charger':
             if (e.chargeState === 'windup') return 'hd_tex_enemy_charger_windup';

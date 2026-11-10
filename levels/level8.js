@@ -59,6 +59,8 @@ const level8 = {
     movingPlatforms: [],
 
     enemies: [
+        { x: 1100, y: 484, type: 'roller' },
+
         // Jungle: canopy predators
         { x: 1500, y: 300, type: 'diver' },
         { x: 2900, y: 280, type: 'diver' },
@@ -164,6 +166,18 @@ const level8 = {
         { x: 2700, y: 360, width: 40, height: 40, contains: 'coin' },
         // Near end - coin reward
         { x: 3020, y: 440, width: 40, height: 40, contains: 'coin' }
+    ],
+
+    // --- Interactables (see interact.js) ---
+
+    bumpBlocks: [
+        { x: 205, y: 440, contains: 'coins', count: 5 }
+    ],
+
+    ropes: [
+        // Vines: a high road over the jungle floor
+        { x: 1140, y: 150, length: 170 },
+        { x: 1690, y: 140, length: 190 }
     ],
 
     playerStart: { x: 100, y: 540 },

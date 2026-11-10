@@ -196,7 +196,8 @@ const ENEMY_TYPES = {
     shooter: { color: 0x880000, speed: 0 },
     shield: { color: 0x008888, speed: 80 },
     diver: { color: 0xdd44aa, speed: 70 },
-    charger: { color: 0xcc5511, speed: 90 }
+    charger: { color: 0xcc5511, speed: 90 },
+    roller: { color: 0x39b54a, speed: 55 }
 };
 
 // Diver: drifts until the player is below, telegraphs, then swoops
@@ -757,6 +758,7 @@ function create() {
     windZones = [];
     levelKeys = [];
     timedGates = [];
+    if (typeof resetInteractState === 'function') resetInteractState();
     breakableBlockRects = [];
     fakeWalls = [];
     fakeWallRects = [];
@@ -1037,6 +1039,7 @@ function loadLevel(levelIndex) {
 
     // Generate all procedural textures (no-op if already created)
     generateGameTextures(this);
+    if (typeof interactTextures === 'function') interactTextures(this);
 
     ambientParticles = [];
     if (typeof shouldUseHdLook === 'function' && shouldUseHdLook(levelIndex)) {
@@ -1460,6 +1463,9 @@ function loadLevel(levelIndex) {
         });
     }
 
+    // Star blocks, shells, doors, switches, cannons and ropes
+    if (typeof buildInteractables === 'function') buildInteractables(this);
+
     // Start background music
     if (typeof startBackgroundMusic === 'function') {
         stopBackgroundMusic();
@@ -1747,7 +1753,8 @@ function update() {
     }
     dashBufferTimer -= this.game.loop.delta;
 
-    if (dashBufferTimer > 0 && dashCooldown <= 0 && !isDashing && isMoveUnlocked('dash')) {
+    if (dashBufferTimer > 0 && dashCooldown <= 0 && !isDashing && isMoveUnlocked('dash') &&
+        !controlLocked && !iaCarried) {
         touchDashPressed = false;
         dashBufferTimer = 0;
         if (onGround || canAirDash) {
@@ -1775,7 +1782,7 @@ function update() {
     // Down + Jump in mid-air: hang briefly, then plunge. The pause is what
     // makes it read as a deliberate move rather than a dropped jump.
     if (!isPounding && !onGround && !isDashing && (cursors.down.isDown || touchDown) && jumpJustPressed &&
-        isMoveUnlocked('pound')) {
+        isMoveUnlocked('pound') && !controlLocked && !iaCarried) {
         isPounding = true;
         poundPauseTimer = POUND_PAUSE;
         jumpBufferTimer = 0;
@@ -1879,7 +1886,7 @@ function update() {
     const canJump = coyoteTimer > 0;
     const canDoubleJump = activePowerUps.doubleJump && !hasDoubleJumped && !onGround && coyoteTimer <= 0;
     const canWallJump = isWallSliding;
-    const wantsJump = jumpBufferTimer > 0;
+    const wantsJump = jumpBufferTimer > 0 && !controlLocked;
 
     if (wantsJump) {
         if (canWallJump) {
@@ -1998,6 +2005,9 @@ function update() {
 
     wasOnGround = onGround;
 
+    // Interactables may take the player over (cannon, rope, door)
+    if (typeof updateInteractables === 'function') updateInteractables(this, this.game.loop.delta);
+
     // --- Camera Look-Ahead ---
     const targetOffsetX = cursors.right.isDown ? -60 : (cursors.left.isDown ? 60 : 0);
     cameraOffsetX += (targetOffsetX - cameraOffsetX) * 0.05;
@@ -2053,6 +2063,7 @@ function update() {
 
         switch (type) {
             case 'walker':
+            case 'roller':
             case 'shield':
                 if (enemy.body.blocked.right) enemy.setVelocityX(-Math.abs(enemy.body.velocity.x || 80));
                 else if (enemy.body.blocked.left) enemy.setVelocityX(Math.abs(enemy.body.velocity.x || 80));
@@ -2726,6 +2737,12 @@ function stompEnemy(enemy) {
     const enemyIndex = enemies.children.entries.indexOf(enemy);
     const enemyRect = enemy.visual || enemyRects[enemyIndex];
 
+    // Rollers tuck into a shell instead of being defeated outright
+    if (enemy.enemyType === 'roller' && !enemy.noShell && typeof shellFromEnemy === 'function') {
+        shellFromEnemy(this, enemy);
+        return;
+    }
+
     if (typeof flowAddStomp === 'function') flowAddStomp();
 
     // Shield enemies take 2 hits
@@ -2799,6 +2816,7 @@ function hitEnemy() {
 
     // Death tracking
     deathCount++;
+    if (typeof interactOnPlayerHit === 'function') interactOnPlayerHit();
 
     // Reset combo on death
     comboCount = 0;
@@ -2855,16 +2873,16 @@ function hitEnemy() {
         // Losing the run still banks the coins earned during it
         if (typeof bankPendingCoins === 'function') bankPendingCoins();
 
-        const gameOverText = this.add.text(this.cameras.main.centerX, 300, 'GAME OVER!', {
+        const gameOverText = this.add.text(400, 300, 'GAME OVER!', {
             fontSize: '48px',
             fill: '#ff0000',
             backgroundColor: '#000',
             padding: { x: 20, y: 10 }
         });
         gameOverText.setOrigin(0.5);
-        gameOverText.setScrollFactor(0);
+        gameOverText.setScrollFactor(0).setDepth(1000);
 
-        const restartButton = this.add.text(this.cameras.main.centerX, 370, 'RESTART LEVEL', {
+        const restartButton = this.add.text(400, 370, 'RESTART LEVEL', {
             fontSize: '28px',
             fill: '#fff',
             backgroundColor: '#444',

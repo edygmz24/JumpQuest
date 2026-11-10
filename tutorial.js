@@ -10,7 +10,7 @@ const TUTORIAL_HINTS = [
     { level: 1, triggerX: 300, text: 'Press SHIFT to dash through obstacles' },
     { level: 1, triggerX: 1500, text: 'Chain coins and stomps for combo multipliers!' },
     { level: 2, triggerX: 500, text: 'Slide on walls and press Space to wall jump!' },
-    { level: 2, triggerX: 1800, text: 'Hit blocks from below to break them' },
+    { level: 2, triggerX: 1800, text: 'Crates break when hit from below, or with a ground pound' },
     { level: 3, triggerX: 600, text: 'Watch out for shooters! Dodge their projectiles' },
     { level: 5, triggerX: 400, text: 'Some walls are fake... try dashing through them!' },
     { level: 8, triggerX: 300, text: 'Speed boosts let you run faster! Grab power-ups' },
@@ -37,11 +37,11 @@ function checkTutorialTriggers(scene, playerX, levelIndex) {
 }
 
 function showTutorialHint(scene, text) {
-    // Positioned below the top HUD bars and right of the left HUD column so it never overlaps them
-    const hint = scene.add.text(480, 140, text, {
-        fontSize: '18px', fill: '#fff', fontStyle: 'bold',
+    // Centred under the HUD row; long hints wrap rather than run off-screen
+    const hint = scene.add.text(400, 150, text, {
+        fontSize: '17px', fill: '#fff', fontStyle: 'bold', align: 'center',
         backgroundColor: 'rgba(0,0,0,0.7)', padding: { x: 16, y: 10 },
-        stroke: '#ffd700', strokeThickness: 1
+        stroke: '#ffd700', strokeThickness: 1, wordWrap: { width: 620 }
     }).setOrigin(0.5).setScrollFactor(0).setDepth(1200).setAlpha(0);
 
     activeTutorialHint = hint;

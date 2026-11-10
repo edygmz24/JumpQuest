@@ -49,6 +49,12 @@ const level2 = {
     ],
 
     enemies: [
+        // Rollers: stomp one, then kick its shell through the others
+        { x: 2700, y: 464, type: 'roller' },
+        { x: 1700, y: 544, type: 'roller' },
+        { x: 1830, y: 544, type: 'walker' },
+        { x: 1890, y: 544, type: 'walker' },
+
         // Section 1: A walker on the intro platform
         { x: 470, y: 444, type: 'walker' },
 
@@ -65,6 +71,14 @@ const level2 = {
     obstacles: [],
 
     coins: [
+        // Above the switch-block stairs
+        { x: 3072, y: 312 },
+        { x: 3104, y: 312 },
+        { x: 3150, y: 280 },
+        { x: 3185, y: 280 },
+        { x: 3150, y: 240 },
+        { x: 3185, y: 240 },
+
         // Section 1: Couple coins on intro platforms
         { x: 220, y: 470 },
         { x: 460, y: 430 },
@@ -126,6 +140,26 @@ const level2 = {
         { x: 1320, y: 530, revealTrigger: { x: 1300, y: 540, radius: 60 } },
         { x: 1350, y: 530, revealTrigger: { x: 1300, y: 540, radius: 60 } },
         { x: 1300, y: 500, revealTrigger: { x: 1300, y: 540, radius: 60 } }
+    ],
+
+    // --- Interactables (see interact.js) ---
+
+    bumpBlocks: [
+        { x: 320, y: 440, contains: 'coin' },
+        { x: 1820, y: 340, contains: 'coin' },
+        { x: 1860, y: 340, contains: 'coins', count: 5 }
+    ],
+
+    switches: [
+        // Stomp to turn the ghost coins into stairs for a few seconds
+        { x: 2890, y: 472 }
+    ],
+
+    switchBlocks: [
+        { x: 2976, y: 410 },
+        { x: 3008, y: 410 },
+        { x: 3072, y: 350 },
+        { x: 3104, y: 350 }
     ],
 
     playerStart: { x: 60, y: 540 },

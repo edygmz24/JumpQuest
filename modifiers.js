@@ -153,12 +153,12 @@ function updateModifiers(scene, delta) {
             if (typeof stopBackgroundMusic === 'function') stopBackgroundMusic();
             playSound('gameOver');
 
-            const timeUpText = scene.add.text(scene.cameras.main.centerX, 250, 'TIME UP!', {
+            const timeUpText = scene.add.text(400, 250, 'TIME UP!', {
                 fontSize: '48px', fill: '#ff0000',
                 backgroundColor: '#000', padding: { x: 20, y: 10 }
             }).setOrigin(0.5).setScrollFactor(0).setDepth(1000);
 
-            const restartButton = scene.add.text(scene.cameras.main.centerX, 370, 'RESTART LEVEL', {
+            const restartButton = scene.add.text(400, 370, 'RESTART LEVEL', {
                 fontSize: '28px', fill: '#fff',
                 backgroundColor: '#444', padding: { x: 20, y: 10 }
             }).setOrigin(0.5).setScrollFactor(0).setDepth(1000);

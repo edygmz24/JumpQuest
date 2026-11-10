@@ -73,6 +73,9 @@ const level4 = {
     ],
 
     enemies: [
+        // A roller ahead of the fortress guards
+        { x: 1000, y: 454, type: 'roller' },
+
         // Section 1: 2 jumpers on ascending platforms
         { x: 350, y: 424, type: 'jumper' },
         { x: 670, y: 304, type: 'jumper' },
@@ -187,6 +190,18 @@ const level4 = {
         { x: 2800, y: 30, revealTrigger: { x: 2800, y: 60, radius: 40 } },
         { x: 2730, y: 30, revealTrigger: { x: 2800, y: 60, radius: 40 } },
         { x: 2870, y: 30, revealTrigger: { x: 2800, y: 60, radius: 40 } }
+    ],
+
+    // --- Interactables (see interact.js) ---
+
+    bumpBlocks: [
+        { x: 2780, y: 440, contains: 'coins', count: 5 },
+        { x: 2820, y: 440, contains: 'coin' }
+    ],
+
+    ropes: [
+        // High road between the two shooter ledges
+        { x: 1875, y: 40, length: 150 }
     ],
 
     playerStart: { x: 120, y: 470 },

@@ -47,6 +47,10 @@ const level9 = {
     movingPlatforms: [],
 
     enemies: [
+        // Rollers ahead of each walker row: bowling
+        { x: 300, y: 464, type: 'roller' },
+        { x: 1880, y: 444, type: 'roller' },
+
         // Speed alley: punishes blind sprinting
         { x: 2500, y: 300, type: 'diver' },
         { x: 4300, y: 464, type: 'charger' },
@@ -85,6 +89,13 @@ const level9 = {
     ],
 
     coins: [
+        // Over the switch-block road
+        { x: 4022, y: 292 },
+        { x: 4086, y: 292 },
+        { x: 4150, y: 292 },
+        { x: 4214, y: 292 },
+        { x: 4278, y: 292 },
+
         // Coins along the speed path - easy to grab while running
         { x: 127, y: 470 },
         { x: 220, y: 470 },
@@ -157,6 +168,34 @@ const level9 = {
     // doubleJump power-up at the top of the shaft
     secretPowerUps: [
         { x: 2930, y: 110, type: 'doubleJump', revealTrigger: { x: 2930, y: 140, radius: 50 } }
+    ],
+
+    // --- Interactables (see interact.js) ---
+
+    bumpBlocks: [
+        { x: 750, y: 330, contains: 'coins', count: 5 },
+        { x: 790, y: 330, contains: 'speed' }
+    ],
+
+    switches: [
+        // Opens a high road over the next stretch
+        { x: 3700, y: 442 }
+    ],
+
+    switchBlocks: [
+        { x: 3900, y: 390 },
+        { x: 3932, y: 390 },
+        { x: 3990, y: 330 },
+        { x: 4022, y: 330 },
+        { x: 4054, y: 330 },
+        { x: 4086, y: 330 },
+        { x: 4118, y: 330 },
+        { x: 4150, y: 330 },
+        { x: 4182, y: 330 },
+        { x: 4214, y: 330 },
+        { x: 4246, y: 330 },
+        { x: 4278, y: 330 },
+        { x: 4310, y: 330 }
     ],
 
     playerStart: { x: 100, y: 540 },

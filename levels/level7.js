@@ -57,6 +57,8 @@ const level7 = {
     ],
 
     enemies: [
+        { x: 1190, y: 484, type: 'roller' },
+
         // The Machine: ramming hardware
         { x: 2000, y: 464, type: 'charger' },
         { x: 3100, y: 464, type: 'charger' },
@@ -94,6 +96,7 @@ const level7 = {
     ],
 
     coins: [
+
         // Starting area
         { x: 120, y: 470 },
         { x: 320, y: 420 },
@@ -134,6 +137,12 @@ const level7 = {
         { x: 680, y: 410, width: 40, height: 40, contains: 'coin' },
         { x: 2100, y: 400, width: 40, height: 40, contains: 'coin' },
         { x: 3280, y: 460, width: 40, height: 40, contains: null }
+    ],
+
+    // --- Interactables (see interact.js) ---
+
+    bumpBlocks: [
+        { x: 210, y: 440, contains: 'coins', count: 5 }
     ],
 
     playerStart: { x: 100, y: 540 },
