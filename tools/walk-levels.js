@@ -39,7 +39,7 @@ function bot(route) {
       const T = route[idx];
       if (T.kind.startsWith('mover:')) {
         const m = movingPlatforms[+T.kind.split(':')[1]];
-        return { x: m.sprite.x, y: m.sprite.body.y, w: T.w, kind: 'mover' };
+        return { x: m.sprite.x, y: m.sprite.body.y, w: T.w, kind: 'mover', closing: m.direction < 0 };
       }
       return T;
     };
@@ -87,13 +87,23 @@ function bot(route) {
         const edge = dir !== 0 && !supported(px + dir * 20, feet + 4);
         const nearEdge = Math.abs(dx) - T.w / 2;        // gap to the target's near edge
         const isRope = route[idx].kind.startsWith('rope');
+        if (feet - T.y > 115 && Math.abs(dx) < T.w / 2 + 12 && idx > 0) {
+          // Ended up on the floor underneath the target: go back a step
+          idx--; return;
+        }
+        if (T.y - feet > 30 && Math.abs(dx) < T.w / 2) {
+          // Standing on something above the target (a gem perch): step off
+          touchRight = true; touchLeft = false; touchJump = false; return;
+        }
         if (isRope && Math.abs(feet - T.y) < 8 && Math.abs(dx) < T.w / 2) {
           // On the launch ledge: wait for the rope to swing within reach
           const r = iaRopes[+route[idx].kind.split(':')[1]];
           dir = px < T.x + 38 ? 1 : 0;
-          if (r.tipX - px < 75 && r.tipX - px > 10 && r.thetaV <= 0.3) { jump = true; dir = 1; }
-        } else if (T.kind === 'mover' && edge && nearEdge > 70) {
-          dir = 0;                                        // wait for the platform
+          // Jump as the rope comes in to the near end of its swing
+          if (r.theta < -0.8 * r.swing && r.thetaV < 0) { jump = true; dir = 1; }
+        } else if (T.kind === 'mover' && !supported(px + dir * 26, feet + 4) &&
+            !(nearEdge < 60 || (nearEdge < 100 && T.closing))) {
+          dir = 0;                                        // wait for the platform to come close
         } else if (edge) {
           jump = true;
         } else if (higher && nearEdge < 40 && nearEdge > -T.w / 2 + 4) {
@@ -105,6 +115,8 @@ function bot(route) {
         } else if (dir !== 0 && obstacles.children.entries.some(o => Math.abs(o.y - feet) < 30 && (o.x - px) * dir > 0 && (o.x - px) * dir < 110)) {
           jump = true;
         }
+      } else if (route[idx].kind.startsWith('rope')) {
+        dir = 1;                                          // reaching for the rope
       } else if (T.kind === 'mover' || Math.abs(dx) < T.w / 2 - 12) {
         // In the air over the target: stop drifting
         if (Math.abs(dx) < T.w / 2 - 12) dir = 0;
@@ -127,7 +139,9 @@ function bot(route) {
     localStorage.setItem('jqCompleted', JSON.stringify(c)); localStorage.setItem('jqStoryShown', JSON.stringify(s));
     localStorage.setItem('jqMovesSeen', JSON.stringify({ dash: 1, pound: 1, flow: 1 }));
   });
-  await p.goto('http://localhost:8000/index.html');
+  // The canvas renderer keeps a headless browser at full frame rate, which the
+  // walker's timing depends on
+  await p.goto('http://localhost:8000/index.html?renderer=canvas&lowfx=1');
   await p.waitForTimeout(2000);
   let bad = 0;
   for (const id of only) {

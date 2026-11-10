@@ -2500,6 +2500,12 @@ function update() {
         movingPlatforms.forEach((mp, index) => {
             const platform = mp.sprite;
             const deltaTime = this.game.loop.delta / 1000;
+            // How far the platform really travelled since the last frame. The
+            // physics body adds its own share on top of the step below, so
+            // the true speed is about twice `speed`; riders are carried by
+            // the measured distance, not the nominal one.
+            const travelledX = platform.x - (mp.lastX === undefined ? platform.x : mp.lastX);
+            mp.lastX = platform.x;
 
             // Calculate movement
             if (mp.moveX > 0) {
@@ -2538,11 +2544,16 @@ function update() {
             // descending platform on its own, and collision lifts them on the
             // way up. Adding an explicit carry here fights the solver and
             // makes the ride drift.
-            if (player.body.touching.down && platform.body.touching.up) {
+            // Standing is judged from positions, not the touching flags: those
+            // are only set on frames where the solver separated the two, which
+            // left a player who was standing still carried about half the time
+            // and slowly sliding off.
+            const feetOnTop = Math.abs(player.body.bottom - platform.body.y) < 6 && player.body.velocity.y >= 0;
+            if (feetOnTop && player.body.enable) {
                 const onPlatform = Math.abs(player.x - platform.x) < platform.displayWidth / 2 + player.displayWidth / 2;
                 if (onPlatform) {
                     if (mp.moveX > 0) {
-                        player.x += mp.speed * mp.direction * deltaTime;
+                        player.x += travelledX;
                         playerRect.x = player.x;
                     }
                 }
