@@ -341,7 +341,7 @@ let ghostPlaybackElapsed = 0;
 let ghostReplaySampleMs = 1000 / 60; // legacy array replays were frame-based at ~60 Hz
 
 // Array of all levels (loaded from separate files)
-let levels = [level1, level2, level3, level4, level5, level6, level7, level8, level9, level10];
+let levels = CAMPAIGN_LEVELS.slice();
 
 // Check for test level from editor
 let isTestMode = false;
@@ -760,6 +760,7 @@ function create() {
     timedGates = [];
     if (typeof resetInteractState === 'function') resetInteractState();
     if (typeof resetSuitLevelState === 'function') resetSuitLevelState();
+    resetCampaignLevelState();
     breakableBlockRects = [];
     fakeWalls = [];
     fakeWallRects = [];
@@ -1024,10 +1025,13 @@ function loadLevel(levelIndex) {
     currentLevel = levels[levelIndex];
 
     // Set world bounds based on level
-    this.physics.world.setBounds(0, 0, currentLevel.worldWidth, currentLevel.worldHeight);
+    // Tall levels extend upward (worldTop < 0); levels with pits get room to
+    // fall below the floor.
+    const bounds = levelBounds(currentLevel);
+    this.physics.world.setBounds(0, bounds.top, currentLevel.worldWidth, bounds.physHeight);
 
     // Setup camera to follow player
-    this.cameras.main.setBounds(0, 0, currentLevel.worldWidth, currentLevel.worldHeight);
+    this.cameras.main.setBounds(0, bounds.top, currentLevel.worldWidth, bounds.viewHeight);
     this.cameras.main.setZoom(1);
 
     // Theme colors (with defaults)
@@ -1053,11 +1057,11 @@ function loadLevel(levelIndex) {
     platforms = this.physics.add.staticGroup();
 
     // Extended ground
-    const groundSections = Math.ceil(currentLevel.worldWidth / 400);
-    for (let i = 0; i < groundSections; i++) {
-        platforms.create(200 + i * 400, 580, null).setDisplaySize(400, 40).setVisible(false).refreshBody();
-        drawTerrainBlock(this, 200 + i * 400, 580, 400, 40, groundColor, true);
-    }
+    // One body per stretch of ground between pits
+    groundIntervals(currentLevel).forEach(([l, r]) => {
+        platforms.create((l + r) / 2, 580, null).setDisplaySize(r - l, 40).setVisible(false).refreshBody();
+        drawTerrainBlock(this, (l + r) / 2, 580, r - l, 40, groundColor, true);
+    });
 
     // Create platforms from level data
     currentLevel.platforms.forEach(platform => {
@@ -1467,6 +1471,7 @@ function loadLevel(levelIndex) {
     // Star blocks, shells, doors, switches, cannons and ropes
     if (typeof buildInteractables === 'function') buildInteractables(this);
     if (typeof buildSuits === 'function') buildSuits(this);
+    buildCampaignLevel(this);
 
     // Start background music
     if (typeof startBackgroundMusic === 'function') {
@@ -1502,7 +1507,9 @@ function loadLevel(levelIndex) {
     scoreText = hudText(222, 12, formatScoreHUD(score, highScore), 16, '#ffe9a8');
 
     const shortLevelName = currentLevel.name.replace(/^Level\s+\d+\s*[-–]\s*/i, '');
-    const levelName = hudText(VIEW_W / 2, 12, `${currentLevelIndex + 1} · ${shortLevelName.toUpperCase()}`, 13, '#ffffff');
+    const hudLabel = (typeof campaignStoryMode === 'function' && campaignStoryMode() && !isTestMode)
+        ? levelLabel(currentLevelIndex) : String(currentLevelIndex + 1);
+    const levelName = hudText(VIEW_W / 2, 12, `${hudLabel} · ${shortLevelName.toUpperCase()}`, 13, '#ffffff');
     levelName.setOrigin(0.5, 0).setAlpha(0.8);
     levelNameText = levelName;
 
@@ -1572,6 +1579,8 @@ function loadLevel(levelIndex) {
 
     // ESC key to pause
     this.input.keyboard.on('keydown-ESC', () => {
+        // On the menu and the world map, ESC belongs to those screens
+        if (showingMenu || showingLevelSelect) return;
         togglePause.call(this);
     });
 
@@ -2016,6 +2025,7 @@ function update() {
     // Interactables may take the player over (cannon, rope, door)
     if (typeof updateInteractables === 'function') updateInteractables(this, this.game.loop.delta);
     if (typeof updateSuits === 'function') updateSuits(this, this.game.loop.delta);
+    updateCampaignLevel(this);
 
     // --- Camera Look-Ahead ---
     const targetOffsetX = cursors.right.isDown ? -60 : (cursors.left.isDown ? 60 : 0);
@@ -2069,6 +2079,21 @@ function update() {
     enemies.children.entries.forEach((enemy, index) => {
         if (!enemy.active) return;
         const type = enemy.enemyType || 'walker';
+
+        // Walked into a pit: gone for good
+        if (enemy.y > currentLevel.worldHeight + 60) {
+            const fallen = enemy.visual || enemyRects[index];
+            if (fallen) {
+                if (fallen.shieldBorder) fallen.shieldBorder.destroy();
+                if (fallen.cbIndicator) fallen.cbIndicator.destroy();
+                fallen.destroy();
+                const vi = enemyRects.indexOf(fallen);
+                if (vi !== -1) enemyRects[vi] = null;
+                enemy.visual = null;
+            }
+            enemy.disableBody(true, true);
+            return;
+        }
 
         switch (type) {
             case 'walker':
@@ -3005,6 +3030,9 @@ function reachEnd() {
     }
     if (typeof markHardcoreComplete === 'function') markHardcoreComplete(currentLevelIndex);
 
+    // Gems and secret exits
+    const campResult = campaignOnComplete(currentLevelIndex);
+
     // Save leaderboard entry
     let leaderRanks = { scoreRank: 0, timeRank: 0 };
     if (typeof saveLeaderboardEntry === 'function') {
@@ -3240,7 +3268,7 @@ function reachEnd() {
     if (nextWasLocked && nextLevelExists) {
         const unlockY = isFlawless ? deathY + 60 : deathY + 30;
         const unlockDelay = statsDelay + (isFlawless ? 1200 : 800);
-        const unlockText = this.add.text(400, unlockY, `LEVEL ${currentLevelIndex + 2} UNLOCKED!`, {
+        const unlockText = this.add.text(400, unlockY, `LEVEL ${levelLabel(currentLevelIndex + 1)} UNLOCKED!`, {
             fontSize: '22px', fill: '#ffd700', fontStyle: 'bold',
             stroke: '#000', strokeThickness: 3
         }).setOrigin(0.5).setScrollFactor(0).setDepth(1000).setAlpha(0).setScale(0.5);
@@ -3254,6 +3282,28 @@ function reachEnd() {
                 playSound('unlock');
             }
         });
+    }
+
+    // Gems, and a secret exit if one was found
+    if ((currentLevel.gems || []).length && campaignStoryMode()) {
+        const saved = getLevelGems(currentLevelIndex);
+        const gemLine = this.add.text(205, 180, 'GEMS  ' + saved.map(g => (g ? '◆' : '◇')).join(' '), {
+            fontSize: '16px', fill: '#ff8fd6', fontStyle: 'bold', stroke: '#000', strokeThickness: 3
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(1000).setAlpha(0);
+        this.tweens.add({ targets: gemLine, alpha: 1, duration: 300, delay: 900 });
+        if (campResult.newGems > 0) {
+            const fresh = this.add.text(205, 202, `+${campResult.newGems} NEW`, {
+                fontSize: '11px', fill: '#ffffff', fontStyle: 'bold'
+            }).setOrigin(0.5).setScrollFactor(0).setDepth(1000).setAlpha(0);
+            this.tweens.add({ targets: fresh, alpha: 1, duration: 300, delay: 1100 });
+        }
+    }
+    if (secretExitTaken) {
+        const to = campResult.secretTo >= 0 ? `  PATH TO ${levelLabel(campResult.secretTo)} OPEN` : '';
+        const secretLine = this.add.text(400, 72, 'SECRET EXIT!' + to, {
+            fontSize: '15px', fill: '#6fd3ff', fontStyle: 'bold', stroke: '#000', strokeThickness: 3
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(1000).setAlpha(0);
+        this.tweens.add({ targets: secretLine, alpha: 1, duration: 300, delay: 700 });
     }
 
     // Buttons (appear after all stats)

@@ -805,18 +805,31 @@ function hdBuildScenery(scene, name) {
     if (recipe.rays && !low) hdBuildRays(scene, recipe);
 
     // Ground: one continuous strip, surface at y=560
-    hdLayer(scene, hdGroundTexture(scene, 'hd_ground_' + name, recipe.ground),
-        560 - HD_GROUND_LIP, 600 - 560 + HD_GROUND_LIP, 1, -3);
+    // (cut into stretches where the level has pits)
+    const groundKey = hdGroundTexture(scene, 'hd_ground_' + name, recipe.ground);
+    const stretches = (!hdEndless() && typeof levelHasPits === 'function' && levelHasPits(currentLevel))
+        ? groundIntervals(currentLevel) : null;
+    const cutToStretches = (make) => {
+        if (!stretches) return [make()];
+        return stretches.map(([l, r]) => {
+            const strip = make();
+            strip.setPosition(l, strip.y).setSize(r - l, strip.height);
+            strip.tilePositionX = l;
+            return strip;
+        });
+    };
+    cutToStretches(() => hdLayer(scene, groundKey, 560 - HD_GROUND_LIP, 600 - 560 + HD_GROUND_LIP, 1, -3));
 
     // Grass tufts in front of the player, so feet sink into the grass
     if (recipe.tufts) {
         const key = hdTuftStripTexture(scene, 'hd_tufts_' + name, recipe.tufts);
-        hdOptional.push(hdLayer(scene, key, 562 - 14, 14, 1, 11));
+        cutToStretches(() => hdLayer(scene, key, 562 - 14, 14, 1, 11)).forEach(t => hdOptional.push(t));
     }
 
     // Depth of field: a blurred strip along the bottom and out-of-focus
     // shapes hanging into the top of the frame
-    if (!low && recipe.foreground) {
+    // (left out over pits, which it would hide)
+    if (!low && recipe.foreground && !stretches) {
         const key = hdForegroundTexture(scene, 'hd_fg_' + name, recipe.foreground);
         hdOptional.push(hdLayer(scene, key, 556, 46, 1.3, 70, 0.95));
     }

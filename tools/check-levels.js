@@ -53,6 +53,8 @@ const ALLOWED = [
 const allowedFor = (n, i) => ALLOWED.find(x => x.level === n &&
     x.a[0] === i.at[0] && x.a[1] === i.at[1] && x.b[0] === i.at[2] && x.b[1] === i.at[3]);
 
+// Only the ten hand-built levels. The generated ones (levels/w*.js) have pits
+// and set pieces this model does not know; tools/walk-levels.js walks those.
 function loadLevels(dir) {
     const ctx = {};
     vm.createContext(ctx);

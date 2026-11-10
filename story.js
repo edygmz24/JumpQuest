@@ -5,15 +5,15 @@
 
 const STORY_CARDS = [
     { level: 0, text: "You are a Jumper — a small but determined being at the base of the Infinite Tower.\nEach floor holds new challenges. The tower shifts and changes, but you must climb." },
-    { level: 1, text: "The meadows gave way to a canyon of gleaming coins.\nThe tower tempts you with riches, but greed slows the climb." },
-    { level: 2, text: "Deeper now. Crystal caves shimmer with an eerie light.\nSomething watches from the shadows..." },
-    { level: 3, text: "A fortress blocks your path — built by those who climbed before.\nTheir traps remain active. Their treasure, unclaimed." },
-    { level: 4, text: "The Final Trial of the lower tower. Beyond this, the true challenge begins.\nSteel yourself." },
-    { level: 5, text: "Above the clouds! The air is thin but the view... incredible.\nThe tower's upper floors feel alive." },
-    { level: 6, text: "Gears grind. Pistons pump. The Machine runs endlessly.\nWho built this? And why?" },
-    { level: 7, text: "Nature reclaims what the tower forgot. Vines and emerald moss cover ancient platforms.\nSecrets hide in the overgrowth." },
-    { level: 8, text: "A long corridor. Speed is your ally here.\nThe tower is testing how fast you've become." },
-    { level: 9, text: "The summit. A Guardian waits — the tower's final protector.\nThis is what you've been training for." }
+    { level: 4, text: "The meadows gave way to a canyon of gleaming coins.\nThe tower tempts you with riches, but greed slows the climb." },
+    { level: 8, text: "Deeper now. Crystal caves shimmer with an eerie light.\nSomething watches from the shadows..." },
+    { level: 12, text: "A fortress blocks your path — built by those who climbed before.\nTheir traps remain active. Their treasure, unclaimed." },
+    { level: 15, text: "The Final Trial of the lower tower. Beyond this, the true challenge begins.\nSteel yourself." },
+    { level: 16, text: "Above the clouds! The air is thin but the view... incredible.\nThe tower's upper floors feel alive." },
+    { level: 20, text: "Gears grind. Pistons pump. The Machine runs endlessly.\nWho built this? And why?" },
+    { level: 17, text: "Nature reclaims what the tower forgot. Vines and emerald moss cover ancient platforms.\nSecrets hide in the overgrowth." },
+    { level: 21, text: "A long corridor. Speed is your ally here.\nThe tower is testing how fast you've become." },
+    { level: 23, text: "The summit. A Guardian waits — the tower's final protector.\nThis is what you've been training for." }
 ];
 
 let storyShown = JSON.parse(localStorage.getItem('jqStoryShown')) || {};
@@ -47,7 +47,7 @@ function showStoryCard(scene, levelIndex, callback) {
     storyObjects.push(bg);
 
     // Level indicator
-    var levelLabel = scene.add.text(400, 160, 'LEVEL ' + (levelIndex + 1), {
+    var levelLabel = scene.add.text(400, 160, 'LEVEL ' + (typeof window.levelLabel === 'function' ? window.levelLabel(levelIndex) : levelIndex + 1), {
         fontSize: '18px', fill: '#888', fontStyle: 'bold',
         letterSpacing: 4
     }).setOrigin(0.5).setScrollFactor(0).setDepth(3001).setAlpha(0);

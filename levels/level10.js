@@ -218,6 +218,15 @@ const level10 = {
         { x: 2900, y: 370, contains: 'coins', count: 3 }
     ],
 
+    // Three hidden gems (campaign.js)
+    gems: [
+        { x: 1250, y: 188 },
+        { x: 3230, y: 228 },
+        { x: 5520, y: 268 }
+    ],
+
+    targetTime: 120000,
+
     playerStart: { x: 100, y: 540 },
     flagPosition: { x: 5850, y: 530 },
     bossArena: { x: 5350, width: 500 }

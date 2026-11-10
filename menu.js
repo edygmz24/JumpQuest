@@ -10,11 +10,9 @@ let showingMenu = true;
 let showingLevelSelect = false;
 let menuObjects = [];
 
-// Target times for star 3 (in ms) per level
-const TARGET_TIMES = {
-    0: 30000, 1: 45000, 2: 60000, 3: 75000, 4: 90000,
-    5: 70000, 6: 80000, 7: 60000, 8: 90000, 9: 120000
-};
+// Target times for star 3 (in ms) per level, from each level's data
+const TARGET_TIMES = {};
+CAMPAIGN_LEVELS.forEach((lvl, i) => { TARGET_TIMES[i] = lvl.targetTime || 60000; });
 
 function saveCompletion(levelIndex, coinCount, totalCoins, timeMs) {
     const key = 'level' + levelIndex;
@@ -24,7 +22,7 @@ function saveCompletion(levelIndex, coinCount, totalCoins, timeMs) {
     // Calculate stars
     const stars = { completion: true, coins: false, time: false };
     if (totalCoins > 0 && coinCount / totalCoins >= 0.8) stars.coins = true;
-    const target = TARGET_TIMES[levelIndex] || 60000;
+    const target = (levels[levelIndex] && levels[levelIndex].targetTime) || 60000;
     if (timeMs <= target) stars.time = true;
 
     // Only upgrade stars, never downgrade
@@ -48,14 +46,11 @@ function getStarCount(levelIndex) {
 
 function getTotalStars() {
     let total = 0;
-    for (let i = 0; i < 10; i++) total += getStarCount(i);
+    for (let i = 0; i < CAMPAIGN_LEVELS.length; i++) total += getStarCount(i);
     return total;
 }
 
-function isLevelUnlocked(index) {
-    if (index === 0) return true;
-    return !!completedLevels['level' + (index - 1)];
-}
+// isLevelUnlocked lives in campaign.js: secret exits can open levels too.
 
 function showMainMenu(scene) {
     showingMenu = true;
@@ -89,7 +84,7 @@ function showMainMenu(scene) {
     }).setOrigin(0.5, 1).setScrollFactor(0).setDepth(2001);
     menuObjects.push(starIcon);
 
-    const starCount = scene.add.text(345, 217, `${totalStars}/30`, {
+    const starCount = scene.add.text(345, 217, `${totalStars}/${CAMPAIGN_LEVELS.length * 3}`, {
         fontSize: '13px', fill: '#ffd700'
     }).setOrigin(0.5, 1).setScrollFactor(0).setDepth(2001);
     menuObjects.push(starCount);
@@ -152,7 +147,7 @@ function showMainMenu(scene) {
     menuObjects.push(modesPanel);
 
     // The mode row uses familiar symbols first, then compact labels.
-    const selectBtn = createMenuButton(scene, 145, 410, '▦  LEVELS', '#06a', '#08c', () => {
+    const selectBtn = createMenuButton(scene, 145, 410, '▦  MAP', '#06a', '#08c', () => {
         clearMenuObjects();
         showLevelSelect(scene);
     });

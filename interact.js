@@ -425,8 +425,9 @@ function iaApplyCameraBounds(scene) {
     const lvl = currentLevel;
     const room = iaRooms.find(r => player.x >= r.x && player.x <= r.x + r.width);
     const cam = scene.cameras.main;
+    const b = levelBounds(lvl);
     if (room) cam.setBounds(room.x, 0, Math.max(room.width, VIEW_W), lvl.worldHeight);
-    else cam.setBounds(0, 0, lvl.mainWidth || lvl.worldWidth, lvl.worldHeight);
+    else cam.setBounds(0, b.top, lvl.mainWidth || lvl.worldWidth, b.viewHeight);
 }
 
 // ========================

@@ -35,7 +35,7 @@ function movesStoryMode() {
 function movesFurthestLevel() {
     let furthest = typeof currentLevelIndex !== 'undefined' ? currentLevelIndex : 0;
     if (typeof completedLevels !== 'undefined') {
-        for (let i = 0; i < 10; i++) {
+        for (let i = 0; i < CAMPAIGN_LEVELS.length; i++) {
             if (completedLevels['level' + i]) furthest = Math.max(furthest, i + 1);
         }
     }
