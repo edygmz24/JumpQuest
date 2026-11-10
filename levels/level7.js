@@ -142,8 +142,17 @@ const level7 = {
     // --- Interactables (see interact.js) ---
 
     bumpBlocks: [
-        { x: 210, y: 440, contains: 'coins', count: 5 }
+        { x: 210, y: 440, contains: 'rang' }
     ],
+
+    // Three hidden gems (campaign.js)
+    gems: [
+        { x: 950, y: 348 },
+        { x: 1520, y: 328 },
+        { x: 2900, y: 318 }
+    ],
+
+    targetTime: 80000,
 
     playerStart: { x: 100, y: 540 },
     flagPosition: { x: 3900, y: 530 }

@@ -127,6 +127,7 @@
         #btn-right { bottom: 20px; left: 110px; }
         #btn-down  { bottom: 20px; left: 200px; }
         #btn-dash  { bottom: 20px; right: 110px; }
+        #btn-action { bottom: 105px; right: 65px; }
         #btn-jump  { bottom: 20px; right: 20px; }
     </style>
 </head>
@@ -150,6 +151,7 @@
         <div class="touch-btn" id="btn-left">&#9664;</div>
         <div class="touch-btn" id="btn-right">&#9654;</div>
         <div class="touch-btn" id="btn-down">&#9660;</div>
+        <div class="touch-btn" id="btn-action" style="visibility:hidden">&#10022;</div>
         <div class="touch-btn" id="btn-dash">&#128168;</div>
         <div class="touch-btn" id="btn-jump">&#9650;</div>
     </div>
@@ -168,7 +170,24 @@
     <script src="levels/level8.js"></script>
     <script src="levels/level9.js"></script>
     <script src="levels/level10.js"></script>
+    <script src="levels/w1_2.js"></script>
+    <script src="levels/w1_3.js"></script>
+    <script src="levels/w1_4.js"></script>
+    <script src="levels/w2_2.js"></script>
+    <script src="levels/w2_3.js"></script>
+    <script src="levels/w2_4.js"></script>
+    <script src="levels/w3_2.js"></script>
+    <script src="levels/w3_3.js"></script>
+    <script src="levels/w3_4.js"></script>
+    <script src="levels/w4_2.js"></script>
+    <script src="levels/w4_3.js"></script>
+    <script src="levels/w5_3.js"></script>
+    <script src="levels/w5_4.js"></script>
+    <script src="levels/w6_3.js"></script>
+    <!-- records.js first: it tidies saves by their old ten-level positions,
+         then campaign.js moves them to their places in the campaign -->
     <script src="records.js"></script>
+    <script src="campaign.js"></script>
     <!-- Load audio and menu systems -->
     <script src="audio.js"></script>
     <script src="menu.js"></script>
@@ -183,12 +202,14 @@
     <script src="hdbiomes.js"></script>
     <script src="hdcreatures.js"></script>
     <script src="interact.js"></script>
+    <script src="suits.js"></script>
     <script src="speedrun.js"></script>
     <script src="endless.js"></script>
     <script src="modifiers.js"></script>
     <script src="daily.js"></script>
     <script src="story.js"></script>
     <script src="tutorial.js"></script>
+    <script src="worldmap.js"></script>
     <!-- Load main game file last -->
     <script src="game.js"></script>
 
@@ -212,6 +233,7 @@
             bindBtn('btn-jump',  function() { touchJump  = true;  }, function() { touchJump  = false; });
             bindBtn('btn-down',  function() { touchDown  = true;  }, function() { touchDown  = false; });
             bindBtn('btn-dash',  function() { touchDashPressed = true; }, function() {});
+            bindBtn('btn-action', function() { touchActionPressed = true; }, function() {});
 
             // Landscape suggestion: brief toast in portrait, never blocks play
             var rotateToast = document.getElementById('rotate-toast');

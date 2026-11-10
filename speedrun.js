@@ -228,21 +228,21 @@ function showSpeedrunLevelSelect(scene) {
     menuObjects.push(subtitle);
 
     for (let i = 0; i < levels.length; i++) {
-        const col = i % 5;
-        const row = Math.floor(i / 5);
-        const x = 110 + col * 145;
-        const y = 160 + row * 190;
+        const col = i % 6;
+        const row = Math.floor(i / 6);
+        const x = 85 + col * 126;
+        const y = 150 + row * 112;
         const unlocked = isLevelUnlocked(i);
         const record = getSpeedrunRecord(i);
         const boxColor = unlocked ? 0x124d66 : 0x2a2a2a;
 
-        const box = scene.add.rectangle(x, y, 120, 118, boxColor);
+        const box = scene.add.rectangle(x, y, 114, 102, boxColor);
         box.setStrokeStyle(2, unlocked ? 0x55ccee : 0x444444);
         box.setScrollFactor(0).setDepth(2001);
         menuObjects.push(box);
 
-        const number = scene.add.text(x, y - 34, 'LEVEL ' + (i + 1), {
-            fontSize: '18px',
+        const number = scene.add.text(x, y - 34, levelLabel(i), {
+            fontSize: '16px',
             fill: unlocked ? '#ffffff' : '#666666',
             fontStyle: 'bold'
         }).setOrigin(0.5).setScrollFactor(0).setDepth(2002);

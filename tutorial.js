@@ -8,12 +8,14 @@ const TUTORIAL_HINTS = [
     { level: 0, triggerX: 800, text: 'Hold Space longer for higher jumps' },
     { level: 0, triggerX: 1600, text: 'Jump on enemies to stomp them!' },
     { level: 1, triggerX: 300, text: 'Press SHIFT to dash through obstacles' },
-    { level: 1, triggerX: 1500, text: 'Chain coins and stomps for combo multipliers!' },
-    { level: 2, triggerX: 500, text: 'Slide on walls and press Space to wall jump!' },
-    { level: 2, triggerX: 1800, text: 'Crates break when hit from below, or with a ground pound' },
-    { level: 3, triggerX: 600, text: 'Watch out for shooters! Dodge their projectiles' },
-    { level: 5, triggerX: 400, text: 'Some walls are fake... try dashing through them!' },
-    { level: 8, triggerX: 300, text: 'Speed boosts let you run faster! Grab power-ups' },
+    { level: 1, triggerX: 1500, text: 'Mind the gaps: falling in costs a heart' },
+    { level: 2, triggerX: 500, text: 'Crates break when hit from below, or with a ground pound' },
+    { level: 4, triggerX: 1500, text: 'Chain coins and stomps for combo multipliers!' },
+    { level: 8, triggerX: 500, text: 'Slide on walls and press Space to wall jump!' },
+    { level: 8, triggerX: 1800, text: 'Crates break when hit from below, or with a ground pound' },
+    { level: 12, triggerX: 600, text: 'Watch out for shooters! Dodge their projectiles' },
+    { level: 16, triggerX: 400, text: 'Some walls are fake... try dashing through them!' },
+    { level: 21, triggerX: 300, text: 'Speed boosts let you run faster! Grab power-ups' },
 ];
 
 let tutorialShown = JSON.parse(localStorage.getItem('jqTutorialShown')) || {};

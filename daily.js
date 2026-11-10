@@ -71,7 +71,7 @@ function getDailyChallenge() {
     const rng = dailySeedRandom(today);
 
     // Pick a level (0-9)
-    const levelIndex = Math.floor(rng() * 10);
+    const levelIndex = Math.floor(rng() * CAMPAIGN_LEVELS.length);
 
     // Pick 2 non-conflicting modifiers
     const modKeys = Object.keys(DAILY_MODIFIERS);

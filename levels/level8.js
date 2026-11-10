@@ -180,6 +180,15 @@ const level8 = {
         { x: 1690, y: 140, length: 190 }
     ],
 
+    // Three hidden gems (campaign.js)
+    gems: [
+        { x: 940, y: 328 },
+        { x: 2050, y: 208 },
+        { x: 2860, y: 288 }
+    ],
+
+    targetTime: 60000,
+
     playerStart: { x: 100, y: 540 },
     flagPosition: { x: 3500, y: 530 }
 };

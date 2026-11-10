@@ -198,6 +198,15 @@ const level9 = {
         { x: 4310, y: 330 }
     ],
 
+    // Three hidden gems (campaign.js)
+    gems: [
+        { x: 1340, y: 398 },
+        { x: 2930, y: 368 },
+        { x: 3810, y: 408 }
+    ],
+
+    targetTime: 90000,
+
     playerStart: { x: 100, y: 540 },
     flagPosition: { x: 4900, y: 530 }
 };

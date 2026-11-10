@@ -544,15 +544,15 @@ function hdDrawPlayerEar(ctx, inner) {
 }
 
 // Headband: the knot and band are baked into one strip across the brow
-function hdDrawPlayerBand(ctx) {
+function hdDrawPlayerBand(ctx, top, bottom, edge) {
     const g = ctx.createLinearGradient(0, 0, 0, 6);
-    g.addColorStop(0, '#ff5a4d'); g.addColorStop(1, '#c2202a');
+    g.addColorStop(0, top || '#ff5a4d'); g.addColorStop(1, bottom || '#c2202a');
     ctx.fillStyle = g;
     ctx.beginPath();
     ctx.moveTo(1.5, 1.2); ctx.quadraticCurveTo(15, -0.8, 28.5, 1.2);
     ctx.lineTo(29, 5); ctx.quadraticCurveTo(15, 3.2, 1, 5);
     ctx.closePath(); ctx.fill();
-    ctx.strokeStyle = 'rgba(70,10,20,0.7)'; ctx.lineWidth = 0.9; ctx.stroke();
+    ctx.strokeStyle = edge || 'rgba(70,10,20,0.7)'; ctx.lineWidth = 0.9; ctx.stroke();
     ctx.fillStyle = 'rgba(255,255,255,0.35)';
     ctx.fillRect(6, 1.2, 14, 0.9);
 }
@@ -562,16 +562,18 @@ function hdPlayerTextures(scene) {
     hdTexture(scene, 'hd_body_shine', 34, 34, hdDrawPlayerShine);
     hdTexture(scene, 'hd_ear', 12, 16, ctx => hdDrawPlayerEar(ctx, false));
     hdTexture(scene, 'hd_ear_inner', 12, 16, ctx => hdDrawPlayerEar(ctx, true));
-    hdTexture(scene, 'hd_band', 30, 6, hdDrawPlayerBand);
+    // The rig's band and tails are drawn in greys and tinted, so a suit can
+    // recolour them (suits.js)
+    hdTexture(scene, 'hd_band', 30, 6, ctx => hdDrawPlayerBand(ctx, '#ffffff', '#c4c4c4', 'rgba(30,30,40,0.7)'));
     // Headband tail: a ribbon that tapers to a notched end
     hdTexture(scene, 'hd_band_tail', 16, 6, (ctx) => {
         const g = ctx.createLinearGradient(0, 0, 0, 6);
-        g.addColorStop(0, '#ff5a4d'); g.addColorStop(1, '#b81c26');
+        g.addColorStop(0, '#ffffff'); g.addColorStop(1, '#bcbcbc');
         ctx.fillStyle = g;
         ctx.beginPath();
         ctx.moveTo(0, 1.6); ctx.lineTo(15.5, 0.3); ctx.lineTo(12.5, 3); ctx.lineTo(15.5, 5.7);
         ctx.lineTo(0, 4.4); ctx.closePath(); ctx.fill();
-        ctx.strokeStyle = 'rgba(70,10,20,0.6)'; ctx.lineWidth = 0.8; ctx.stroke();
+        ctx.strokeStyle = 'rgba(30,30,40,0.6)'; ctx.lineWidth = 0.8; ctx.stroke();
     });
     hdTexture(scene, 'hd_tail', 12, 12, (ctx) => {
         const g = ctx.createRadialGradient(7, 4, 0.5, 6, 6, 6);
@@ -803,18 +805,31 @@ function hdBuildScenery(scene, name) {
     if (recipe.rays && !low) hdBuildRays(scene, recipe);
 
     // Ground: one continuous strip, surface at y=560
-    hdLayer(scene, hdGroundTexture(scene, 'hd_ground_' + name, recipe.ground),
-        560 - HD_GROUND_LIP, 600 - 560 + HD_GROUND_LIP, 1, -3);
+    // (cut into stretches where the level has pits)
+    const groundKey = hdGroundTexture(scene, 'hd_ground_' + name, recipe.ground);
+    const stretches = (!hdEndless() && typeof levelHasPits === 'function' && levelHasPits(currentLevel))
+        ? groundIntervals(currentLevel) : null;
+    const cutToStretches = (make) => {
+        if (!stretches) return [make()];
+        return stretches.map(([l, r]) => {
+            const strip = make();
+            strip.setPosition(l, strip.y).setSize(r - l, strip.height);
+            strip.tilePositionX = l;
+            return strip;
+        });
+    };
+    cutToStretches(() => hdLayer(scene, groundKey, 560 - HD_GROUND_LIP, 600 - 560 + HD_GROUND_LIP, 1, -3));
 
     // Grass tufts in front of the player, so feet sink into the grass
     if (recipe.tufts) {
         const key = hdTuftStripTexture(scene, 'hd_tufts_' + name, recipe.tufts);
-        hdOptional.push(hdLayer(scene, key, 562 - 14, 14, 1, 11));
+        cutToStretches(() => hdLayer(scene, key, 562 - 14, 14, 1, 11)).forEach(t => hdOptional.push(t));
     }
 
     // Depth of field: a blurred strip along the bottom and out-of-focus
     // shapes hanging into the top of the frame
-    if (!low && recipe.foreground) {
+    // (left out over pits, which it would hide)
+    if (!low && recipe.foreground && !stretches) {
         const key = hdForegroundTexture(scene, 'hd_fg_' + name, recipe.foreground);
         hdOptional.push(hdLayer(scene, key, 556, 46, 1.3, 70, 0.95));
     }
@@ -1474,6 +1489,8 @@ function updateHdRig(scene, dt) {
     r.earFront.setTint(playerRect.tintTopLeft);
     r.earBack.setTint(hdMix(playerRect.tintTopLeft, 0x202838, 0.25));
     r.tail.setTint(playerRect.tintTopLeft);
+    const bandColor = typeof suitBandColor === 'function' ? suitBandColor() : 0xf0483c;
+    r.band.setTint(bandColor); r.tailA.setTint(bandColor); r.tailB.setTint(bandColor);
     r.handBack.setTint(0xb8bcc6);
     r.footBack.setTint(0xb0b0b0);
 
@@ -1484,7 +1501,8 @@ function updateHdRig(scene, dt) {
     const footAnchor = onGround ? (base - sy) * 16 : 0;
     let lean = 0;
     if (!isDashing && !isPounding) lean = Phaser.Math.Clamp(vx / 220, -1, 1) * (onGround ? 0.09 : 0.05);
-    r.container.setPosition(playerRect.x, playerRect.y + footAnchor);
+    const rideLift = typeof suitRigLift === 'function' ? suitRigLift() : 0;
+    r.container.setPosition(playerRect.x, playerRect.y + footAnchor - rideLift);
     r.container.setScale(sx * facing, sy);
     r.container.setRotation(playerRect.rotation + lean);
     r.container.setAlpha(playerRect.alpha);

@@ -310,7 +310,7 @@ function showModifierScreen(scene) {
 function isHardcoreComplete() {
     var data = JSON.parse(localStorage.getItem('jqHardcoreComplete')) || {};
     // Check if all 10 levels beaten with all hardcore modifiers active
-    for (var i = 0; i < 10; i++) {
+    for (var i = 0; i < CAMPAIGN_LEVELS.length; i++) {
         if (!data['level' + i]) return false;
     }
     return true;
