@@ -11,7 +11,7 @@ const config = {
     scale: {
         mode: Phaser.Scale.FIT,
         autoCenter: Phaser.Scale.CENTER_BOTH,
-        width: 800,
+        width: VIEW_W,
         height: 600
     },
     physics: {
@@ -130,11 +130,11 @@ function setGameplayHUDVisible(visible) {
 
 // Compact HUD formatters keep all game modes speaking the same visual language.
 function formatScoreHUD(value, best) {
-    return `★ ${value}   RECORD ${best || 0}`;
+    return `★ ${value}`;
 }
 
 function formatTimeHUD(value, best) {
-    return `⏱ ${formatTime(value)}   RECORD ${best ? formatTime(best) : '--:--'}`;
+    return formatTime(value);
 }
 
 function formatLivesHUD(value) {
@@ -701,6 +701,9 @@ function create() {
     const splash = document.getElementById('splash-screen');
     if (splash) splash.remove();
 
+    // Second camera for the 800px-wide menus (see view.js)
+    setupViewCameras(this);
+
     // Clean up moving platforms from previous session
     if (movingPlatforms && movingPlatforms.length > 0) {
         movingPlatforms.forEach(mp => {
@@ -888,7 +891,10 @@ function create() {
         showStoryCard(this, currentLevelIndex, () => {
             isPaused = false;
             this.physics.resume();
+            if (typeof showMoveIntro === 'function') showMoveIntro(this);
         });
+    } else if (typeof showMoveIntro === 'function') {
+        showMoveIntro(this);
     }
 }
 
@@ -998,7 +1004,7 @@ function buildClassicBackdrop(theme, skyColor, groundColor, bgColor1, bgColor2) 
     const ambColor = isNight ? 0xffe28a : 0xffffff;
     const ambientCount = (typeof lowFxMode !== 'undefined' && lowFxMode) ? 0 : 14;
     for (let i = 0; i < ambientCount; i++) {
-        const p = this.add.circle(Math.random() * 800, Math.random() * 500,
+        const p = this.add.circle(Math.random() * VIEW_W, Math.random() * 500,
             isNight ? 2 : 1.5, ambColor, isNight ? 0.7 : 0.35);
         p.setDepth(-5);
         ambientParticles.push({
@@ -1464,155 +1470,97 @@ function loadLevel(levelIndex) {
     cursors = this.input.keyboard.createCursorKeys();
     dashKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT);
 
-    // One quiet panel contains persistent run information. Moment-to-moment
-    // feedback (combo, hints) stays outside it so the playfield stays clear.
+    // Slim HUD: a single row of readouts drawn straight over the world, laid
+    // out for the full widescreen width. Records live on the level select
+    // and results screens, not here.
     gameplayHudObjects = [];
-    const shortLevelName = currentLevel.name.replace(/^Level\s+\d+\s*[-–]\s*/i, '');
-    const levelTitle = `LEVEL ${currentLevelIndex + 1} OF ${levels.length} - ${shortLevelName}`;
-    const levelName = this.add.text(20, 19, levelTitle, {
-        fontSize: '14px', fill: '#ffff00', fontStyle: 'bold'
-    });
-    levelName.setScrollFactor(0).setDepth(100);
-    levelNameText = levelName;
-    // Let each level title define the panel width, while retaining enough room
-    // for the Dash/Flow row on shorter level names.
-    const hudPanelWidth = Math.max(285, Math.ceil(levelName.width + 40));
-    const hudPanel = this.add.rectangle(10, 10, hudPanelWidth, 128, 0x07121e, 0.78);
-    hudPanel.setOrigin(0, 0).setStrokeStyle(1, 0x29405f).setScrollFactor(0).setDepth(90);
-    gameplayHudObjects.push(hudPanel);
-    gameplayHudObjects.push(levelName);
-
-    // The first level teaches the core moves; later levels stay unobstructed.
-    if (currentLevelIndex === 0) {
-        const instructionPanel = this.add.rectangle(400, 576, 610, 32, 0x07121e, 0.55);
-        instructionPanel.setStrokeStyle(1, 0x29405f).setOrigin(0.5, 1).setScrollFactor(0).setDepth(99);
-        const instructionSpecs = [
-        { x: 122, text: '← → : MOVE' },
-        { x: 230, text: 'SPACE : JUMP' },
-        { x: 360, text: 'SHIFT : DASH' },
-        { x: 492, text: '↓ + SPACE : POUND' },
-        { x: 647, text: 'R : RETRY' }
-        ];
-        const instructionChips = instructionSpecs.map(spec => this.add.text(spec.x, 566, spec.text, {
-        fontSize: '9px', fill: '#d7e2f0', fontStyle: 'bold',
-        backgroundColor: '#1b2b3f', padding: { x: 5, y: 3 }
-        }).setOrigin(0.5, 1).setScrollFactor(0).setDepth(100).setAlpha(0.78));
-        const instructions = this.add.container(0, 0, [instructionPanel, ...instructionChips]);
-        instructions.setScrollFactor(0).setDepth(100);
-        gameplayHudObjects.push(instructions);
-        this.tweens.add({
-        targets: instructions,
-        alpha: 0,
-        duration: 600,
-        delay: 6000,
-        ease: 'Power2',
-            onComplete: () => instructions.destroy()
+    const hudText = (x, y, text, size, color) => {
+        const t = this.add.text(x, y, text, {
+            fontSize: size + 'px', fill: color, fontStyle: 'bold',
+            stroke: '#0a1220', strokeThickness: 4
         });
-    }
+        t.setScrollFactor(0).setDepth(100);
+        gameplayHudObjects.push(wideUI(t));
+        return t;
+    };
 
-    // Score display
-    const highScore = highScores['level' + currentLevelIndex] || 0;
-    scoreText = this.add.text(20, 46, formatScoreHUD(score, highScore), {
-        fontSize: '13px', fill: '#ffd700'
-    });
-    scoreText.setScrollFactor(0).setDepth(100);
-    gameplayHudObjects.push(scoreText);
+    livesText = hudText(16, 8, formatLivesHUD(lives), 22, '#ff5b6e');
 
-    // Coin wallet display
     if (typeof getDisplayCoins === 'function') {
-        walletText = this.add.text(176, 94, `● ${getDisplayCoins()}`, {
-            fontSize: '13px', fill: '#ffcc33'
-        });
-        walletText.setScrollFactor(0).setDepth(100);
-        gameplayHudObjects.push(walletText);
+        walletText = hudText(132, 12, `● ${getDisplayCoins()}`, 16, '#ffcc33');
     }
 
-    // Timer display
+    const highScore = highScores['level' + currentLevelIndex] || 0;
+    scoreText = hudText(222, 12, formatScoreHUD(score, highScore), 16, '#ffe9a8');
+
+    const shortLevelName = currentLevel.name.replace(/^Level\s+\d+\s*[-–]\s*/i, '');
+    const levelName = hudText(VIEW_W / 2, 12, `${currentLevelIndex + 1} · ${shortLevelName.toUpperCase()}`, 13, '#ffffff');
+    levelName.setOrigin(0.5, 0).setAlpha(0.8);
+    levelNameText = levelName;
+
     const bestTime = bestTimes['level' + currentLevelIndex];
-    timerText = this.add.text(20, 69, formatTimeHUD(0, bestTime), {
-        fontSize: '13px', fill: '#00ffff'
-    });
-    timerText.setScrollFactor(0).setDepth(100);
-    gameplayHudObjects.push(timerText);
+    timerText = hudText(VIEW_W - 96, 12, formatTimeHUD(0, bestTime), 16, '#bfefff');
+    timerText.setOrigin(1, 0);
 
-    // Lives display
-    livesText = this.add.text(20, 93, formatLivesHUD(lives), {
-        fontSize: '16px', fill: '#ff5b5b'
-    });
-    livesText.setScrollFactor(0).setDepth(100);
-    gameplayHudObjects.push(livesText);
+    // Combo display (under the timer)
+    comboText = hudText(VIEW_W - 16, 48, '', 20, '#ff0');
+    comboText.setOrigin(1, 0);
+    comboText.setStyle({ strokeThickness: 3, stroke: '#000' });
 
-    // Combo display (top-right area)
-    comboText = this.add.text(784, 50, '', {
-        fontSize: '20px',
-        fill: '#ff0',
-        fontStyle: 'bold',
-        stroke: '#000',
-        strokeThickness: 3
-    });
-    comboText.setOrigin(1, 0).setScrollFactor(0).setDepth(100);
-    gameplayHudObjects.push(comboText);
-
-    // Combo timer bar
-    comboTimerBarBg = this.add.rectangle(730, 75, 60, 6, 0x333333);
+    comboTimerBarBg = wideUI(this.add.rectangle(VIEW_W - 46, 74, 60, 6, 0x333333));
     comboTimerBarBg.setOrigin(0.5, 0).setScrollFactor(0).setDepth(100).setAlpha(0);
-    comboTimerBar = this.add.rectangle(730, 75, 60, 6, 0xffdd00);
+    comboTimerBar = wideUI(this.add.rectangle(VIEW_W - 46, 74, 60, 6, 0xffdd00));
     comboTimerBar.setOrigin(0.5, 0).setScrollFactor(0).setDepth(100).setAlpha(0);
     gameplayHudObjects.push(comboTimerBarBg, comboTimerBar);
 
-    // Dash cooldown bar
-    dashCooldownBarBg = this.add.rectangle(20, 117, 72, 6, 0x33445c);
-    dashCooldownBarBg.setOrigin(0, 0.5).setScrollFactor(0).setDepth(100);
-    dashCooldownBar = this.add.rectangle(20, 117, 72, 6, 0x00ccff);
+    // Dash and flow meters sit under the hearts, and only once the player
+    // has been taught the move they belong to (see moves.js).
+    const dashKnown = typeof isMoveUnlocked !== 'function' || isMoveUnlocked('dash');
+    const flowKnown = typeof isMoveUnlocked !== 'function' || isMoveUnlocked('flow');
+    dashCooldownBarBg = wideUI(this.add.rectangle(18, 44, 64, 6, 0x0a1220, 0.75));
+    dashCooldownBarBg.setOrigin(0, 0.5).setStrokeStyle(1, 0x0a1220).setScrollFactor(0).setDepth(100);
+    dashCooldownBar = wideUI(this.add.rectangle(18, 44, 64, 6, 0x00ccff));
     dashCooldownBar.setOrigin(0, 0.5).setScrollFactor(0).setDepth(100);
-    const dashLabel = this.add.text(98, 117, 'DASH', {
-        fontSize: '10px', fill: '#00ccff'
-    }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(100);
-    gameplayHudObjects.push(dashCooldownBarBg, dashCooldownBar, dashLabel);
+    if (dashKnown) gameplayHudObjects.push(dashCooldownBarBg, dashCooldownBar);
+    else { dashCooldownBarBg.setVisible(false); dashCooldownBar.setVisible(false); }
 
-    // Flow meter, sharing the row with the dash bar
     if (typeof createFlowHUD === 'function') {
-        createFlowHUD(this, 148, 117);
+        createFlowHUD(this, 94, 44, flowKnown);
     }
 
-    // Sound toggle button (always visible, bottom-right corner)
-    const muteLabel = (typeof audioMuted !== 'undefined' && audioMuted) ? '×' : '♫';
-    const muteBtn = this.add.text(784, 584, muteLabel, {
-        fontSize: '18px', fill: '#aaa',
-        fontFamily: 'monospace',
-        padding: { x: 4, y: 3 }
-    });
-    muteBtn.setOrigin(1, 1).setScrollFactor(0).setDepth(2100).setAlpha(0.45);
-    muteBtn.setInteractive({ useHandCursor: true });
-    muteBtn.on('pointerover', () => muteBtn.setAlpha(0.85));
-    muteBtn.on('pointerout', () => muteBtn.setAlpha(0.45));
+    // Touch: the dash button only appears once dash has been taught
+    const dashBtn = document.getElementById('btn-dash');
+    if (dashBtn) dashBtn.style.visibility = dashKnown ? 'visible' : 'hidden';
+
+    // Controls reminder: only the moves this player has, and it fades away
+    if (typeof showControlsReminder === 'function') showControlsReminder(this);
+
+    const hudButton = (x, label) => {
+        const b = this.add.text(x, 10, label, {
+            fontSize: '14px', fill: '#fff', fontStyle: 'bold', fontFamily: 'monospace',
+            backgroundColor: 'rgba(10,18,32,0.6)', padding: { x: 8, y: 5 }
+        });
+        b.setOrigin(1, 0).setScrollFactor(0).setDepth(2100).setAlpha(0.8);
+        b.setInteractive({ useHandCursor: true });
+        b.on('pointerover', () => b.setAlpha(1));
+        b.on('pointerout', () => b.setAlpha(0.8));
+        gameplayHudObjects.push(wideUI(b));
+        return b;
+    };
+
+    // Sound toggle
+    const muteLabel = () => (typeof audioMuted !== 'undefined' && audioMuted) ? '×' : '♫';
+    const muteBtn = hudButton(VIEW_W - 52, muteLabel());
     muteBtn.on('pointerup', () => {
         if (typeof toggleMute === 'function') toggleMute();
-        muteBtn.setText((typeof audioMuted !== 'undefined' && audioMuted) ? '×' : '♫');
+        muteBtn.setText(muteLabel());
     });
-    gameplayHudObjects.push(muteBtn);
 
     // Pause button
-    pauseButton = this.add.text(778, 12, 'PAUSE', {
-        fontSize: '11px',
-        fill: '#fff', fontStyle: 'bold',
-        backgroundColor: '#666',
-        padding: { x: 8, y: 6 }
-    });
-    pauseButton.setOrigin(1, 0);
-    pauseButton.setScrollFactor(0);
-    pauseButton.setDepth(2100);
-    pauseButton.setInteractive({ useHandCursor: true });
-    pauseButton.on('pointerover', () => {
-        pauseButton.setStyle({ backgroundColor: '#888' });
-    });
-    pauseButton.on('pointerout', () => {
-        pauseButton.setStyle({ backgroundColor: '#666' });
-    });
+    pauseButton = hudButton(VIEW_W - 14, 'II');
     pauseButton.on('pointerup', () => {
         togglePause.call(this);
     });
-    gameplayHudObjects.push(pauseButton);
 
     // ESC key to pause
     this.input.keyboard.on('keydown-ESC', () => {
@@ -1799,7 +1747,7 @@ function update() {
     }
     dashBufferTimer -= this.game.loop.delta;
 
-    if (dashBufferTimer > 0 && dashCooldown <= 0 && !isDashing) {
+    if (dashBufferTimer > 0 && dashCooldown <= 0 && !isDashing && isMoveUnlocked('dash')) {
         touchDashPressed = false;
         dashBufferTimer = 0;
         if (onGround || canAirDash) {
@@ -1826,7 +1774,8 @@ function update() {
     // --- Ground Pound ---
     // Down + Jump in mid-air: hang briefly, then plunge. The pause is what
     // makes it read as a deliberate move rather than a dropped jump.
-    if (!isPounding && !onGround && !isDashing && (cursors.down.isDown || touchDown) && jumpJustPressed) {
+    if (!isPounding && !onGround && !isDashing && (cursors.down.isDown || touchDown) && jumpJustPressed &&
+        isMoveUnlocked('pound')) {
         isPounding = true;
         poundPauseTimer = POUND_PAUSE;
         jumpBufferTimer = 0;
@@ -2387,7 +2336,7 @@ function update() {
     }
 
     // Flow meter: driven by how much of the speed cap is actually being used
-    if (typeof updateFlowMeter === 'function') {
+    if (typeof updateFlowMeter === 'function' && isMoveUnlocked('flow')) {
         const cap = activePowerUps.speed ? 330 : MAX_SPEED;
         const speedRatio = Math.abs(player.body.velocity.x) / cap;
         updateFlowMeter(this, this.game.loop.delta, speedRatio, playerRect);

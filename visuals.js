@@ -450,7 +450,7 @@ function buildForeground(scene, worldWidth, color) {
         g.destroy();
         scene.textures.get(key).setFilter(Phaser.Textures.FilterMode.NEAREST);
     }
-    const strip = scene.add.tileSprite(0, 600 - stripH, 900, stripH, key).setOrigin(0, 0);
+    const strip = scene.add.tileSprite(0, 600 - stripH, VIEW_W + 100, stripH, key).setOrigin(0, 0);
     strip.setScrollFactor(0).setDepth(DEPTH_FOREGROUND).setAlpha(0.55);
     foregroundLayers.push({ sprite: strip, factor: 1.2 });
 }
@@ -489,7 +489,7 @@ function buildWeather(scene, kind) {
         p.setScrollFactor(0).setDepth(DEPTH_WEATHER);
         weatherParticles.push({
             obj: p,
-            x: Math.random() * 800,
+            x: Math.random() * VIEW_W,
             y: Math.random() * 600,
             vx: kind === 'rain' ? -30 : (kind === 'embers' ? 12 + Math.random() * 20 : -18 + Math.random() * 36),
             vy: kind === 'rain' ? 430 : (kind === 'embers' ? -34 - Math.random() * 30 : 34 + Math.random() * 34),
@@ -509,8 +509,8 @@ function updateWeather(scene, delta) {
         p.x += (p.vx + (p.kind === 'leaves' ? Math.sin(p.sway) * 26 : 0)) * dt;
         p.y += p.vy * dt;
 
-        if (p.y > 620) { p.y = -20; p.x = Math.random() * 800; }
-        if (p.y < -30) { p.y = 610; p.x = Math.random() * 800; }
+        if (p.y > 620) { p.y = -20; p.x = Math.random() * VIEW_W; }
+        if (p.y < -30) { p.y = 610; p.x = Math.random() * VIEW_W; }
         if (p.x < -20) p.x = 810;
         if (p.x > 820) p.x = -10;
 

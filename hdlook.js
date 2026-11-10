@@ -448,22 +448,21 @@ function hdBuildGoal(scene) {
 // ========================
 // Player parts. The body is drawn in greys so the cosmetic tint shades it;
 // the shine layer sits on top untinted, keeping highlights white.
-function hdPlayerBodyPath(ctx, x, y, s, r) {
+function hdPlayerBodyPath(ctx, x, y, s) {
+    // Egg-shaped: narrower at the crown, full at the hips. Fills the same
+    // box as the old square so the physics body still matches the art.
+    const cx = x + s / 2;
     ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.lineTo(x + s - r, y);
-    ctx.quadraticCurveTo(x + s, y, x + s, y + r);
-    ctx.lineTo(x + s, y + s - r);
-    ctx.quadraticCurveTo(x + s, y + s, x + s - r, y + s);
-    ctx.lineTo(x + r, y + s);
-    ctx.quadraticCurveTo(x, y + s, x, y + s - r);
-    ctx.lineTo(x, y + r);
-    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.moveTo(cx, y);
+    ctx.bezierCurveTo(x + s * 0.86, y, x + s, y + s * 0.3, x + s, y + s * 0.6);
+    ctx.bezierCurveTo(x + s, y + s * 0.9, x + s * 0.8, y + s, cx, y + s);
+    ctx.bezierCurveTo(x + s * 0.2, y + s, x, y + s * 0.9, x, y + s * 0.6);
+    ctx.bezierCurveTo(x, y + s * 0.3, x + s * 0.14, y, cx, y);
     ctx.closePath();
 }
 
 function hdDrawPlayerBody(ctx) {
-    hdPlayerBodyPath(ctx, 1, 1, 32, 10);
+    hdPlayerBodyPath(ctx, 1, 1, 32);
     const g = ctx.createLinearGradient(0, 1, 0, 33);
     g.addColorStop(0, '#ffffff');
     g.addColorStop(0.6, '#e8ecf1');
@@ -480,13 +479,13 @@ function hdDrawPlayerBody(ctx) {
     ctx.restore();
     ctx.strokeStyle = 'rgba(55,62,80,0.6)';
     ctx.lineWidth = 1.2;
-    hdPlayerBodyPath(ctx, 1.5, 1.5, 31, 9.5);
+    hdPlayerBodyPath(ctx, 1.5, 1.5, 31);
     ctx.stroke();
 }
 
 function hdDrawPlayerShine(ctx) {
     ctx.save();
-    hdPlayerBodyPath(ctx, 1, 1, 32, 10);
+    hdPlayerBodyPath(ctx, 1, 1, 32);
     ctx.clip();
     // Form shadow away from the sun, drawn untinted so it reads on any colour
     const shade = ctx.createLinearGradient(30, 4, 6, 34);
@@ -506,14 +505,86 @@ function hdDrawPlayerShine(ctx) {
     rim.addColorStop(1, 'rgba(255,236,190,0.6)');
     ctx.fillStyle = rim;
     ctx.fillRect(26, 0, 8, 26);
+    // Pale belly, on the side the character faces
+    const belly = ctx.createRadialGradient(21, 25, 2, 21, 25, 12);
+    belly.addColorStop(0, 'rgba(255,250,235,0.78)');
+    belly.addColorStop(0.75, 'rgba(255,250,235,0.6)');
+    belly.addColorStop(1, 'rgba(255,250,235,0)');
+    ctx.fillStyle = belly;
+    ctx.beginPath(); ctx.ellipse(21, 25.5, 10.5, 9, 0, 0, Math.PI * 2); ctx.fill();
+    // Blush
+    ctx.fillStyle = 'rgba(255,120,130,0.5)';
+    ctx.beginPath(); ctx.ellipse(31, 18.5, 2.6, 1.7, 0, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
     ctx.fillStyle = 'rgba(255,255,255,0.8)';
-    ctx.beginPath(); ctx.ellipse(27, 5.2, 3, 1.5, -0.4, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(24.5, 4.6, 3, 1.4, -0.3, 0, Math.PI * 2); ctx.fill();
+}
+
+// Ear, pointing up, drawn in greys so it takes the body tint. The pink
+// inner ear is a separate untinted texture.
+function hdDrawPlayerEar(ctx, inner) {
+    ctx.beginPath();
+    ctx.moveTo(1, 15);
+    ctx.quadraticCurveTo(0.5, 5, 6, 0.8);
+    ctx.quadraticCurveTo(11.5, 5, 11, 15);
+    ctx.closePath();
+    if (inner) {
+        ctx.save();
+        ctx.translate(6, 9); ctx.scale(0.5, 0.62); ctx.translate(-6, -9);
+        ctx.fillStyle = '#ff9aa8';
+        ctx.fill();
+        ctx.restore();
+        return;
+    }
+    const g = ctx.createLinearGradient(0, 0, 0, 15);
+    g.addColorStop(0, '#ffffff'); g.addColorStop(1, '#c9d0db');
+    ctx.fillStyle = g;
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(55,62,80,0.6)'; ctx.lineWidth = 1.1; ctx.stroke();
+}
+
+// Headband: the knot and band are baked into one strip across the brow
+function hdDrawPlayerBand(ctx) {
+    const g = ctx.createLinearGradient(0, 0, 0, 6);
+    g.addColorStop(0, '#ff5a4d'); g.addColorStop(1, '#c2202a');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.moveTo(1.5, 1.2); ctx.quadraticCurveTo(15, -0.8, 28.5, 1.2);
+    ctx.lineTo(29, 5); ctx.quadraticCurveTo(15, 3.2, 1, 5);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = 'rgba(70,10,20,0.7)'; ctx.lineWidth = 0.9; ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    ctx.fillRect(6, 1.2, 14, 0.9);
 }
 
 function hdPlayerTextures(scene) {
     hdTexture(scene, 'hd_body', 34, 34, hdDrawPlayerBody);
     hdTexture(scene, 'hd_body_shine', 34, 34, hdDrawPlayerShine);
+    hdTexture(scene, 'hd_ear', 12, 16, ctx => hdDrawPlayerEar(ctx, false));
+    hdTexture(scene, 'hd_ear_inner', 12, 16, ctx => hdDrawPlayerEar(ctx, true));
+    hdTexture(scene, 'hd_band', 30, 6, hdDrawPlayerBand);
+    // Headband tail: a ribbon that tapers to a notched end
+    hdTexture(scene, 'hd_band_tail', 16, 6, (ctx) => {
+        const g = ctx.createLinearGradient(0, 0, 0, 6);
+        g.addColorStop(0, '#ff5a4d'); g.addColorStop(1, '#b81c26');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.moveTo(0, 1.6); ctx.lineTo(15.5, 0.3); ctx.lineTo(12.5, 3); ctx.lineTo(15.5, 5.7);
+        ctx.lineTo(0, 4.4); ctx.closePath(); ctx.fill();
+        ctx.strokeStyle = 'rgba(70,10,20,0.6)'; ctx.lineWidth = 0.8; ctx.stroke();
+    });
+    hdTexture(scene, 'hd_tail', 12, 12, (ctx) => {
+        const g = ctx.createRadialGradient(7, 4, 0.5, 6, 6, 6);
+        g.addColorStop(0, '#ffffff'); g.addColorStop(1, '#b4bcc9');
+        ctx.fillStyle = g;
+        ctx.beginPath(); ctx.arc(6, 6, 5.2, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = 'rgba(55,62,80,0.6)'; ctx.lineWidth = 1; ctx.stroke();
+    });
+    // Happy closed eye for the victory pose
+    hdTexture(scene, 'hd_eye_happy', 8, 6, (ctx) => {
+        ctx.strokeStyle = '#141827'; ctx.lineWidth = 1.7; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(1, 4.6); ctx.quadraticCurveTo(4, 0.2, 7, 4.6); ctx.stroke();
+    });
     // White cartoon glove: reads clearly over any body colour
     hdTexture(scene, 'hd_hand', 10, 10, (ctx) => {
         const g = ctx.createRadialGradient(6.5, 3.5, 0.5, 5, 5, 5);
@@ -565,12 +636,19 @@ function hdPlayerTextures(scene) {
         ctx.fillStyle = 'rgba(27,31,46,0.8)'; ctx.fillRect(4.5, 1.8, 0.8, 1.2);
     });
     // Flat composite for the ghost replay and dash afterimages
-    hdTexture(scene, 'hd_tex_player', 34, 34, (ctx) => {
+    hdTexture(scene, 'hd_tex_player', 34, 50, (ctx) => {
+        ctx.translate(0, 8);
+        [[8, -5, -0.3], [26, -5, 0.3]].forEach(([ex, ey, rot]) => {
+            ctx.save(); ctx.translate(ex, ey + 15); ctx.rotate(rot); ctx.translate(-6, -15);
+            hdDrawPlayerEar(ctx, false);
+            ctx.restore();
+        });
         hdDrawPlayerBody(ctx);
         hdDrawPlayerShine(ctx);
+        ctx.save(); ctx.translate(2, 5.5); hdDrawPlayerBand(ctx); ctx.restore();
         ctx.fillStyle = '#141827';
-        ctx.beginPath(); ctx.ellipse(20, 13, 2.6, 3.6, 0, 0, Math.PI * 2); ctx.fill();
-        ctx.beginPath(); ctx.ellipse(28, 13, 2.6, 3.6, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(20, 14, 2.6, 3.6, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(28, 14, 2.6, 3.6, 0, 0, Math.PI * 2); ctx.fill();
     });
 }
 
@@ -631,8 +709,8 @@ function hdResetSceneryState() {
 // camera moves (see hdUpdateStrips).
 function hdLayer(scene, key, y, height, factor, depth, alpha) {
     const width = hdEndless()
-        ? 800 + HD_LOOP_TILE * 2
-        : Math.ceil(800 + Math.max(0, currentLevel.worldWidth - 800) * factor) + 4;
+        ? VIEW_W + HD_LOOP_TILE * 2
+        : Math.ceil(VIEW_W + Math.max(0, currentLevel.worldWidth - VIEW_W) * factor) + 4;
     const strip = scene.add.tileSprite(0, y, width, height, key).setOrigin(0, 0);
     strip.setScrollFactor(factor, 0).setDepth(depth);
     strip.hdDrift = 0;
@@ -742,7 +820,7 @@ function hdBuildScenery(scene, name) {
     }
     if (!low && recipe.overhang) {
         const key = hdOverhangTexture(scene, 'hd_overhang_' + recipe.overhang, recipe.overhang);
-        const reach = hdEndless() ? 3900 : 800 + Math.max(0, currentLevel.worldWidth - 800) * 1.25;
+        const reach = hdEndless() ? 3900 : VIEW_W + Math.max(0, currentLevel.worldWidth - VIEW_W) * 1.25;
         const start = hdEndless() ? scene.cameras.main.scrollX * 1.25 + 900 : 900;
         for (let x = start, i = 0; x < start + reach - 900; x += 1300 + rnd() * 600, i++) {
             const b = scene.add.image(x, -8, key).setOrigin(0.5, 0)
@@ -757,7 +835,7 @@ function hdBuildScenery(scene, name) {
     // Dark worlds: everything away from the player falls into shadow
     if (recipe.light && recipe.light.darkness) {
         hdDarkness = scene.add.image(player ? player.x : 0, player ? player.y : 0, 'hd_darkness')
-            .setScale(8, 6.5).setDepth(65).setAlpha(recipe.light.darkness);
+            .setScale(10.5, 6.5).setDepth(65).setAlpha(recipe.light.darkness);
     }
 
     // Vignette, WebGL only (same cost as the classic look's)
@@ -897,7 +975,7 @@ function hdBuildClouds(scene, c, rnd, low) {
         const factor = far ? 0.03 + rnd() * 0.03 : 0.08 + rnd() * 0.06;
         // Spread across at least a screen and a half so wrapping never pops
         // a cloud into view
-        const span = Math.max(1800, 800 + worldW * factor);
+        const span = Math.max(1800, VIEW_W + worldW * factor);
         const x = scrollX * factor + (i + rnd() * 0.6) / count * span - 300;
         const y = c.y[0] + rnd() * (c.y[1] - c.y[0]);
         const scale = far ? 0.45 + rnd() * 0.25 : 0.65 + rnd() * 0.35;
@@ -934,7 +1012,7 @@ function hdBuildRays(scene, recipe) {
 function hdBuildProps(scene, p, rnd, low) {
     if (low && p.kind !== 'torch') return;
     const endless = hdEndless();
-    const reach = endless ? 2400 : 800 + Math.max(0, currentLevel.worldWidth - 800) * p.f;
+    const reach = endless ? 2400 : VIEW_W + Math.max(0, currentLevel.worldWidth - VIEW_W) * p.f;
     const start = endless ? scene.cameras.main.scrollX * p.f - 200 : 0;
     const loop = obj => { if (endless) hdLoop(obj, p.f, reach); };
     let key = null;
@@ -986,7 +1064,7 @@ function hdBuildAmbient(scene, fx, rnd, low) {
     if (!low && f.birds !== undefined) {
         const key = hdBirdTexture(scene, f.birds);
         for (let i = 0; i < 5; i++) {
-            const b = scene.add.image(rnd() * 800, 110 + rnd() * 100, key)
+            const b = scene.add.image(rnd() * VIEW_W, 110 + rnd() * 100, key)
                 .setScrollFactor(0).setDepth(-37).setScale(0.5 + rnd() * 0.4).setAlpha(0.7);
             hdCritters.push({ kind: 'bird', obj: b, speed: 10 + rnd() * 8, phase: rnd() * 6, baseY: b.y });
         }
@@ -999,7 +1077,7 @@ function hdBuildAmbient(scene, fx, rnd, low) {
     };
     if (f.motes) {
         for (let i = 0; i < f.motes.count; i++) {
-            const m = scene.add.image(rnd() * 800, rnd() * 520, 'hd_mote').setScrollFactor(0)
+            const m = scene.add.image(rnd() * VIEW_W, rnd() * 520, 'hd_mote').setScrollFactor(0)
                 .setScale(0.2 + rnd() * 0.25).setDepth(f.motes.add ? 66 : -4).setTint(f.motes.color);
             if (f.motes.add) m.setBlendMode(Phaser.BlendModes.ADD);
             add('mote', m, { vx: (rnd() - 0.3) * 14, vy: (rnd() - 0.6) * 8, base: 0.35 + rnd() * 0.45 });
@@ -1007,7 +1085,7 @@ function hdBuildAmbient(scene, fx, rnd, low) {
     }
     if (f.dust) {
         for (let i = 0; i < f.dust.count; i++) {
-            const m = scene.add.image(rnd() * 800, 200 + rnd() * 380, 'hd_mote').setScrollFactor(0)
+            const m = scene.add.image(rnd() * VIEW_W, 200 + rnd() * 380, 'hd_mote').setScrollFactor(0)
                 .setScale(0.12 + rnd() * 0.12).setDepth(58).setTint(f.dust.color).setAlpha(0.6);
             add('dust', m, { vx: 60 + rnd() * 80, vy: (rnd() - 0.5) * 10 });
         }
@@ -1015,7 +1093,7 @@ function hdBuildAmbient(scene, fx, rnd, low) {
     if (f.leaves) {
         for (let i = 0; i < 12; i++) {
             const near = i < 2;
-            const l = scene.add.image(rnd() * 800, rnd() * 600, hdLeafTexture(scene, f.leaves[i % f.leaves.length]))
+            const l = scene.add.image(rnd() * VIEW_W, rnd() * 600, hdLeafTexture(scene, f.leaves[i % f.leaves.length]))
                 .setScrollFactor(0).setDepth(near ? 71 : 58).setScale(near ? 2.6 : 0.8 + rnd() * 0.5)
                 .setAlpha(near ? 0.55 : 0.9);
             add('leaf', l, {
@@ -1027,14 +1105,14 @@ function hdBuildAmbient(scene, fx, rnd, low) {
     if (f.snow) {
         for (let i = 0; i < 40; i++) {
             const near = i < 5;
-            const s = scene.add.image(rnd() * 800, rnd() * 600, 'hd_mote').setScrollFactor(0)
+            const s = scene.add.image(rnd() * VIEW_W, rnd() * 600, 'hd_mote').setScrollFactor(0)
                 .setScale(near ? 0.55 : 0.12 + rnd() * 0.18).setDepth(near ? 71 : 58).setAlpha(near ? 0.6 : 0.9);
             add('snow', s, { vx: -10 + rnd() * 10, vy: near ? 70 : 25 + rnd() * 30 });
         }
     }
     if (f.embers) {
         for (let i = 0; i < 26; i++) {
-            const e = scene.add.image(rnd() * 800, rnd() * 600, 'hd_mote').setScrollFactor(0)
+            const e = scene.add.image(rnd() * VIEW_W, rnd() * 600, 'hd_mote').setScrollFactor(0)
                 .setScale(0.12 + rnd() * 0.18).setDepth(66).setTint(rnd() < 0.5 ? 0xff8a2a : 0xffc04a)
                 .setBlendMode(Phaser.BlendModes.ADD);
             add('ember', e, { vx: 8 + rnd() * 20, vy: -30 - rnd() * 40 });
@@ -1049,7 +1127,7 @@ function hdBuildAmbient(scene, fx, rnd, low) {
     }
     if (f.drips) {
         for (let i = 0; i < 8; i++) {
-            const d = scene.add.image(rnd() * 800, -20, 'hd_drip').setScrollFactor(0).setDepth(58).setAlpha(0.8);
+            const d = scene.add.image(rnd() * VIEW_W, -20, 'hd_drip').setScrollFactor(0).setDepth(58).setAlpha(0.8);
             add('drip', d, { vy: 0, delay: rnd() * 4 });
         }
     }
@@ -1166,21 +1244,30 @@ function hdTerrainBlock(scene, x, y, w, h, color, isGround, kind) {
 function createHdPlayerRig(scene) {
     const img = key => scene.add.image(0, 0, key);
     const r = {
+        tailA: img('hd_band_tail').setOrigin(0, 0.5), tailB: img('hd_band_tail').setOrigin(0, 0.5),
+        tail: img('hd_tail'),
+        earBack: img('hd_ear').setOrigin(0.5, 0.95), earBackIn: img('hd_ear_inner').setOrigin(0.5, 0.95),
         footBack: img('hd_foot'), handBack: img('hd_hand'),
+        earFront: img('hd_ear').setOrigin(0.5, 0.95), earFrontIn: img('hd_ear_inner').setOrigin(0.5, 0.95),
         body: img('hd_body'), shine: img('hd_body_shine'),
+        band: img('hd_band'),
         eyeA: img('hd_eye'), eyeB: img('hd_eye'),
         pupilA: img('hd_pupil'), pupilB: img('hd_pupil'),
         mouth: img('hd_mouth_smile'),
         handFront: img('hd_hand'), footFront: img('hd_foot')
     };
     r.container = scene.add.container(playerRect.x, playerRect.y, [
-        r.footBack, r.handBack, r.body, r.shine, r.eyeA, r.eyeB,
+        r.tailA, r.tailB, r.tail, r.earBack, r.earBackIn, r.footBack, r.handBack,
+        r.earFront, r.earFrontIn, r.body, r.shine, r.band, r.eyeA, r.eyeB,
         r.pupilA, r.pupilB, r.mouth, r.handFront, r.footFront
     ]).setDepth(playerRect.depth);
     r.phase = 0;
     r.blinkTimer = 2500;
     r.blink = 0;
+    r.idleTime = 0;
     r.look = { x: 1, y: 0 };
+    r.ear = 0;          // extra ear rotation: negative = pinned back
+    r.ribbon = [Math.PI - 1.1, Math.PI - 1.3];
     r.pose = {
         footFront: { x: 6, y: 14 }, footBack: { x: -6, y: 14 },
         handFront: { x: -12, y: 6 }, handBack: { x: 12, y: 6 },
@@ -1197,7 +1284,10 @@ function hdApproach(cur, target, rate, dt) {
 function updateHdRig(scene, dt) {
     const r = hdRig;
     if (!r || !playerRect || !playerRect.scene || !player || !player.body) return;
-    const frozen = isPaused || gameOver || levelComplete || scene.physics.world.isPaused;
+    const cheering = levelComplete && !gameOver;
+    const frozen = !cheering && (isPaused || gameOver || scene.physics.world.isPaused);
+    const leftHeld = cursors && (cursors.left.isDown || touchLeft);
+    const rightHeld = cursors && (cursors.right.isDown || touchRight);
     const body = player.body;
     const vx = body.velocity.x;
     const vy = body.velocity.y;
@@ -1217,12 +1307,31 @@ function updateHdRig(scene, dt) {
     const s = Math.sin(r.phase);
     const c = Math.cos(r.phase);
 
-    if (isPounding) {
+    const carrying = typeof playerCarrying === 'function' && playerCarrying();
+    const hanging = typeof playerOnRope === 'function' && playerOnRope();
+    const skidding = onGround && speed > 90 && ((vx > 0 && leftHeld) || (vx < 0 && rightHeld));
+    let happyEyes = false;
+    let earTarget = 0;
+    if (cheering) {
+        // Victory: arms up, bouncing on the spot
+        const hop = Math.abs(Math.sin(t * 0.012));
+        ff = { x: 6, y: 14 }; fb = { x: -6, y: 14 };
+        hf = { x: 15, y: -17 - hop * 3 }; hb = { x: -15, y: -17 - hop * 3 };
+        bodyY = -hop * 5;
+        mouth = 'hd_mouth_open'; happyEyes = true; earTarget = 0.25;
+        rate = 26;
+    } else if (hanging) {
+        ff = { x: 3, y: 15 }; fb = { x: -4, y: 15 };
+        hf = { x: 3, y: -20 }; hb = { x: -3, y: -20 };
+        mouth = 'hd_mouth_open';
+    } else if (isPounding) {
+        earTarget = 0.5;
         ff = { x: 3, y: 10 }; fb = { x: -3, y: 10 };
         hf = { x: 5, y: -19 }; hb = { x: -5, y: -19 };
         mouth = 'hd_mouth_grit'; eyeScale = 0.55;
         rate = 30;
     } else if (isDashing) {
+        earTarget = -0.9;
         ff = { x: -5, y: 12 }; fb = { x: -10, y: 11 };
         hf = { x: -16, y: 2 }; hb = { x: -14, y: -1 };
         mouth = 'hd_mouth_grit'; eyeScale = 0.75;
@@ -1243,7 +1352,17 @@ function updateHdRig(scene, dt) {
             mouth = vy > 380 ? 'hd_mouth_o' : 'hd_mouth_open';
             eyeScale = vy > 380 ? 1.15 : 1;
         }
+    } else if (skidding) {
+        // Heels dug in, arms thrown forward for balance
+        ff = { x: 12, y: 14 }; fb = { x: 4, y: 14 };
+        hf = { x: 17, y: -2 }; hb = { x: 9, y: -6 };
+        mouth = 'hd_mouth_grit'; earTarget = 0.5;
+        rate = 30;
+        if (!frozen && Math.random() < 0.5 && typeof spawnParticles === 'function') {
+            spawnParticles(scene, player.x + Math.sign(vx) * 12, player.y + 15, 0xd8d8d8, 1, 26);
+        }
     } else if (speed > 30) {
+        earTarget = -0.35 - Math.min(0.3, speed / 900);
         // Run cycle: feet orbit, arms counter-swing, body bobs on each step
         ff = { x: s * 7, y: 14 - Math.max(0, c) * 4 };
         fb = { x: -s * 7, y: 14 - Math.max(0, -c) * 4 };
@@ -1257,7 +1376,20 @@ function updateHdRig(scene, dt) {
         ff = { x: 6, y: 14 }; fb = { x: -6, y: 14 };
         hf = { x: 16, y: 7 + breathe * 0.8 }; hb = { x: -16, y: 7 + breathe * 0.8 };
         bodyY = breathe * 0.6;
+        // Left alone for a while: a little wave at the player
+        if (r.idleTime > 5 && (r.idleTime % 6) < 1.4) {
+            hf = { x: 17 + Math.sin(t * 0.02) * 3, y: -15 };
+            mouth = 'hd_mouth_open';
+        }
+        // An ear flicks now and then
+        if ((t % 3100) < 160) earTarget = 0.35;
     }
+    if (!onGround && !isDashing && !isPounding && !cheering) earTarget = Phaser.Math.Clamp(vy / 500, -0.7, 0.8);
+    if (carrying && !cheering) {
+        // Holding something overhead
+        hf = { x: 9, y: -19 }; hb = { x: -9, y: -19 };
+    }
+    if (!frozen) r.idleTime = (onGround && speed < 10 && !cheering) ? r.idleTime + dt : 0;
 
     const p = r.pose;
     const lerp = (obj, target) => {
@@ -1299,10 +1431,36 @@ function updateHdRig(scene, dt) {
     const eyeY = -4 + p.bodyY;
     const blinkScale = r.blink > 0 ? 0.12 : eyeScale;
     [[r.eyeA, r.pupilA, 3], [r.eyeB, r.pupilB, 11]].forEach(([eye, pupil, ex]) => {
-        eye.setPosition(ex, eyeY).setScale(1, blinkScale);
+        const key = happyEyes ? 'hd_eye_happy' : 'hd_eye';
+        if (eye.texture.key !== key) eye.setTexture(key);
+        eye.setPosition(ex, eyeY).setScale(1, happyEyes ? 1 : blinkScale);
+        pupil.setVisible(!happyEyes);
         pupil.setPosition(ex + 0.4 + r.look.x, eyeY + 0.6 + r.look.y * blinkScale).setScale(1, blinkScale);
     });
     r.mouth.setTexture(mouth).setPosition(7.5, 6 + p.bodyY);
+
+    // Ears: perk, pin back with speed, lift on a fall
+    r.ear = hdApproach(r.ear, earTarget, 14, dt);
+    const earY = -9.5 + p.bodyY;
+    [[r.earBack, r.earBackIn, -8.5, -0.32], [r.earFront, r.earFrontIn, 8, 0.3]].forEach(([ear, inner, ex, base]) => {
+        const rot = base - r.ear * 0.75;
+        ear.setPosition(ex, earY).setRotation(rot);
+        inner.setPosition(ex, earY).setRotation(rot);
+    });
+    r.band.setPosition(0, -10.5 + p.bodyY);
+    r.tail.setPosition(-15, 8 + p.bodyY + Math.sin(t * 0.008) * 0.8);
+
+    // Headband tails stream behind: they hang when still, level out with
+    // speed and lift when falling
+    const drift = Math.min(1, speed / 180);
+    const lift = Phaser.Math.Clamp(vy / 420, -0.9, 1.1);
+    const flutter = 0.12 + drift * 0.22;
+    [r.tailA, r.tailB].forEach((tail, i) => {
+        const hang = (1 - drift) * (onGround ? 1.15 + i * 0.2 : 0.3);
+        const target = Math.PI - hang + (onGround ? 0 : lift) + Math.sin(t * 0.018 + i * 1.7) * flutter;
+        if (!frozen) r.ribbon[i] = hdApproach(r.ribbon[i], target, 9 - i * 3, dt);
+        tail.setPosition(-13.5, -9.5 + i * 1.2 + p.bodyY).setRotation(r.ribbon[i]);
+    });
 
     r.body.setPosition(0, p.bodyY);
     r.shine.setPosition(0, p.bodyY);
@@ -1313,6 +1471,9 @@ function updateHdRig(scene, dt) {
 
     // --- Mirror the classic sprite: tint, squash, rotation, alpha ---
     r.body.setTint(playerRect.tintTopLeft);
+    r.earFront.setTint(playerRect.tintTopLeft);
+    r.earBack.setTint(hdMix(playerRect.tintTopLeft, 0x202838, 0.25));
+    r.tail.setTint(playerRect.tintTopLeft);
     r.handBack.setTint(0xb8bcc6);
     r.footBack.setTint(0xb0b0b0);
 
@@ -1637,7 +1798,7 @@ function hdUpdateParticles(scene, dt) {
                 if (p.delay > 0) {
                     p.delay -= dt;
                     o.setVisible(false);
-                    if (p.delay <= 0) { p.x = 20 + Math.random() * 760; p.y = -10; p.vy = 0; o.setVisible(true); }
+                    if (p.delay <= 0) { p.x = 20 + Math.random() * (VIEW_W - 40); p.y = -10; p.vy = 0; o.setVisible(true); }
                     continue;
                 }
                 p.vy += 500 * dt;
@@ -1647,10 +1808,10 @@ function hdUpdateParticles(scene, dt) {
         }
         // Wrap drifting particles around the screen
         if (p.kind !== 'spark' && p.kind !== 'drip') {
-            if (p.y > 620) { p.y = -20; p.x = Math.random() * 900; }
-            if (p.y < -30) { p.y = 610; p.x = Math.random() * 800; }
-            if (p.x < -30) p.x = 830;
-            if (p.x > 840) p.x = -20;
+            if (p.y > 620) { p.y = -20; p.x = Math.random() * (VIEW_W + 100); }
+            if (p.y < -30) { p.y = 610; p.x = Math.random() * VIEW_W; }
+            if (p.x < -30) p.x = VIEW_W + 30;
+            if (p.x > VIEW_W + 40) p.x = -20;
         }
         o.setPosition(p.x, p.y);
     }
