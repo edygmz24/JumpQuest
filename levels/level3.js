@@ -1,6 +1,6 @@
 const level3 = {
     name: "Level 3 - Crystal Caves",
-    worldWidth: 3600,
+    worldWidth: 4780,
     worldHeight: 600,
 
     theme: {
@@ -55,6 +55,13 @@ const level3 = {
     movingPlatforms: [],
 
     enemies: [
+        // Roller up top, and a bowling lane in the bonus room
+        { x: 640, y: 224, type: 'roller' },
+        { x: 3900, y: 544, type: 'roller' },
+        { x: 4080, y: 544, type: 'walker' },
+        { x: 4140, y: 544, type: 'walker' },
+        { x: 4200, y: 544, type: 'walker' },
+
         // Section 1: Walkers on early platforms
         { x: 400, y: 424, type: 'walker' },
         { x: 770, y: 234, type: 'walker' },
@@ -89,6 +96,14 @@ const level3 = {
     ],
 
     coins: [
+        // Bonus room
+        { x: 4520, y: 540 },
+        { x: 4560, y: 540 },
+        { x: 4600, y: 540 },
+        { x: 4640, y: 540 },
+        { x: 4420, y: 380 },
+        { x: 4460, y: 380 },
+
         // Section 1: On early platforms and in shaft
         { x: 170, y: 470 },
         { x: 400, y: 410 },
@@ -135,12 +150,36 @@ const level3 = {
     powerUps: [],
 
     breakableBlocks: [
+        // Bonus room
+        { x: 4300, y: 540, width: 40, height: 40, contains: 'coin' },
+
         // Section 2: Hidden coin in breakable block
         { x: 1150, y: 320, width: 40, height: 20, contains: 'coin' },
         // Section 4: doubleJump power-up guarded by shield enemy
         { x: 2830, y: 350, width: 40, height: 20, contains: 'doubleJump' },
         // Section 5: Coin in the vertical shaft
         { x: 3070, y: 370, width: 40, height: 20, contains: 'coin' }
+    ],
+
+    // --- Interactables (see interact.js) ---
+
+    // The level proper ends at mainWidth; past it are walled-off bonus rooms
+    // reached by door.
+    mainWidth: 3600,
+    rooms: [{ x: 3640, width: 1100 }],
+
+    bumpBlocks: [
+        { x: 150, y: 370, contains: 'coin' },
+        { x: 260, y: 440, contains: 'coins', count: 4 },
+        // Bonus room
+        { x: 4420, y: 440, contains: 'doubleJump' },
+        { x: 4460, y: 440, contains: 'coins', count: 5 }
+    ],
+
+    doors: [
+        // Bonus room
+        { id: 'a', x: 1020, y: 526 },
+        { id: 'a', x: 3710, y: 526 }
     ],
 
     playerStart: { x: 60, y: 540 },

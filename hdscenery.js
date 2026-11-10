@@ -13,7 +13,7 @@
 // baked in: distant enough that they barely move with the camera, and one
 // image is much cheaper to draw than a stack of large glows.
 function hdSkyTexture(scene, key, sky) {
-    return hdTexture(scene, key, 800, 600, (ctx, w, h) => {
+    return hdTexture(scene, key, VIEW_W, 600, (ctx, w, h) => {
         const g = ctx.createLinearGradient(0, 0, 0, h);
         sky.stops.forEach(([t, c]) => g.addColorStop(t, c));
         ctx.fillStyle = g;

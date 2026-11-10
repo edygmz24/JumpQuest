@@ -20,6 +20,7 @@ let flowBar = null;
 let flowBarBg = null;
 let flowLabel = null;
 let _flowGlowFx = null;
+let flowHudShown = true;
 
 function resetFlowState() {
     flowMeter = 0;
@@ -30,19 +31,22 @@ function resetFlowState() {
     _flowGlowFx = null;
 }
 
-function createFlowHUD(scene, x, y) {
-    flowBarBg = scene.add.rectangle(x, y, 80, 8, 0x333333);
-    flowBarBg.setOrigin(0, 0.5).setScrollFactor(0).setDepth(100);
-    flowBar = scene.add.rectangle(x, y, 80, 8, 0xffdd44);
+function createFlowHUD(scene, x, y, shown) {
+    flowHudShown = shown !== false;
+    flowBarBg = scene.add.rectangle(x, y, 64, 6, 0x0a1220, 0.75);
+    flowBarBg.setOrigin(0, 0.5).setStrokeStyle(1, 0x0a1220).setScrollFactor(0).setDepth(100);
+    flowBar = scene.add.rectangle(x, y, 64, 6, 0xffdd44);
     flowBar.setOrigin(0, 0.5).setScrollFactor(0).setDepth(100).setScale(0, 1);
-    flowLabel = scene.add.text(x + 86, y, 'FLOW', {
-        fontSize: '10px', fill: '#888'
+    // The label only speaks up when a tier is reached
+    flowLabel = scene.add.text(x + 70, y, '', {
+        fontSize: '11px', fill: '#ffaa22', fontStyle: 'bold', stroke: '#0a1220', strokeThickness: 3
     }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(100);
+    [flowBarBg, flowBar, flowLabel].forEach(o => { o.wideUI = true; o.setVisible(flowHudShown); });
 }
 
 function setFlowHUDVisible(visible) {
     [flowBarBg, flowBar, flowLabel].forEach(obj => {
-        if (obj && obj.setVisible) obj.setVisible(visible);
+        if (obj && obj.setVisible) obj.setVisible(visible && flowHudShown);
     });
 }
 
@@ -99,8 +103,8 @@ function updateFlowMeter(scene, delta, speedRatio, playerVisual) {
     }
     if (flowLabel) {
         const name = getFlowTierName();
-        flowLabel.setText(name || 'FLOW');
-        flowLabel.setColor(flowTier >= 2 ? '#ff6622' : (flowTier >= 1 ? '#ffaa22' : '#888'));
+        flowLabel.setText(name);
+        flowLabel.setColor(flowTier >= 2 ? '#ff6622' : '#ffaa22');
     }
 
     // Ambient tier particles trailing the player

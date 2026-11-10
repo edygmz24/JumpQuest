@@ -81,6 +81,25 @@ function surfaces(L) {
     add(L.secretPlatforms, 'secretPlatforms');
     add(L.fakeWalls, 'fakeWalls');
     add(L.invisiblePlatforms, 'invisiblePlatforms');
+    // Interactables you can stand on (interact.js). They are given a height
+    // over the ledge limit so the spacing rules, which are about platform
+    // clutter, leave them alone; reachability still counts them.
+    // Not modelled: cannon arcs, rope swings and double-jump pickups, so coins
+    // that need one of those are reported as unreachable.
+    const prop = (x, y, w, kind, i) => out.push({
+        ref: `${kind}[${i}]`, kind: kind, x: x, y: y + 2, w: w, h: 44,
+        l: x - w / 2, r: x + w / 2, top: y - 20, bot: y + 24, mx: 0, my: 0
+    });
+    (L.bumpBlocks || []).forEach((b, i) => {
+        prop(b.x, b.y, 40, 'bumpBlocks', i);
+        if (b.contains === 'sprout') {
+            // Beanstalk leaves: alternating sides, 62px apart (iaGrowSprout)
+            for (let n = 0; n < (b.leaves || 4); n++) {
+                prop(b.x + (n % 2 === 0 ? 34 : -34), b.y - 20 - 62 * (n + 1) + 14, 48, 'sproutLeaves', i + '.' + n);
+            }
+        }
+    });
+    (L.switchBlocks || []).forEach((b, i) => prop(b.x, b.y + 4, 32, 'switchBlocks', i));
     (L.movingPlatforms || []).forEach((p, i) => {
         // Mirrors game.js: a platform travels from its start by moveX (right)
         // and moveY (down) and back; zero or negative values do not move it.

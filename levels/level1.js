@@ -1,6 +1,6 @@
 const level1 = {
     name: "Level 1 - Green Meadows",
-    worldWidth: 2800,
+    worldWidth: 3980,
     worldHeight: 600,
 
     theme: {
@@ -15,6 +15,10 @@ const level1 = {
     },
 
     platforms: [
+        // Bonus room (through the door at x 1935)
+        { x: 3420, y: 470, width: 160, height: 20 },
+        { x: 3650, y: 400, width: 160, height: 20 },
+
         // Section 2 (600-1200): 3 stepping-stone platforms at increasing heights
         { x: 650, y: 500, width: 150, height: 20 },
         { x: 850, y: 440, width: 150, height: 20 },
@@ -53,6 +57,27 @@ const level1 = {
     ],
 
     coins: [
+        // Up the beanstalk, and the bonus room
+        { x: 1264, y: 330 },
+        { x: 1196, y: 268 },
+        { x: 1264, y: 206 },
+        { x: 1196, y: 144 },
+        { x: 1230, y: 96 },
+        { x: 1285, y: 96 },
+        { x: 1175, y: 96 },
+        { x: 3250, y: 540 },
+        { x: 3290, y: 540 },
+        { x: 3330, y: 540 },
+        { x: 3370, y: 440 },
+        { x: 3420, y: 440 },
+        { x: 3470, y: 440 },
+        { x: 3600, y: 370 },
+        { x: 3650, y: 370 },
+        { x: 3700, y: 370 },
+        { x: 3800, y: 300 },
+        { x: 3840, y: 300 },
+        { x: 3880, y: 300 },
+
         // Section 1 (0-600): Arrow pattern pointing right on the ground
         // Arrow shaft (horizontal line)
         { x: 100, y: 540 },
@@ -88,6 +113,33 @@ const level1 = {
     powerUps: [],
 
     breakableBlocks: [],
+
+    // --- Interactables (see interact.js) ---
+
+    // The level proper ends at mainWidth; past it are walled-off bonus rooms
+    // reached by door.
+    mainWidth: 2800,
+    rooms: [{ x: 2840, width: 1100 }],
+
+    bumpBlocks: [
+        // First star blocks, with a hidden one just past them
+        { x: 420, y: 440, contains: 'coin' },
+        { x: 460, y: 440, contains: 'coins', count: 5 },
+        { x: 500, y: 440, contains: 'coin' },
+        { x: 540, y: 440, contains: 'coin', hidden: true },
+        // Sprouts a beanstalk up to a coin stash
+        { x: 1230, y: 440, contains: 'sprout', leaves: 4 },
+        // Bonus room
+        { x: 3080, y: 440, contains: 'coins', count: 5 },
+        { x: 3120, y: 440, contains: 'coin' },
+        { x: 3160, y: 440, contains: 'coin' }
+    ],
+
+    doors: [
+        // Down to the bonus room and back
+        { id: 'a', x: 1935, y: 526 },
+        { id: 'a', x: 2910, y: 526 }
+    ],
 
     playerStart: { x: 60, y: 540 },
     flagPosition: { x: 2750, y: 555 }

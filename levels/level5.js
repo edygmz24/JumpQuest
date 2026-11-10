@@ -101,6 +101,9 @@ const level5 = {
     ],
 
     enemies: [
+        // Roller in front of the last guards
+        { x: 4340, y: 464, type: 'roller' },
+
         // Section 1: 2 jumpers on platforms
         { x: 400, y: 424, type: 'jumper' },
         { x: 650, y: 364, type: 'jumper' },
@@ -222,6 +225,17 @@ const level5 = {
         { x: 3700, y: 250, width: 40, height: 40, contains: 'invincibility' },
         // Section 5: Extra coin block
         { x: 4250, y: 360, width: 40, height: 40, contains: 'coin' }
+    ],
+
+    // --- Interactables (see interact.js) ---
+
+    bumpBlocks: [
+        { x: 1300, y: 440, contains: 'coins', count: 5 },
+        { x: 1340, y: 440, contains: 'coin' }
+    ],
+
+    ropes: [
+        { x: 3445, y: 170, length: 170 }
     ],
 
     playerStart: { x: 100, y: 470 },
