@@ -2,7 +2,7 @@
 const level_w3_2 = {
     name: 'Glowworm Grotto',
 
-    worldWidth: 11503,
+    worldWidth: 11743,
 
     worldHeight: 600,
 
@@ -10,10 +10,10 @@ const level_w3_2 = {
 
     theme: { biome: 'cave', propStyle: 'spires', skyColor: 0x1a1a2e, groundColor: 0x2d2d2d, platformColor: 0x555555, bgColor1: 0x0d1b2a, bgColor2: 0x1b2838 },
 
-    mainWidth: 10323,
+    mainWidth: 10563,
 
     rooms: [
-        { x: 10363, width: 1100 }
+        { x: 10603, width: 1100 }
     ],
 
     platforms: [
@@ -37,8 +37,10 @@ const level_w3_2 = {
         { x: 9123, y: 380, width: 130, height: 20 },
         { x: 9273, y: 320, width: 130, height: 20 },
         { x: 9493, y: 320, width: 160, height: 20 },
-        { x: 10923, y: 470, width: 160, height: 20 },
-        { x: 11153, y: 400, width: 160, height: 20 }
+        { x: 10183, y: 500, width: 100, height: 20 },
+        { x: 10298, y: 440, width: 90, height: 20 },
+        { x: 11163, y: 470, width: 160, height: 20 },
+        { x: 11393, y: 400, width: 160, height: 20 }
     ],
 
     movingPlatforms: [
@@ -134,19 +136,19 @@ const level_w3_2 = {
         { x: 9903, y: 540 },
         { x: 9943, y: 540 },
         { x: 9983, y: 540 },
-        { x: 10883, y: 430 },
-        { x: 10923, y: 430 },
-        { x: 10963, y: 430 },
-        { x: 11113, y: 360 },
-        { x: 11153, y: 360 },
-        { x: 11193, y: 360 },
-        { x: 10783, y: 540 },
-        { x: 10823, y: 540 },
-        { x: 10863, y: 540 },
-        { x: 11283, y: 540 },
-        { x: 11323, y: 540 },
-        { x: 11363, y: 540 },
-        { x: 11403, y: 540 }
+        { x: 11123, y: 430 },
+        { x: 11163, y: 430 },
+        { x: 11203, y: 430 },
+        { x: 11353, y: 360 },
+        { x: 11393, y: 360 },
+        { x: 11433, y: 360 },
+        { x: 11023, y: 540 },
+        { x: 11063, y: 540 },
+        { x: 11103, y: 540 },
+        { x: 11523, y: 540 },
+        { x: 11563, y: 540 },
+        { x: 11603, y: 540 },
+        { x: 11643, y: 540 }
     ],
 
     checkpoints: [
@@ -183,16 +185,16 @@ const level_w3_2 = {
     gems: [
         { x: 2630, y: 30 },
         { x: 6513, y: 285 },
-        { x: 11153, y: 340 }
+        { x: 11393, y: 340 }
     ],
 
     bumpBlocks: [
         { x: 1680, y: 440, contains: 'coins', count: 5 },
         { x: 1720, y: 440, contains: 'claw' },
         { x: 1760, y: 440, contains: 'coin' },
-        { x: 10623, y: 440, contains: 'coins', count: 5 },
-        { x: 10663, y: 440, contains: 'coin' },
-        { x: 10703, y: 440, contains: 'coins', count: 5 }
+        { x: 10863, y: 440, contains: 'coins', count: 5 },
+        { x: 10903, y: 440, contains: 'coin' },
+        { x: 10943, y: 440, contains: 'coins', count: 5 }
     ],
 
     switches: [
@@ -213,12 +215,12 @@ const level_w3_2 = {
 
     doors: [
         { id: 'a', x: 7743, y: 526 },
-        { id: 'a', x: 10433, y: 526 }
+        { id: 'a', x: 10673, y: 526 }
     ],
 
-    targetTime: 89000,
+    targetTime: 91000,
 
     playerStart: { x: 60, y: 540 },
 
-    flagPosition: { x: 10213, y: 555 }
+    flagPosition: { x: 10453, y: 555 }
 };

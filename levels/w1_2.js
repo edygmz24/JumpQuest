@@ -2,19 +2,19 @@
 const level_w1_2 = {
     name: 'Clover Hills',
 
-    worldWidth: 9805,
+    worldWidth: 10045,
 
     worldHeight: 600,
 
     theme: { biome: 'meadow', propStyle: 'mountains', weather: 'leaves', skyColor: 0x87ceeb, groundColor: 0x228b22, platformColor: 0x8b4513, bgColor1: 0x4a8505, bgColor2: 0x2d5a1e },
 
-    mainWidth: 8625,
+    mainWidth: 8865,
 
     rooms: [
-        { x: 8665, width: 1100 }
+        { x: 8905, width: 1100 }
     ],
 
-    secretExit: { x: 9675, y: 560 },
+    secretExit: { x: 9915, y: 560 },
 
     platforms: [
         { x: 1710, y: 500, width: 130, height: 20 },
@@ -33,8 +33,10 @@ const level_w1_2 = {
         { x: 7070, y: 320, width: 160, height: 20 },
         { x: 7550, y: 510, width: 110, height: 20 },
         { x: 7775, y: 510, width: 110, height: 20 },
-        { x: 9225, y: 470, width: 160, height: 20 },
-        { x: 9455, y: 400, width: 160, height: 20 }
+        { x: 8485, y: 500, width: 100, height: 20 },
+        { x: 8600, y: 440, width: 90, height: 20 },
+        { x: 9465, y: 470, width: 160, height: 20 },
+        { x: 9695, y: 400, width: 160, height: 20 }
     ],
 
     movingPlatforms: [],
@@ -105,15 +107,15 @@ const level_w1_2 = {
         { x: 8205, y: 540 },
         { x: 8245, y: 540 },
         { x: 8285, y: 540 },
-        { x: 9185, y: 430 },
-        { x: 9225, y: 430 },
-        { x: 9265, y: 430 },
-        { x: 9415, y: 360 },
-        { x: 9455, y: 360 },
-        { x: 9495, y: 360 },
-        { x: 9085, y: 540 },
-        { x: 9125, y: 540 },
-        { x: 9165, y: 540 }
+        { x: 9425, y: 430 },
+        { x: 9465, y: 430 },
+        { x: 9505, y: 430 },
+        { x: 9655, y: 360 },
+        { x: 9695, y: 360 },
+        { x: 9735, y: 360 },
+        { x: 9325, y: 540 },
+        { x: 9365, y: 540 },
+        { x: 9405, y: 540 }
     ],
 
     checkpoints: [
@@ -143,7 +145,7 @@ const level_w1_2 = {
     gems: [
         { x: 3160, y: 285 },
         { x: 7070, y: 255 },
-        { x: 9455, y: 340 }
+        { x: 9695, y: 340 }
     ],
 
     bumpBlocks: [
@@ -154,19 +156,19 @@ const level_w1_2 = {
         { x: 5780, y: 440, contains: 'coin' },
         { x: 5820, y: 440, contains: 'cape' },
         { x: 5860, y: 440, contains: 'coin' },
-        { x: 8925, y: 440, contains: 'coins', count: 5 },
-        { x: 8965, y: 440, contains: 'coin' },
-        { x: 9005, y: 440, contains: 'coins', count: 5 }
+        { x: 9165, y: 440, contains: 'coins', count: 5 },
+        { x: 9205, y: 440, contains: 'coin' },
+        { x: 9245, y: 440, contains: 'coins', count: 5 }
     ],
 
     doors: [
         { id: 'a', x: 5220, y: 136 },
-        { id: 'a', x: 8735, y: 526 }
+        { id: 'a', x: 8975, y: 526 }
     ],
 
-    targetTime: 74000,
+    targetTime: 77000,
 
     playerStart: { x: 60, y: 540 },
 
-    flagPosition: { x: 8515, y: 555 }
+    flagPosition: { x: 8755, y: 555 }
 };

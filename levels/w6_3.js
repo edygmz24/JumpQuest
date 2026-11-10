@@ -2,7 +2,7 @@
 const level_w6_3 = {
     name: 'Clockwork Heart',
 
-    worldWidth: 15499,
+    worldWidth: 15739,
 
     worldHeight: 600,
 
@@ -43,7 +43,9 @@ const level_w6_3 = {
         { x: 12284, y: 320, width: 160, height: 20 },
         { x: 12534, y: 320, width: 160, height: 20 },
         { x: 12834, y: 500, width: 120, height: 20 },
-        { x: 12974, y: 440, width: 120, height: 20 }
+        { x: 12974, y: 440, width: 120, height: 20 },
+        { x: 15359, y: 500, width: 100, height: 20 },
+        { x: 15474, y: 440, width: 90, height: 20 }
     ],
 
     movingPlatforms: [
@@ -270,9 +272,9 @@ const level_w6_3 = {
         { x: 11014, y: 544 }
     ],
 
-    targetTime: 134000,
+    targetTime: 136000,
 
     playerStart: { x: 60, y: 540 },
 
-    flagPosition: { x: 15389, y: 555 }
+    flagPosition: { x: 15629, y: 555 }
 };

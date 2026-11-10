@@ -24,6 +24,7 @@ const MOVE_CARDS = {
 let movesSeen = JSON.parse(localStorage.getItem('jqMovesSeen') || '{}');
 
 function movesStoryMode() {
+    if (typeof bonusRound !== 'undefined' && bonusRound) return false;
     if (typeof isTestMode !== 'undefined' && isTestMode) return false;
     if (typeof endlessMode !== 'undefined' && endlessMode) return false;
     if (typeof dailyChallengeMode !== 'undefined' && dailyChallengeMode) return false;
