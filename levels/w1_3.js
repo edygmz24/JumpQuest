@@ -2,16 +2,16 @@
 const level_w1_3 = {
     name: 'Windmill Fields',
 
-    worldWidth: 10140,
+    worldWidth: 10380,
 
     worldHeight: 600,
 
     theme: { biome: 'meadow', propStyle: 'mountains', weather: 'leaves', skyColor: 0x87ceeb, groundColor: 0x228b22, platformColor: 0x8b4513, bgColor1: 0x4a8505, bgColor2: 0x2d5a1e },
 
-    mainWidth: 8960,
+    mainWidth: 9200,
 
     rooms: [
-        { x: 9000, width: 1100 }
+        { x: 9240, width: 1100 }
     ],
 
     platforms: [
@@ -23,8 +23,10 @@ const level_w1_3 = {
         { x: 7450, y: 380, width: 130, height: 20 },
         { x: 7600, y: 320, width: 130, height: 20 },
         { x: 7820, y: 320, width: 160, height: 20 },
-        { x: 9560, y: 470, width: 160, height: 20 },
-        { x: 9790, y: 400, width: 160, height: 20 }
+        { x: 8820, y: 500, width: 100, height: 20 },
+        { x: 8935, y: 440, width: 90, height: 20 },
+        { x: 9800, y: 470, width: 160, height: 20 },
+        { x: 10030, y: 400, width: 160, height: 20 }
     ],
 
     movingPlatforms: [
@@ -89,19 +91,19 @@ const level_w1_3 = {
         { x: 8540, y: 540 },
         { x: 8580, y: 540 },
         { x: 8620, y: 540 },
-        { x: 9520, y: 430 },
-        { x: 9560, y: 430 },
-        { x: 9600, y: 430 },
-        { x: 9750, y: 360 },
-        { x: 9790, y: 360 },
-        { x: 9830, y: 360 },
-        { x: 9420, y: 540 },
-        { x: 9460, y: 540 },
-        { x: 9500, y: 540 },
-        { x: 9920, y: 540 },
-        { x: 9960, y: 540 },
-        { x: 10000, y: 540 },
-        { x: 10040, y: 540 }
+        { x: 9760, y: 430 },
+        { x: 9800, y: 430 },
+        { x: 9840, y: 430 },
+        { x: 9990, y: 360 },
+        { x: 10030, y: 360 },
+        { x: 10070, y: 360 },
+        { x: 9660, y: 540 },
+        { x: 9700, y: 540 },
+        { x: 9740, y: 540 },
+        { x: 10160, y: 540 },
+        { x: 10200, y: 540 },
+        { x: 10240, y: 540 },
+        { x: 10280, y: 540 }
     ],
 
     checkpoints: [
@@ -140,21 +142,21 @@ const level_w1_3 = {
     gems: [
         { x: 2395, y: 360 },
         { x: 7820, y: 255 },
-        { x: 9790, y: 340 }
+        { x: 10030, y: 340 }
     ],
 
     bumpBlocks: [
         { x: 4190, y: 440, contains: 'coins', count: 5 },
         { x: 4230, y: 440, contains: 'coin', hidden: true },
         { x: 4270, y: 440, contains: 'rang' },
-        { x: 9260, y: 440, contains: 'coins', count: 5 },
-        { x: 9300, y: 440, contains: 'coin' },
-        { x: 9340, y: 440, contains: 'coins', count: 5 }
+        { x: 9500, y: 440, contains: 'coins', count: 5 },
+        { x: 9540, y: 440, contains: 'coin' },
+        { x: 9580, y: 440, contains: 'coins', count: 5 }
     ],
 
     doors: [
         { id: 'a', x: 6970, y: 526 },
-        { id: 'a', x: 9070, y: 526 }
+        { id: 'a', x: 9310, y: 526 }
     ],
 
     cannons: [
@@ -165,9 +167,9 @@ const level_w1_3 = {
         { x: 1760, y: 544 }
     ],
 
-    targetTime: 77000,
+    targetTime: 79000,
 
     playerStart: { x: 60, y: 540 },
 
-    flagPosition: { x: 8850, y: 555 }
+    flagPosition: { x: 9090, y: 555 }
 };

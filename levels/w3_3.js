@@ -2,7 +2,7 @@
 const level_w3_3 = {
     name: 'Echo Deep',
 
-    worldWidth: 11260,
+    worldWidth: 11500,
 
     worldHeight: 600,
 
@@ -30,7 +30,9 @@ const level_w3_3 = {
         { x: 5680, y: 470, width: 110, height: 20 },
         { x: 5905, y: 510, width: 110, height: 20 },
         { x: 7115, y: 500, width: 120, height: 20 },
-        { x: 7255, y: 440, width: 120, height: 20 }
+        { x: 7255, y: 440, width: 120, height: 20 },
+        { x: 11120, y: 500, width: 100, height: 20 },
+        { x: 11235, y: 440, width: 90, height: 20 }
     ],
 
     movingPlatforms: [
@@ -204,9 +206,9 @@ const level_w3_3 = {
         { x: 4615, y: 544 }
     ],
 
-    targetTime: 97000,
+    targetTime: 99000,
 
     playerStart: { x: 60, y: 540 },
 
-    flagPosition: { x: 11150, y: 555 }
+    flagPosition: { x: 11390, y: 555 }
 };

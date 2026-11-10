@@ -2,7 +2,7 @@
 const level_w4_2 = {
     name: 'Rampart Row',
 
-    worldWidth: 13305,
+    worldWidth: 13545,
 
     worldHeight: 600,
 
@@ -10,13 +10,13 @@ const level_w4_2 = {
 
     theme: { biome: 'castle', propStyle: 'towers', weather: 'embers', skyColor: 0xe85d04, groundColor: 0x4a2800, platformColor: 0x5c3317, bgColor1: 0xbb3e00, bgColor2: 0x6b2d00 },
 
-    mainWidth: 12125,
+    mainWidth: 12365,
 
     rooms: [
-        { x: 12165, width: 1100 }
+        { x: 12405, width: 1100 }
     ],
 
-    secretExit: { x: 13175, y: 560 },
+    secretExit: { x: 13415, y: 560 },
 
     platforms: [
         { x: 1730, y: 500, width: 120, height: 20 },
@@ -44,8 +44,10 @@ const level_w4_2 = {
         { x: 10825, y: 460, width: 110, height: 20 },
         { x: 11050, y: 510, width: 110, height: 20 },
         { x: 11275, y: 460, width: 110, height: 20 },
-        { x: 12725, y: 470, width: 160, height: 20 },
-        { x: 12955, y: 400, width: 160, height: 20 }
+        { x: 11985, y: 500, width: 100, height: 20 },
+        { x: 12100, y: 440, width: 90, height: 20 },
+        { x: 12965, y: 470, width: 160, height: 20 },
+        { x: 13195, y: 400, width: 160, height: 20 }
     ],
 
     movingPlatforms: [
@@ -163,15 +165,15 @@ const level_w4_2 = {
         { x: 11705, y: 540 },
         { x: 11745, y: 540 },
         { x: 11785, y: 540 },
-        { x: 12685, y: 430 },
-        { x: 12725, y: 430 },
-        { x: 12765, y: 430 },
-        { x: 12915, y: 360 },
-        { x: 12955, y: 360 },
-        { x: 12995, y: 360 },
-        { x: 12585, y: 540 },
-        { x: 12625, y: 540 },
-        { x: 12665, y: 540 }
+        { x: 12925, y: 430 },
+        { x: 12965, y: 430 },
+        { x: 13005, y: 430 },
+        { x: 13155, y: 360 },
+        { x: 13195, y: 360 },
+        { x: 13235, y: 360 },
+        { x: 12825, y: 540 },
+        { x: 12865, y: 540 },
+        { x: 12905, y: 540 }
     ],
 
     checkpoints: [
@@ -199,15 +201,15 @@ const level_w4_2 = {
     gems: [
         { x: 5315, y: -110 },
         { x: 9520, y: 255 },
-        { x: 12955, y: 340 }
+        { x: 13195, y: 340 }
     ],
 
     bumpBlocks: [
         { x: 2755, y: 440, contains: 'coins', count: 5 },
         { x: 2795, y: 440, contains: 'claw' },
-        { x: 12425, y: 440, contains: 'coins', count: 5 },
-        { x: 12465, y: 440, contains: 'coin' },
-        { x: 12505, y: 440, contains: 'coins', count: 5 }
+        { x: 12665, y: 440, contains: 'coins', count: 5 },
+        { x: 12705, y: 440, contains: 'coin' },
+        { x: 12745, y: 440, contains: 'coins', count: 5 }
     ],
 
     switches: [
@@ -229,7 +231,7 @@ const level_w4_2 = {
 
     doors: [
         { id: 'a', x: 6755, y: 526 },
-        { id: 'a', x: 12235, y: 526 }
+        { id: 'a', x: 12475, y: 526 }
     ],
 
     cannons: [
@@ -240,9 +242,9 @@ const level_w4_2 = {
         { x: 2095, y: 215, length: 200 }
     ],
 
-    targetTime: 105000,
+    targetTime: 107000,
 
     playerStart: { x: 60, y: 540 },
 
-    flagPosition: { x: 12015, y: 555 }
+    flagPosition: { x: 12255, y: 555 }
 };

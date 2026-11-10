@@ -2,7 +2,7 @@
 const level_w4_3 = {
     name: 'Midnight Battlements',
 
-    worldWidth: 11837,
+    worldWidth: 12077,
 
     worldHeight: 600,
 
@@ -34,7 +34,9 @@ const level_w4_3 = {
         { x: 8317, y: -60, width: 140, height: 20 },
         { x: 8547, y: -60, width: 140, height: 20 },
         { x: 8317, y: -135, width: 60, height: 20 },
-        { x: 9967, y: 330, width: 140, height: 20 }
+        { x: 9967, y: 330, width: 140, height: 20 },
+        { x: 11697, y: 500, width: 100, height: 20 },
+        { x: 11812, y: 440, width: 90, height: 20 }
     ],
 
     movingPlatforms: [
@@ -220,9 +222,9 @@ const level_w4_3 = {
         { x: 5675, y: 544 }
     ],
 
-    targetTime: 102000,
+    targetTime: 104000,
 
     playerStart: { x: 60, y: 540 },
 
-    flagPosition: { x: 11727, y: 555 }
+    flagPosition: { x: 11967, y: 555 }
 };

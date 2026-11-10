@@ -2,7 +2,7 @@
 const level_w2_3 = {
     name: 'Moonlit Gulch',
 
-    worldWidth: 10608,
+    worldWidth: 10848,
 
     worldHeight: 600,
 
@@ -28,7 +28,9 @@ const level_w2_3 = {
         { x: 7773, y: 150, width: 140, height: 20 },
         { x: 8003, y: 150, width: 140, height: 20 },
         { x: 8233, y: 150, width: 140, height: 20 },
-        { x: 8003, y: 75, width: 60, height: 20 }
+        { x: 8003, y: 75, width: 60, height: 20 },
+        { x: 10468, y: 500, width: 100, height: 20 },
+        { x: 10583, y: 440, width: 90, height: 20 }
     ],
 
     movingPlatforms: [],
@@ -185,9 +187,9 @@ const level_w2_3 = {
         { x: 5983, y: 544 }
     ],
 
-    targetTime: 92000,
+    targetTime: 94000,
 
     playerStart: { x: 60, y: 540 },
 
-    flagPosition: { x: 10498, y: 555 }
+    flagPosition: { x: 10738, y: 555 }
 };

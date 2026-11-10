@@ -357,9 +357,16 @@ class Level {
     // --- output ---
     finish() {
         const d = this.d;
-        this.ground(180);
+        // Two ledges up to the goal pole: a jump from the top one reaches the
+        // top of the pole for the biggest bonus (goal.js). Boss arenas end flat.
+        const stairs = !this.extra.boss;
+        this.ground(stairs ? 420 : 180);
         const main = this.x;
         const flagX = main - 110;
+        if (stairs) {
+            this.plat(flagX - 270, 500, 100);
+            this.plat(flagX - 155, 440, 90);
+        }
         let world = main;
         const out = {
             name: this.name, worldWidth: main, worldHeight: 600

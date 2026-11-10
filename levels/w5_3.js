@@ -2,7 +2,7 @@
 const level_w5_3 = {
     name: 'Canopy Road',
 
-    worldWidth: 14235,
+    worldWidth: 14475,
 
     worldHeight: 600,
 
@@ -10,13 +10,13 @@ const level_w5_3 = {
 
     theme: { biome: 'jungle', propStyle: 'trees', weather: 'leaves', skyColor: 0x2d5f2d, groundColor: 0x1b4d1b, platformColor: 0x4a7a3d, bgColor1: 0x1a3a1a, bgColor2: 0x2b4f2b },
 
-    mainWidth: 13055,
+    mainWidth: 13295,
 
     rooms: [
-        { x: 13095, width: 1100 }
+        { x: 13335, width: 1100 }
     ],
 
-    secretExit: { x: 14105, y: 560 },
+    secretExit: { x: 14345, y: 560 },
 
     platforms: [
         { x: 710, y: 500, width: 120, height: 20 },
@@ -51,8 +51,10 @@ const level_w5_3 = {
         { x: 11755, y: 320, width: 130, height: 20 },
         { x: 11975, y: 320, width: 160, height: 20 },
         { x: 12225, y: 320, width: 160, height: 20 },
-        { x: 13655, y: 470, width: 160, height: 20 },
-        { x: 13885, y: 400, width: 160, height: 20 }
+        { x: 12915, y: 500, width: 100, height: 20 },
+        { x: 13030, y: 440, width: 90, height: 20 },
+        { x: 13895, y: 470, width: 160, height: 20 },
+        { x: 14125, y: 400, width: 160, height: 20 }
     ],
 
     movingPlatforms: [],
@@ -176,15 +178,15 @@ const level_w5_3 = {
         { x: 12635, y: 540 },
         { x: 12675, y: 540 },
         { x: 12715, y: 540 },
-        { x: 13615, y: 430 },
-        { x: 13655, y: 430 },
-        { x: 13695, y: 430 },
-        { x: 13845, y: 360 },
-        { x: 13885, y: 360 },
-        { x: 13925, y: 360 },
-        { x: 13515, y: 540 },
-        { x: 13555, y: 540 },
-        { x: 13595, y: 540 }
+        { x: 13855, y: 430 },
+        { x: 13895, y: 430 },
+        { x: 13935, y: 430 },
+        { x: 14085, y: 360 },
+        { x: 14125, y: 360 },
+        { x: 14165, y: 360 },
+        { x: 13755, y: 540 },
+        { x: 13795, y: 540 },
+        { x: 13835, y: 540 }
     ],
 
     checkpoints: [
@@ -212,21 +214,21 @@ const level_w5_3 = {
     gems: [
         { x: 4110, y: -180 },
         { x: 12225, y: 255 },
-        { x: 13885, y: 340 }
+        { x: 14125, y: 340 }
     ],
 
     bumpBlocks: [
         { x: 2740, y: 440, contains: 'coin' },
         { x: 2780, y: 440, contains: 'claw' },
         { x: 2820, y: 440, contains: 'coin' },
-        { x: 13355, y: 440, contains: 'coins', count: 5 },
-        { x: 13395, y: 440, contains: 'coin' },
-        { x: 13435, y: 440, contains: 'coins', count: 5 }
+        { x: 13595, y: 440, contains: 'coins', count: 5 },
+        { x: 13635, y: 440, contains: 'coin' },
+        { x: 13675, y: 440, contains: 'coins', count: 5 }
     ],
 
     doors: [
         { id: 'a', x: 6780, y: 526 },
-        { id: 'a', x: 13165, y: 526 }
+        { id: 'a', x: 13405, y: 526 }
     ],
 
     cannons: [
@@ -240,12 +242,12 @@ const level_w5_3 = {
     ],
 
     suits: [
-        { x: 13275, y: 530, type: 'cape' }
+        { x: 13515, y: 530, type: 'cape' }
     ],
 
-    targetTime: 113000,
+    targetTime: 115000,
 
     playerStart: { x: 60, y: 540 },
 
-    flagPosition: { x: 12945, y: 555 }
+    flagPosition: { x: 13185, y: 555 }
 };

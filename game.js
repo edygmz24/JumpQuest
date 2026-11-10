@@ -761,6 +761,7 @@ function create() {
     if (typeof resetInteractState === 'function') resetInteractState();
     if (typeof resetSuitLevelState === 'function') resetSuitLevelState();
     resetCampaignLevelState();
+    resetGoalState();
     breakableBlockRects = [];
     fakeWalls = [];
     fakeWallRects = [];
@@ -1022,7 +1023,7 @@ function buildClassicBackdrop(theme, skyColor, groundColor, bgColor1, bgColor2) 
 
 function loadLevel(levelIndex) {
     // Get level data
-    currentLevel = levels[levelIndex];
+    currentLevel = bonusLevelOr(levels[levelIndex]);
 
     // Set world bounds based on level
     // Tall levels extend upward (worldTop < 0); levels with pits get room to
@@ -1472,6 +1473,8 @@ function loadLevel(levelIndex) {
     if (typeof buildInteractables === 'function') buildInteractables(this);
     if (typeof buildSuits === 'function') buildSuits(this);
     buildCampaignLevel(this);
+    setupGoalPole(this);
+    buildBonusRound(this);
 
     // Start background music
     if (typeof startBackgroundMusic === 'function') {
@@ -2026,6 +2029,7 @@ function update() {
     if (typeof updateInteractables === 'function') updateInteractables(this, this.game.loop.delta);
     if (typeof updateSuits === 'function') updateSuits(this, this.game.loop.delta);
     updateCampaignLevel(this);
+    updateBonusRound(this, this.game.loop.delta);
 
     // --- Camera Look-Ahead ---
     const targetOffsetX = cursors.right.isDown ? -60 : (cursors.left.isDown ? 60 : 0);
@@ -2983,6 +2987,8 @@ function hitEnemy() {
 
 function reachEnd() {
     if (levelComplete) return;
+    // The goal pole plays out first (goal.js), then calls back in
+    if (goalPoleIntercept(this)) return;
 
     levelComplete = true;
     this.physics.pause();
@@ -3210,6 +3216,7 @@ function reachEnd() {
         fontSize: '14px', fill: scoreColor
     }).setOrigin(0.5).setScrollFactor(0).setDepth(1000).setAlpha(0);
     this.tweens.add({ targets: scoreDisplay, alpha: 1, duration: 300, delay: statsDelay });
+    goalCountUp(this, scoreDisplay, scoreStr, score, statsDelay);
 
     // Time delta
     let timeStr = `Time: ${formatTime(levelTimer)}`;
@@ -3323,7 +3330,8 @@ function reachEnd() {
     let btnY = (isFlawless ? deathY + 60 : deathY + 30) + unlockOffset;
 
     if (!isLastLevel && !(typeof speedrunMode !== 'undefined' && speedrunMode)) {
-        const nextBtn = this.add.text(400, btnY, 'NEXT LEVEL', {
+        const bonusNext = bonusDue(currentLevelIndex);
+        const nextBtn = this.add.text(400, btnY, bonusNext ? 'BONUS ROUND!' : 'NEXT LEVEL', {
             fontSize: '24px', fill: '#fff', fontStyle: 'bold',
             backgroundColor: '#0a0', padding: { x: 20, y: 8 }
         }).setOrigin(0.5).setScrollFactor(0).setDepth(1000).setAlpha(0);
@@ -3331,7 +3339,12 @@ function reachEnd() {
         nextBtn.setInteractive({ useHandCursor: true });
         nextBtn.on('pointerover', () => nextBtn.setStyle({ backgroundColor: '#0c0' }));
         nextBtn.on('pointerout', () => nextBtn.setStyle({ backgroundColor: '#0a0' }));
-        nextBtn.on('pointerup', () => { currentLevelIndex++; restartWithTransition(this); });
+        nextBtn.on('pointerup', () => {
+            // The bonus round leads on to the next level itself
+            if (bonusNext) startBonusAfter(currentLevelIndex);
+            else currentLevelIndex++;
+            restartWithTransition(this);
+        });
         btnY += 45;
     }
 

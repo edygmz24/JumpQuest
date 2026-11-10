@@ -2,19 +2,19 @@
 const level_w2_2 = {
     name: 'Mesa Run',
 
-    worldWidth: 11015,
+    worldWidth: 11255,
 
     worldHeight: 600,
 
     theme: { biome: 'canyon', propStyle: 'mountains', skyColor: 0xe8a87c, groundColor: 0xcd853f, platformColor: 0x8b6914, bgColor1: 0xc19552, bgColor2: 0x8b7355 },
 
-    mainWidth: 9835,
+    mainWidth: 10075,
 
     rooms: [
-        { x: 9875, width: 1100 }
+        { x: 10115, width: 1100 }
     ],
 
-    secretExit: { x: 10885, y: 560 },
+    secretExit: { x: 11125, y: 560 },
 
     platforms: [
         { x: 750, y: 500, width: 130, height: 20 },
@@ -31,8 +31,10 @@ const level_w2_2 = {
         { x: 7925, y: 320, width: 130, height: 20 },
         { x: 8145, y: 320, width: 160, height: 20 },
         { x: 8395, y: 320, width: 160, height: 20 },
-        { x: 10435, y: 470, width: 160, height: 20 },
-        { x: 10665, y: 400, width: 160, height: 20 }
+        { x: 9695, y: 500, width: 100, height: 20 },
+        { x: 9810, y: 440, width: 90, height: 20 },
+        { x: 10675, y: 470, width: 160, height: 20 },
+        { x: 10905, y: 400, width: 160, height: 20 }
     ],
 
     movingPlatforms: [
@@ -122,15 +124,15 @@ const level_w2_2 = {
         { x: 9415, y: 540 },
         { x: 9455, y: 540 },
         { x: 9495, y: 540 },
-        { x: 10395, y: 430 },
-        { x: 10435, y: 430 },
-        { x: 10475, y: 430 },
-        { x: 10625, y: 360 },
-        { x: 10665, y: 360 },
-        { x: 10705, y: 360 },
-        { x: 10295, y: 540 },
-        { x: 10335, y: 540 },
-        { x: 10375, y: 540 }
+        { x: 10635, y: 430 },
+        { x: 10675, y: 430 },
+        { x: 10715, y: 430 },
+        { x: 10865, y: 360 },
+        { x: 10905, y: 360 },
+        { x: 10945, y: 360 },
+        { x: 10535, y: 540 },
+        { x: 10575, y: 540 },
+        { x: 10615, y: 540 }
     ],
 
     checkpoints: [
@@ -160,30 +162,30 @@ const level_w2_2 = {
     gems: [
         { x: 5255, y: 285 },
         { x: 8395, y: 255 },
-        { x: 10665, y: 340 }
+        { x: 10905, y: 340 }
     ],
 
     bumpBlocks: [
         { x: 2350, y: 440, contains: 'coins', count: 5 },
         { x: 2390, y: 440, contains: 'coin' },
         { x: 2430, y: 440, contains: 'cape' },
-        { x: 10135, y: 440, contains: 'coins', count: 5 },
-        { x: 10175, y: 440, contains: 'coin' },
-        { x: 10215, y: 440, contains: 'coins', count: 5 }
+        { x: 10375, y: 440, contains: 'coins', count: 5 },
+        { x: 10415, y: 440, contains: 'coin' },
+        { x: 10455, y: 440, contains: 'coins', count: 5 }
     ],
 
     doors: [
         { id: 'a', x: 6275, y: 526 },
-        { id: 'a', x: 9945, y: 526 }
+        { id: 'a', x: 10185, y: 526 }
     ],
 
     cannons: [
         { x: 3935, y: 532, angle: -45 }
     ],
 
-    targetTime: 85000,
+    targetTime: 87000,
 
     playerStart: { x: 60, y: 540 },
 
-    flagPosition: { x: 9725, y: 555 }
+    flagPosition: { x: 9965, y: 555 }
 };
