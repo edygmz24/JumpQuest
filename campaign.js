@@ -99,7 +99,9 @@ function isSecretFound(index) { return !!secretData['level' + index]; }
 // A level opens once the one before it is beaten, or a secret path reaches it
 function isLevelUnlocked(index) {
     if (index === 0) return true;
-    if (completedLevels['level' + (index - 1)]) return true;
+    // A level already beaten stays open (saves from the ten-level game land
+    // in the middle of worlds)
+    if (completedLevels['level' + (index - 1)] || completedLevels['level' + index]) return true;
     return SECRET_PATHS.some(p => p.to === index && isSecretFound(p.from));
 }
 
