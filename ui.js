@@ -29,7 +29,7 @@
 //
 // ---- Builders (each adds the object to the screen and returns it) -------
 //   s.panel(x, y, w, h, { header, accent: role, fill: 'dark' })
-//   s.title(x, y, text, { ribbon: true, size })        -> .setText(t)
+//   s.title(x, y, text, { ribbon: true, size, color })  -> .setText(t)
 //   s.label(x, y, text, { style: 'body'|'small'|'caps'|'value'|'mono',
 //                         color: role or css colour, align, size, wrap: px })   -> Phaser Text
 //   s.button(x, y, text, { role: 'go'|'nav'|'mode'|'danger'|'neutral',
@@ -93,6 +93,8 @@
 //                     the key chip grows with its text
 //   UI.icon(scene, name, size, color) -> Image (code-drawn once into a cached texture)
 //   UI.drawIcon(graphics, name, size, color, x, y) draws one into your own Graphics
+//   UI.later(scene, ms, fn)   run fn after ms (at once when motion is off): timed reveals
+//   UI.burst(scene, x, y, color, count, speed, depth)   confetti at a screen position
 //   UI.isOpen()     true while any modal kit screen is open (or closing)
 //   UI.top()        the top screen or null
 //   UI.reset(scene) called from create(): drops every screen, toast and listener
@@ -542,7 +544,11 @@ const UI = (() => {
         // The legacy 800px menu camera sits above the main camera, so it would
         // win clicks over a kit screen. Turn its input off under a modal screen.
         if (typeof uiCamera !== 'undefined' && uiCamera) {
-            uiCamera.inputEnabled = !stack.some(s => s.modal);
+            const covered = stack.some(s => s.modal);
+            uiCamera.inputEnabled = !covered;
+            // That camera draws after the main one, so its in-level HUDs
+            // (speedrun timer, boss bar) would sit on top of a kit screen
+            uiCamera.setVisible(!covered);
         }
     }
 
@@ -1169,7 +1175,7 @@ const UI = (() => {
             const scene = this.scene, C = theme.color;
             const c = box(scene, x, y);
             const size = o.size || (o.ribbon ? theme.size.ribbon : theme.size.title);
-            const t = scene.add.text(0, 0, text, textStyle(size, 'gold', {
+            const t = scene.add.text(0, 0, text, textStyle(size, o.color || 'gold', {
                 stroke: css(C.ink), strokeThickness: Math.round(size / 5),
                 shadow: { offsetX: 0, offsetY: 4, color: theme.text.black, blur: 0, fill: true, stroke: true }
             })).setOrigin(0.5, 0.5);
@@ -1930,6 +1936,34 @@ const UI = (() => {
         return t;
     }
 
+    // ---------- small helpers for screens ----------
+
+    // Run fn after ms on the tween clock (at once when motion is off). Used to
+    // reveal a screen's lines in sequence.
+    function later(scene, ms, fn) {
+        if (!theme.motion || ms <= 0) { fn(); return null; }
+        return scene.tweens.addCounter({ from: 0, to: 1, duration: ms, onComplete: fn });
+    }
+
+    // A small burst of confetti squares at a screen position
+    function burst(scene, x, y, color, count, speed, depth) {
+        if (!theme.motion) return;
+        const n = (typeof lowFxMode !== 'undefined' && lowFxMode) ? Math.min(count, 4) : count;
+        for (let i = 0; i < n; i++) {
+            const size = 3 + Math.random() * 5;
+            const p = scene.add.rectangle(x, y, size, size, numColor(color));
+            p.wideUI = true;
+            p.setScrollFactor(0).setDepth(depth !== undefined ? depth : theme.depth.toast);
+            const angle = Math.random() * Math.PI * 2;
+            const vel = speed * (0.5 + Math.random() * 0.5);
+            scene.tweens.add({
+                targets: p, x: x + Math.cos(angle) * vel, y: y + Math.sin(angle) * vel - 20,
+                alpha: 0, scaleX: 0, scaleY: 0, duration: 400 + Math.random() * 300,
+                onComplete: () => p.destroy()
+            });
+        }
+    }
+
     // ---------- style sheet ----------
 
     function showStyleSheet(scene) {
@@ -2033,6 +2067,8 @@ const UI = (() => {
         css: css,
         screen: (scene, opts) => new Screen(scene, opts),
         toast: toast,
+        later: later,
+        burst: burst,
         icon: makeIcon,
         drawIcon: drawIcon,
         isOpen: () => stack.some(s => s.modal),

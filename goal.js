@@ -101,34 +101,37 @@ function goalPoleIntercept(scene) {
 
 // Results screen: the score line counts up from zero, with the pole and
 // time bonuses listed above it.
-function goalCountUp(scene, textObj, finalText, total, delay) {
+function goalCountUp(scene, textObj, finalText, total, delay, prefix) {
+    if (prefix === undefined) prefix = 'Score: ';
     const counter = { v: 0 };
     let lastTick = 0;
-    textObj.setText('Score: 0');
+    textObj.setText(prefix + '0');
     scene.tweens.add({
         targets: counter, v: total, duration: Phaser.Math.Clamp(total * 0.4, 500, 1300), delay: delay + 250,
         ease: 'Cubic.easeOut',
         onUpdate: () => {
-            textObj.setText('Score: ' + Math.floor(counter.v));
+            if (!textObj.active) return;
+            textObj.setText(prefix + Math.floor(counter.v));
             if (scene.time.now - lastTick > 55 && typeof playTick === 'function') {
                 lastTick = scene.time.now;
                 playTick(900 + (counter.v / Math.max(1, total)) * 700);
             }
         },
         onComplete: () => {
+            if (!textObj.active) return;
             textObj.setText(finalText);
             scene.tweens.add({ targets: textObj, scale: 1.25, duration: 110, yoyo: true });
             if (typeof playSound === 'function') playSound('coin');
         }
     });
-    if (goalResult) {
-        const parts = [`POLE +${goalResult.pole}`];
-        if (goalResult.time > 0) parts.push(`TIME +${goalResult.time}`);
-        const line = scene.add.text(400, 251, parts.join('     '), {
-            fontSize: '11px', fill: '#ffe680', fontStyle: 'bold'
-        }).setOrigin(0.5).setScrollFactor(0).setDepth(1000).setAlpha(0);
-        scene.tweens.add({ targets: line, alpha: 1, duration: 250, delay: delay });
-    }
+}
+
+// The pole and time bonus as one line for the results screen ('' when none)
+function goalBonusText() {
+    if (!goalResult) return '';
+    const parts = [`POLE +${goalResult.pole}`];
+    if (goalResult.time > 0) parts.push(`TIME +${goalResult.time}`);
+    return parts.join('     ');
 }
 
 // ========================

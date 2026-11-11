@@ -3131,18 +3131,28 @@ function reachEnd() {
         return;
     }
 
-    // Overlay
-    const overlay = this.add.rectangle(400, 300, 800, 600, 0x000000, 0.7);
-    overlay.setScrollFactor(0).setDepth(999);
+    // ---- Results screen (menu kit) ----
+    const T = UI.theme;
+    const cx = VIEW_W / 2;
+    const s = UI.screen(scene, {
+        id: 'results', depth: 999, backdrop: 'dim', enter: 'fade',
+        // Esc does what the last button does, once the buttons are up
+        onBack: () => { if (leaveToSelect) leaveToSelect(); }
+    });
+    let leaveToSelect = null;
+    // Reveals run on the tween clock, in the same order and rhythm as before
+    const at = (ms, fn) => UI.later(scene, ms, () => { if (s.state !== 'closed' && s.state !== 'closing') fn(); });
+    const pop = (obj) => {
+        if (!T.motion) return;
+        const sx = obj.scaleX, sy = obj.scaleY;      // icons are scaled textures
+        obj.setScale(sx * 0.4, sy * 0.4);
+        scene.tweens.add({ targets: obj, scaleX: sx, scaleY: sy, duration: 320, ease: 'Back.easeOut' });
+    };
 
-    const winText = this.add.text(400, 120,
-        speedrunResult ? 'SPEEDRUN COMPLETE!' : (isLastLevel ? 'GAME COMPLETE!' : 'LEVEL COMPLETE!'), {
-        fontSize: '42px', fill: '#00ff00', fontStyle: 'bold',
-        stroke: '#000', strokeThickness: 3
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(1000);
-    winText.setAlpha(0);
-    this.tweens.add({ targets: winText, alpha: 1, duration: 400, ease: 'Power2' });
+    s.title(cx, 50, speedrunResult ? 'SPEEDRUN COMPLETE!' : (isLastLevel ? 'GAME COMPLETE!' : 'LEVEL COMPLETE!'), { ribbon: true });
 
+    // Lines under the title: speedrun time, secret exit
+    let subY = 100;
     if (speedrunResult) {
         let resultLabel = 'TIME  ' + formatSpeedrunTime(levelTimer);
         if (speedrunResult.isNewBest) {
@@ -3152,268 +3162,178 @@ function reachEnd() {
         } else if (speedrunResult.previousTime) {
             resultLabel += '   ' + formatSpeedrunDelta(levelTimer - speedrunResult.previousTime);
         }
-        const speedrunBadge = this.add.text(400, 155, resultLabel, {
-            fontSize: '16px',
-            fill: speedrunResult.isNewBest ? '#7dff9b' : '#ffb0b0',
-            fontStyle: 'bold',
-            fontFamily: 'monospace',
-            backgroundColor: '#000000',
-            padding: { x: 10, y: 5 }
-        }).setOrigin(0.5).setScrollFactor(0).setDepth(1001);
-        speedrunBadge.setAlpha(0);
-        this.tweens.add({ targets: speedrunBadge, alpha: 1, duration: 350, delay: 250 });
+        const y = subY; subY += 24;
+        at(250, () => s.label(cx, y, resultLabel, {
+            style: 'mono', color: speedrunResult.isNewBest ? 'go' : 'danger', outline: true
+        }));
+    }
+    if (secretExitTaken) {
+        const to = campResult.secretTo >= 0 ? `  PATH TO ${levelLabel(campResult.secretTo)} OPEN` : '';
+        const y = subY; subY += 24;
+        at(700, () => s.label(cx, y, 'SECRET EXIT!' + to, { style: 'body', color: 'cyan', outline: true }));
     }
 
-    // Animated star display (appear one at a time)
+    // Three panels: stars and gems, the run's numbers, records
+    const panelY = 268, panelH = 250, top = panelY - panelH / 2;
+    const leftX = 200, rightX = VIEW_W - 200, sideW = 280, midW = 360;
+    s.panel(leftX, panelY, sideW, panelH, { header: 'Stars', accent: 'mode' });
+    s.panel(cx, panelY, midW, panelH, { header: 'This run', accent: 'go' });
+    s.panel(rightX, panelY, sideW, panelH, { header: 'Records', accent: 'nav' });
+
+    // Stars, one at a time
     const starLabels = ['Complete', 'Coins (80%)', 'Speed Run'];
     const starResults = [earnedStars.completion, earnedStars.coins, earnedStars.time];
     for (let i = 0; i < 3; i++) {
-        const sy = 175 + i * 28;
-        const icon = starResults[i] ? '\u2605' : '\u2606';
-        const color = starResults[i] ? '#ffd700' : '#555';
-        const starText = scene.add.text(300, sy, `${icon} ${starLabels[i]}`, {
-            fontSize: '18px', fill: color
-        }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(1000);
-        starText.setAlpha(0).setScale(0.5);
-        scene.tweens.add({
-            targets: starText,
-            alpha: 1, scaleX: 1, scaleY: 1,
-            duration: 300, delay: 500 + i * 300,
-            ease: 'Back.easeOut',
-            onStart: () => {
-                if (starResults[i]) {
-                    spawnParticles(scene, 310, sy, 0xffd700, 6, 30);
-                }
-            }
+        const sy = top + 66 + i * 36;
+        at(500 + i * 300, () => {
+            const icon = s.icon(leftX - 100, sy, starResults[i] ? 'star' : 'starEmpty', 26);
+            s.label(leftX - 78, sy, starLabels[i], { style: 'body', color: starResults[i] ? 'gold' : 'dim', align: 'left' });
+            pop(icon);
+            if (starResults[i]) UI.burst(scene, leftX - 100, sy, T.color.gold, 6, 30, 1005);
         });
     }
 
-    // Stats section (appears after stars)
-    const statsDelay = 1500;
+    // Gems
+    if ((currentLevel.gems || []).length && campaignStoryMode()) {
+        const saved = getLevelGems(currentLevelIndex);
+        const gy = top + 190;
+        at(900, () => {
+            s.label(leftX - 112, gy, 'Gems', { style: 'caps', align: 'left' });
+            saved.forEach((g, i) => s.icon(leftX - 40 + i * 28, gy, g ? 'gem' : 'gemEmpty', 22));
+        });
+        if (campResult.newGems > 0) {
+            at(1100, () => s.label(leftX + 84, gy, `+${campResult.newGems} NEW`, { style: 'small', color: 'pink' }));
+        }
+    }
 
-    // Personal-best ranking, shown to the right of the stars so the centered
-    // stats column keeps its layout.
+    // The run's numbers (appear after the stars)
+    const statsDelay = 1500;
+    const rowL = cx - midW / 2 + 24, rowR = cx + midW / 2 - 24;
+    let rowY = top + 62;
+    const statRow = (delay, label, value, color) => {
+        const y = rowY; rowY += 30;
+        let valueText = null;
+        at(delay, () => {
+            s.label(rowL, y, label, { style: 'body', color: 'dim', align: 'left' });
+            valueText = s.label(rowR, y, value, { style: 'body', color: color, align: 'right' });
+        });
+        return () => valueText;
+    };
+
+    const scoreDelta = score - prevHighScore;
+    const scoreStr = isNewHighScore ? `${score} (+${scoreDelta} NEW BEST!)` : `${score}`;
+    const scoreText = statRow(statsDelay, 'Score', '0', isNewHighScore ? 'go' : 'light');
+    at(statsDelay + 10, () => { if (scoreText()) goalCountUp(scene, scoreText(), scoreStr, score, 0, ''); });
+
+    let timeStr = formatTime(levelTimer);
+    if (prevBestTime && !isNewBestTime) {
+        timeStr += ` (+${formatTime(levelTimer - prevBestTime)})`;
+    } else if (isNewBestTime && prevBestTime) {
+        timeStr += ` (-${formatTime(prevBestTime - levelTimer)} NEW BEST!)`;
+    } else if (isNewBestTime) {
+        timeStr += ' (NEW BEST!)';
+    }
+    statRow(statsDelay + 150, 'Time', timeStr, isNewBestTime ? 'cyan' : 'light');
+
+    let coinStr = `${coinsCollected}/${totalLevelCoins}`;
+    if (coinsBanked > 0) coinStr += `  (+${coinsBanked} banked)`;
+    statRow(statsDelay + 300, 'Coins', coinStr, 'gold');
+
+    if (maxCombo >= 2) {
+        statRow(statsDelay + 450, 'Max Combo', `${maxCombo}x (x${1 + Math.floor(maxCombo / 5) * 0.5} multiplier)`, 'mode');
+    }
+
+    let deathStr = `${deathCount}`;
+    if (prevBestDeaths !== null && isNewBestDeaths && deathCount < prevBestDeaths) {
+        deathStr += ` (was ${prevBestDeaths}, NEW BEST!)`;
+    }
+    statRow(statsDelay + 600, 'Deaths', deathStr, isFlawless ? 'gold' : 'light');
+
+    // Goal pole and time bonus (goal.js)
+    const bonusLine = typeof goalBonusText === 'function' ? goalBonusText() : '';
+    if (bonusLine) {
+        at(statsDelay, () => s.label(cx, top + panelH - 22, bonusLine, { style: 'small', color: 'gold' }));
+    }
+
+    // Records: ranks, coin bonuses, best runs, the next shop unlock
     if (leaderRanks.scoreRank > 0 || leaderRanks.timeRank > 0) {
         const rankLines = [];
         if (leaderRanks.scoreRank > 0) rankLines.push(`#${leaderRanks.scoreRank} SCORE`);
         if (leaderRanks.timeRank > 0) rankLines.push(`#${leaderRanks.timeRank} TIME`);
-        const rankBadge = this.add.text(560, 190, rankLines.join('\n'), {
-            fontSize: '16px', fill: '#ffd700', fontStyle: 'bold',
-            align: 'center', stroke: '#000', strokeThickness: 3
-        }).setOrigin(0.5).setScrollFactor(0).setDepth(1000).setAlpha(0).setScale(0.5);
-        this.tweens.add({
-            targets: rankBadge,
-            alpha: 1, scaleX: 1, scaleY: 1,
-            duration: 400, delay: 1400, ease: 'Back.easeOut',
-            onStart: () => spawnParticles(scene, 560, 190, 0xffd700, 8, 35)
+        at(1400, () => {
+            const badge = s.label(rightX, top + 62, rankLines.join('     '), { style: 'value', size: 18 });
+            pop(badge);
+            UI.burst(scene, rightX, top + 62, T.color.gold, 8, 35, 1005);
         });
     }
-
-    // Coin bonuses earned this run
     if (coinBonusLabel) {
-        const bonusText = this.add.text(560, 222, coinBonusLabel, {
-            fontSize: '11px', fill: '#ffcc33', align: 'center', wordWrap: { width: 190 }
-        }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(1000).setAlpha(0);
-        this.tweens.add({ targets: bonusText, alpha: 1, duration: 300, delay: statsDelay + 200 });
+        at(statsDelay + 200, () => s.label(rightX, top + 90, coinBonusLabel, { style: 'small', color: 'gold', wrap: sideW - 30 }));
     }
-
-    // "Next unlock" teaser — keeps the shop in view while coins accumulate
+    if (typeof getLeaderboard === 'function') {
+        const lb = getLeaderboard(currentLevelIndex);
+        if (lb.times && lb.times.length > 0) {
+            at(statsDelay + 300, () => {
+                s.label(rightX, top + 118, 'Best runs', { style: 'caps' });
+                lb.times.slice(0, 3).forEach((e, i) => {
+                    s.label(rightX, top + 142 + i * 22, `${i + 1}.  ${formatTime(e.time)}`, { style: 'mono', size: 16 });
+                });
+            });
+        }
+    }
+    // "Next unlock" teaser keeps the shop in view while coins accumulate
     if (typeof getNextPurchaseTeaser === 'function') {
         const teaser = getNextPurchaseTeaser();
         if (teaser) {
             const txt = teaser.remaining > 0
                 ? `Next unlock: ${teaser.name}  ${walletCoins}/${teaser.price}`
-                : `${teaser.name} unlocked — visit Cosmetics!`;
-            // Right column, clear of the centered stats and the buttons below
-            const teaserText = this.add.text(560, 345, txt, {
-                fontSize: '11px', fill: teaser.remaining > 0 ? '#aa9955' : '#ffcc33',
-                align: 'center', wordWrap: { width: 200 }
-            }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(1000).setAlpha(0);
-            this.tweens.add({ targets: teaserText, alpha: 1, duration: 300, delay: statsDelay + 750 });
+                : `${teaser.name} unlocked: visit the Shop!`;
+            at(statsDelay + 750, () => s.label(rightX, top + panelH - 26, txt, {
+                style: 'small', color: teaser.remaining > 0 ? 'dim' : 'gold', wrap: sideW - 30
+            }));
         }
     }
 
-    // Top runs for this level
-    if (typeof getLeaderboard === 'function') {
-        const lb = getLeaderboard(currentLevelIndex);
-        if (lb.times && lb.times.length > 0) {
-            const rows = lb.times.slice(0, 3)
-                .map((e, i) => `${i + 1}. ${formatTime(e.time)}`)
-                .join('\n');
-            const lbPanel = this.add.text(560, 255, 'BEST RUNS\n' + rows, {
-                fontSize: '12px', fill: '#aaddff', align: 'center', lineSpacing: 3
-            }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(1000).setAlpha(0);
-            this.tweens.add({ targets: lbPanel, alpha: 1, duration: 300, delay: statsDelay + 300 });
-        }
-    }
-
-    // Score delta
-    const scoreDelta = score - prevHighScore;
-    const scoreStr = isNewHighScore ? `Score: ${score} (+${scoreDelta} NEW BEST!)` : `Score: ${score}`;
-    const scoreColor = isNewHighScore ? '#00ff00' : '#ccc';
-    const scoreDisplay = this.add.text(400, 270, scoreStr, {
-        fontSize: '14px', fill: scoreColor
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(1000).setAlpha(0);
-    this.tweens.add({ targets: scoreDisplay, alpha: 1, duration: 300, delay: statsDelay });
-    goalCountUp(this, scoreDisplay, scoreStr, score, statsDelay);
-
-    // Time delta
-    let timeStr = `Time: ${formatTime(levelTimer)}`;
-    if (prevBestTime && !isNewBestTime) {
-        const diff = levelTimer - prevBestTime;
-        timeStr += ` (+${formatTime(diff)})`;
-    } else if (isNewBestTime && prevBestTime) {
-        const diff = prevBestTime - levelTimer;
-        timeStr += ` (-${formatTime(diff)} NEW BEST!)`;
-    } else if (isNewBestTime) {
-        timeStr += ' (NEW BEST!)';
-    }
-    const timeColor = isNewBestTime ? '#00ffff' : '#ccc';
-    const timeDisplay = this.add.text(400, 290, timeStr, {
-        fontSize: '14px', fill: timeColor
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(1000).setAlpha(0);
-    this.tweens.add({ targets: timeDisplay, alpha: 1, duration: 300, delay: statsDelay + 150 });
-
-    // Coins
-    let coinStr = `Coins: ${coinsCollected}/${totalLevelCoins}`;
-    if (coinsBanked > 0) coinStr += `  (+${coinsBanked} banked)`;
-    const coinDisplay = this.add.text(400, 310, coinStr, {
-        fontSize: '14px', fill: '#ffd700'
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(1000).setAlpha(0);
-    this.tweens.add({ targets: coinDisplay, alpha: 1, duration: 300, delay: statsDelay + 300 });
-
-    // Max combo
-    if (maxCombo >= 2) {
-        const comboStr = `Max Combo: ${maxCombo}x (x${1 + Math.floor(maxCombo / 5) * 0.5} multiplier)`;
-        const comboDisplay = this.add.text(400, 330, comboStr, {
-            fontSize: '14px', fill: '#ff8800'
-        }).setOrigin(0.5).setScrollFactor(0).setDepth(1000).setAlpha(0);
-        this.tweens.add({ targets: comboDisplay, alpha: 1, duration: 300, delay: statsDelay + 450 });
-    }
-
-    // Deaths
-    const deathY = maxCombo >= 2 ? 350 : 330;
-    let deathStr = `Deaths: ${deathCount}`;
-    if (prevBestDeaths !== null && isNewBestDeaths && deathCount < prevBestDeaths) {
-        deathStr += ` (was ${prevBestDeaths}, NEW BEST!)`;
-    }
-    const deathDisplay = this.add.text(400, deathY, deathStr, {
-        fontSize: '14px', fill: isFlawless ? '#ffd700' : '#aaa'
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(1000).setAlpha(0);
-    this.tweens.add({ targets: deathDisplay, alpha: 1, duration: 300, delay: statsDelay + 600 });
-
-    // FLAWLESS badge
+    // FLAWLESS and "level unlocked" share the line under the panels
+    const unlocked = nextWasLocked && nextLevelExists;
+    const bannerY = 420;
     if (isFlawless) {
-        const flawlessY = deathY + 25;
-        const flawlessText = this.add.text(400, flawlessY, 'FLAWLESS!', {
-            fontSize: '28px', fill: '#ffd700', fontStyle: 'bold',
-            stroke: '#000', strokeThickness: 4
-        }).setOrigin(0.5).setScrollFactor(0).setDepth(1000).setAlpha(0).setScale(0.3);
-        this.tweens.add({
-            targets: flawlessText,
-            alpha: 1, scaleX: 1, scaleY: 1,
-            duration: 500, delay: statsDelay + 800,
-            ease: 'Back.easeOut',
-            onStart: () => {
-                spawnParticles(scene, 400, flawlessY, 0xffd700, 15, 60);
-                shakeCamera(scene, 15, 100);
-            }
+        const fx = unlocked ? cx - 190 : cx;
+        at(statsDelay + 800, () => {
+            const flawless = s.label(fx, bannerY, 'FLAWLESS!', { style: 'value', size: 30 });
+            pop(flawless);
+            UI.burst(scene, fx, bannerY, T.color.gold, 15, 60, 1005);
         });
     }
-
-    // "Level Unlocked!" banner
-    if (nextWasLocked && nextLevelExists) {
-        const unlockY = isFlawless ? deathY + 60 : deathY + 30;
-        const unlockDelay = statsDelay + (isFlawless ? 1200 : 800);
-        const unlockText = this.add.text(400, unlockY, `LEVEL ${levelLabel(currentLevelIndex + 1)} UNLOCKED!`, {
-            fontSize: '22px', fill: '#ffd700', fontStyle: 'bold',
-            stroke: '#000', strokeThickness: 3
-        }).setOrigin(0.5).setScrollFactor(0).setDepth(1000).setAlpha(0).setScale(0.5);
-        this.tweens.add({
-            targets: unlockText,
-            alpha: 1, scaleX: 1, scaleY: 1,
-            duration: 400, delay: unlockDelay,
-            ease: 'Back.easeOut',
-            onStart: () => {
-                spawnParticles(scene, 400, unlockY, 0xffd700, 10, 40);
-                playSound('unlock');
-            }
+    if (unlocked) {
+        const ux = isFlawless ? cx + 150 : cx;
+        at(statsDelay + (isFlawless ? 1200 : 800), () => {
+            const banner = s.label(ux, bannerY, `LEVEL ${levelLabel(currentLevelIndex + 1)} UNLOCKED!`, { style: 'value', size: 24 });
+            pop(banner);
+            UI.burst(scene, ux, bannerY, T.color.gold, 10, 40, 1005);
+            playSound('unlock');
         });
-    }
-
-    // Gems, and a secret exit if one was found
-    if ((currentLevel.gems || []).length && campaignStoryMode()) {
-        const saved = getLevelGems(currentLevelIndex);
-        const gemLine = this.add.text(205, 180, 'GEMS  ' + saved.map(g => (g ? '◆' : '◇')).join(' '), {
-            fontSize: '16px', fill: '#ff8fd6', fontStyle: 'bold', stroke: '#000', strokeThickness: 3
-        }).setOrigin(0.5).setScrollFactor(0).setDepth(1000).setAlpha(0);
-        this.tweens.add({ targets: gemLine, alpha: 1, duration: 300, delay: 900 });
-        if (campResult.newGems > 0) {
-            const fresh = this.add.text(205, 202, `+${campResult.newGems} NEW`, {
-                fontSize: '11px', fill: '#ffffff', fontStyle: 'bold'
-            }).setOrigin(0.5).setScrollFactor(0).setDepth(1000).setAlpha(0);
-            this.tweens.add({ targets: fresh, alpha: 1, duration: 300, delay: 1100 });
-        }
-    }
-    if (secretExitTaken) {
-        const to = campResult.secretTo >= 0 ? `  PATH TO ${levelLabel(campResult.secretTo)} OPEN` : '';
-        const secretLine = this.add.text(400, 72, 'SECRET EXIT!' + to, {
-            fontSize: '15px', fill: '#6fd3ff', fontStyle: 'bold', stroke: '#000', strokeThickness: 3
-        }).setOrigin(0.5).setScrollFactor(0).setDepth(1000).setAlpha(0);
-        this.tweens.add({ targets: secretLine, alpha: 1, duration: 300, delay: 700 });
     }
 
     // Buttons (appear after all stats)
-    const unlockOffset = (nextWasLocked && nextLevelExists) ? 35 : 0;
     const buttonDelay = statsDelay + (isFlawless ? 1400 : 900) + (nextWasLocked ? 300 : 0);
-    let btnY = (isFlawless ? deathY + 60 : deathY + 30) + unlockOffset;
-
-    if (!isLastLevel && !(typeof speedrunMode !== 'undefined' && speedrunMode)) {
-        const bonusNext = bonusDue(currentLevelIndex);
-        const nextBtn = this.add.text(400, btnY, bonusNext ? 'BONUS ROUND!' : 'NEXT LEVEL', {
-            fontSize: '24px', fill: '#fff', fontStyle: 'bold',
-            backgroundColor: '#0a0', padding: { x: 20, y: 8 }
-        }).setOrigin(0.5).setScrollFactor(0).setDepth(1000).setAlpha(0);
-        this.tweens.add({ targets: nextBtn, alpha: 1, duration: 300, delay: buttonDelay });
-        nextBtn.setInteractive({ useHandCursor: true });
-        nextBtn.on('pointerover', () => nextBtn.setStyle({ backgroundColor: '#0c0' }));
-        nextBtn.on('pointerout', () => nextBtn.setStyle({ backgroundColor: '#0a0' }));
-        nextBtn.on('pointerup', () => {
-            // The bonus round leads on to the next level itself
-            if (bonusNext) startBonusAfter(currentLevelIndex);
-            else currentLevelIndex++;
-            restartWithTransition(this);
-        });
-        btnY += 45;
-    }
-
-    const restartLabel = speedrunResult ? 'RUN AGAIN' : (isLastLevel ? 'PLAY AGAIN' : 'RESTART');
-    const restartBtn = this.add.text(400, btnY, restartLabel, {
-        fontSize: '20px', fill: '#fff',
-        backgroundColor: '#666', padding: { x: 20, y: 8 }
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(1000).setAlpha(0);
-    this.tweens.add({ targets: restartBtn, alpha: 1, duration: 300, delay: buttonDelay + 100 });
-    restartBtn.setInteractive({ useHandCursor: true });
-    restartBtn.on('pointerover', () => restartBtn.setStyle({ backgroundColor: '#888' }));
-    restartBtn.on('pointerout', () => restartBtn.setStyle({ backgroundColor: '#666' }));
-    restartBtn.on('pointerup', () => {
+    const hasNext = !isLastLevel && !(typeof speedrunMode !== 'undefined' && speedrunMode);
+    const bonusNext = hasNext && bonusDue(currentLevelIndex);
+    const restartLabel = speedrunResult ? 'Run Again' : (isLastLevel ? 'Play Again' : 'Restart');
+    const goNext = () => {
+        // The bonus round leads on to the next level itself
+        if (bonusNext) startBonusAfter(currentLevelIndex);
+        else currentLevelIndex++;
+        restartWithTransition(scene);
+    };
+    const goRestart = () => {
         if (speedrunResult) {
-            this.scene.restart();
+            scene.scene.restart();
         } else {
             if (isLastLevel) currentLevelIndex = 0;
-            restartWithTransition(this);
+            restartWithTransition(scene);
         }
-    });
-
-    const menuBtn = this.add.text(400, btnY + 40, speedrunResult ? 'SPEEDRUN SELECT' : 'LEVEL SELECT', {
-        fontSize: '18px', fill: '#fff',
-        backgroundColor: '#06a', padding: { x: 20, y: 6 }
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(1000).setAlpha(0);
-    this.tweens.add({ targets: menuBtn, alpha: 1, duration: 300, delay: buttonDelay + 200 });
-    menuBtn.setInteractive({ useHandCursor: true });
-    menuBtn.on('pointerover', () => menuBtn.setStyle({ backgroundColor: '#08c' }));
-    menuBtn.on('pointerout', () => menuBtn.setStyle({ backgroundColor: '#06a' }));
-    menuBtn.on('pointerup', () => {
+    };
+    const goSelect = () => {
         if (speedrunResult) {
             speedrunMode = false;
             showingSpeedrunSelect = true;
@@ -3421,8 +3341,39 @@ function reachEnd() {
         } else {
             showingLevelSelect = true;
         }
-        restartWithTransition(this);
-    });
+        restartWithTransition(scene);
+    };
+    const btnY = 484, btnW = 230, step = 250;
+    const count = hasNext ? 3 : 2;
+    const btnX = (i) => cx + (i - (count - 1) / 2) * step;
+    let slot = 0;
+    if (hasNext) {
+        const x = btnX(slot++);
+        at(buttonDelay, () => {
+            const b = s.button(x, btnY, bonusNext ? 'Bonus Round!' : 'Next Level', {
+                role: bonusNext ? 'mode' : 'go', icon: 'play', width: btnW, onClick: goNext
+            });
+            s.setFocus(b);
+        });
+    }
+    {
+        const x = btnX(slot++);
+        at(buttonDelay + 100, () => {
+            const b = s.button(x, btnY, restartLabel, { role: hasNext ? 'neutral' : 'go', width: btnW, onClick: goRestart });
+            if (!hasNext) s.setFocus(b);
+        });
+    }
+    {
+        const x = btnX(slot++);
+        at(buttonDelay + 200, () => {
+            s.button(x, btnY, speedrunResult ? 'Speedrun Select' : 'Level Select', {
+                role: 'nav', icon: 'map', width: btnW, onClick: goSelect
+            });
+            leaveToSelect = goSelect;
+        });
+    }
+    s.hintBar([['← →', 'Move'], ['ENTER', 'Select'], ['ESC', speedrunResult ? 'Speedrun select' : 'Level select']]);
+    s.open();
 }
 
 let pauseScreen = null;           // kit screens; stale after a restart (UI.reset closes them)
@@ -4313,31 +4264,23 @@ function shakeCamera(scene, intensity, duration) {
 }
 
 function showCreditsScreen(scene, stats) {
-    const overlay = scene.add.rectangle(400, 300, 800, 600, 0x000000, 0.9);
-    overlay.setScrollFactor(0).setDepth(999);
+    const T = UI.theme;
+    const cx = VIEW_W / 2;
+    if (typeof setGameplayHUDVisible === 'function') setGameplayHUDVisible(false);
+    const s = UI.screen(scene, { id: 'credits', depth: 999, backdrop: 'solid', enter: 'fade' });
+    const at = (ms, fn) => UI.later(scene, ms, () => { if (s.state !== 'closed' && s.state !== 'closing') fn(); });
 
-    // Title
-    const title = scene.add.text(400, 60, 'CONGRATULATIONS!', {
-        fontSize: '42px', fill: '#ffd700', fontStyle: 'bold',
-        stroke: '#000', strokeThickness: 4
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(1000).setAlpha(0);
-    scene.tweens.add({ targets: title, alpha: 1, duration: 600, ease: 'Power2' });
+    s.title(cx, 52, 'CONGRATULATIONS!', { ribbon: true });
+    at(500, () => s.label(cx, 104, 'You conquered the tower and defeated The Guardian!', { style: 'body', color: 'caps' }));
 
-    // Subtitle
-    const sub = scene.add.text(400, 110, 'You conquered the tower and defeated The Guardian!', {
-        fontSize: '16px', fill: '#aaa', fontStyle: 'italic'
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(1000).setAlpha(0);
-    scene.tweens.add({ targets: sub, alpha: 1, duration: 400, delay: 500 });
-
-    // Fireworks effect (repeating)
-    const fireworkColors = [0xffd700, 0xff4444, 0x44ff44, 0x4488ff, 0xff44ff, 0x44ffff];
-    let fireworkTimer = scene.time.addEvent({
+    // Fireworks (repeating) until the player leaves
+    const fireworkColors = [T.color.gold, T.color.pink, T.color.cyan, T.roles.go.base, T.roles.nav.base, T.roles.danger.base];
+    const fireworkTimer = scene.time.addEvent({
         delay: 400,
         callback: () => {
-            const fx = 100 + Math.random() * 600;
-            const fy = 50 + Math.random() * 150;
-            const color = fireworkColors[Math.floor(Math.random() * fireworkColors.length)];
-            spawnParticles(scene, fx, fy, color, 8, 50);
+            const fx = 80 + Math.random() * (VIEW_W - 160);
+            const fy = 30 + Math.random() * 110;
+            UI.burst(scene, fx, fy, fireworkColors[Math.floor(Math.random() * fireworkColors.length)], 8, 50, 1005);
         },
         loop: true
     });
@@ -4350,69 +4293,63 @@ function showCreditsScreen(scene, stats) {
         totalDeaths = jqStats.totalDeaths || 0;
     }
 
-    const statsLines = [
-        { text: `Total Stars: ${totalStars}/30`, color: '#ffd700', delay: 1000 },
-        { text: `Total Coins Collected: ${totalCoins}`, color: '#ffd700', delay: 1200 },
-        { text: `Total Deaths: ${totalDeaths}`, color: '#ff6666', delay: 1400 },
-        { text: `Final Level Score: ${stats.score}`, color: '#00ff00', delay: 1600 },
-        { text: `Final Level Time: ${formatTime(stats.levelTimer)}`, color: '#00ffff', delay: 1800 },
-    ];
+    const panelY = 300, panelH = 270, top = panelY - panelH / 2, panelW = 400;
+    const leftX = cx - 215, rightX = cx + 215;
+    s.panel(leftX, panelY, panelW, panelH, { header: 'Your journey', accent: 'mode' });
+    s.panel(rightX, panelY, panelW, panelH, { header: 'Credits', accent: 'nav' });
 
+    const statsLines = [
+        { icon: 'star', label: 'Total Stars', value: `${totalStars}/${CAMPAIGN_LEVELS.length * 3}`, color: 'gold', delay: 1000 },
+        { icon: 'coin', label: 'Total Coins Collected', value: `${totalCoins}`, color: 'gold', delay: 1200 },
+        { icon: 'heart', label: 'Total Deaths', value: `${totalDeaths}`, color: 'danger', delay: 1400 },
+        { icon: 'trophy', label: 'Final Level Score', value: `${stats.score}`, color: 'go', delay: 1600 },
+        { icon: 'clock', label: 'Final Level Time', value: formatTime(stats.levelTimer), color: 'cyan', delay: 1800 }
+    ];
     statsLines.forEach((line, i) => {
-        const t = scene.add.text(400, 160 + i * 28, line.text, {
-            fontSize: '15px', fill: line.color
-        }).setOrigin(0.5).setScrollFactor(0).setDepth(1000).setAlpha(0);
-        scene.tweens.add({ targets: t, alpha: 1, duration: 300, delay: line.delay });
+        const y = top + 70 + i * 38;
+        at(line.delay, () => {
+            s.icon(leftX - panelW / 2 + 36, y, line.icon, 22);
+            s.label(leftX - panelW / 2 + 60, y, line.label, { style: 'body', color: 'dim', align: 'left' });
+            s.label(leftX + panelW / 2 - 28, y, line.value, { style: 'body', color: line.color, align: 'right' });
+        });
     });
 
-    // Credits section
-    const creditsY = 320;
     const creditLines = [
-        { text: '--- CREDITS ---', color: '#888', size: '14px' },
-        { text: 'JUMP QUEST', color: '#ffd700', size: '20px' },
-        { text: 'A Platformer Adventure', color: '#aaa', size: '13px' },
-        { text: '', color: '#000', size: '8px' },
-        { text: 'Built with Phaser 3', color: '#888', size: '12px' },
-        { text: 'Audio: Web Audio API + Top Floor Dash', color: '#888', size: '12px' },
-        { text: 'Thank you for playing!', color: '#fff', size: '16px' },
+        { text: 'JUMP QUEST', style: 'value', size: 26, y: 72 },
+        { text: 'A Platformer Adventure', style: 'body', color: 'caps', y: 108 },
+        { text: 'Built with Phaser 3', style: 'small', y: 150 },
+        { text: 'Audio: Web Audio API + Top Floor Dash', style: 'small', y: 174 },
+        { text: 'Thank you for playing!', style: 'body', y: 220 }
     ];
-
     creditLines.forEach((line, i) => {
-        const t = scene.add.text(400, creditsY + i * 22, line.text, {
-            fontSize: line.size, fill: line.color, fontStyle: i === 1 ? 'bold' : ''
-        }).setOrigin(0.5).setScrollFactor(0).setDepth(1000).setAlpha(0);
-        scene.tweens.add({ targets: t, alpha: 1, duration: 300, delay: 2200 + i * 200 });
+        at(2200 + i * 200, () => s.label(rightX, top + line.y, line.text, { style: line.style, size: line.size, color: line.color }));
     });
 
     // Buttons
     const btnDelay = 3800;
-    const playAgainBtn = scene.add.text(300, 520, 'PLAY AGAIN', {
-        fontSize: '20px', fill: '#fff', fontStyle: 'bold',
-        backgroundColor: '#0a0', padding: { x: 20, y: 8 }
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(1000).setAlpha(0);
-    scene.tweens.add({ targets: playAgainBtn, alpha: 1, duration: 300, delay: btnDelay });
-    playAgainBtn.setInteractive({ useHandCursor: true });
-    playAgainBtn.on('pointerover', () => playAgainBtn.setStyle({ backgroundColor: '#0c0' }));
-    playAgainBtn.on('pointerout', () => playAgainBtn.setStyle({ backgroundColor: '#0a0' }));
-    playAgainBtn.on('pointerup', () => {
-        fireworkTimer.remove();
-        currentLevelIndex = 0;
-        restartWithTransition(scene);
+    at(btnDelay, () => {
+        const b = s.button(cx - 130, 492, 'Play Again', {
+            role: 'go', icon: 'play', width: 230,
+            onClick: () => {
+                fireworkTimer.remove();
+                currentLevelIndex = 0;
+                restartWithTransition(scene);
+            }
+        });
+        s.setFocus(b);
     });
-
-    const menuBtn = scene.add.text(500, 520, 'MAIN MENU', {
-        fontSize: '20px', fill: '#fff', fontStyle: 'bold',
-        backgroundColor: '#06a', padding: { x: 20, y: 8 }
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(1000).setAlpha(0);
-    scene.tweens.add({ targets: menuBtn, alpha: 1, duration: 300, delay: btnDelay + 100 });
-    menuBtn.setInteractive({ useHandCursor: true });
-    menuBtn.on('pointerover', () => menuBtn.setStyle({ backgroundColor: '#08c' }));
-    menuBtn.on('pointerout', () => menuBtn.setStyle({ backgroundColor: '#06a' }));
-    menuBtn.on('pointerup', () => {
-        fireworkTimer.remove();
-        showingMenu = true;
-        restartWithTransition(scene);
+    at(btnDelay + 100, () => {
+        s.button(cx + 130, 492, 'Main Menu', {
+            role: 'nav', icon: 'back', width: 230,
+            onClick: () => {
+                fireworkTimer.remove();
+                showingMenu = true;
+                restartWithTransition(scene);
+            }
+        });
     });
+    s.hintBar([['← →', 'Move'], ['ENTER', 'Select']]);
+    s.open();
 }
 
 function restartWithTransition(scene) {
