@@ -80,44 +80,89 @@ let lives = 3;
 let livesText;
 let levelNameText;             // HUD title; endless mode rewrites it per world
 let gameplayHudObjects = [];
-let controlsPopupObjects = [];
+let controlsPopupScreen = null;   // kit popup; stale after a restart (UI.reset closes it)
+
+// True while a kit screen reference still points at a screen on display
+function isKitScreenLive(s) {
+    return !!s && s.state !== 'closed' && s.state !== 'closing';
+}
+
+// Hint bar for a popup stacked on another kit screen: the kit's bar is
+// see-through, so an opaque strip keeps the covered screen's hints from
+// showing through it (the kit has no option for this yet)
+function addStackedHintBar(s, items) {
+    // positioned like the kit's bar (centre of the bottom 36px) so the enter animation moves both alike
+    const g = s.scene.add.graphics({ x: VIEW_W / 2, y: VIEW_H - 18 });
+    g.fillStyle(UI.theme.color.ink, 1);
+    g.fillRect(-VIEW_W / 2, -18, VIEW_W, 36);
+    s.add(g, 5);
+    s.hintBar(items);
+}
 
 function closeControlsPopup() {
-    controlsPopupObjects.forEach(obj => {
-        if (obj && obj.active) obj.destroy();
-    });
-    controlsPopupObjects = [];
+    const s = controlsPopupScreen;
+    controlsPopupScreen = null;
+    if (isKitScreenLive(s)) s.close();
 }
 
 function toggleControlsPopup(scene) {
-    if (controlsPopupObjects.length) {
+    if (isKitScreenLive(controlsPopupScreen)) {
         closeControlsPopup();
         return;
     }
+    controlsPopupScreen = null;
 
-    const panel = scene.add.rectangle(400, 300, 300, 230, 0x07121e, 0.94);
-    panel.setStrokeStyle(2, 0x45678f).setScrollFactor(0).setDepth(2200);
-    const title = scene.add.text(400, 220, 'CONTROLS', {
-        fontSize: '16px', fill: '#ffdd00', fontStyle: 'bold'
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(2201);
-    const divider = scene.add.rectangle(400, 246, 250, 1, 0x45678f);
-    divider.setScrollFactor(0).setDepth(2201);
+    const T = UI.theme;
+    const cx = VIEW_W / 2, cy = 300, pw = 380, ph = 320;
+    const stacked = UI.isOpen();
+    const s = UI.screen(scene, {
+        id: 'controls-popup', depth: 2200, backdrop: 'dim', enter: 'pop',
+        onBack: () => closeControlsPopup()
+    });
+    s.panel(cx, cy, pw, ph, { header: 'Controls', accent: 'nav' });
+    s.iconButton(cx + pw / 2 - 30, cy - ph / 2 + 24, 'close', {
+        label: 'Close', size: 34, default: true, onClick: () => closeControlsPopup()
+    });
+
+    // One row per action: name on the left, key chips on the right
     const rows = [
-        'MOVE       ← / →',
-        'JUMP       SPACE',
-        'DASH       SHIFT',
-        'POUND      ↓ + SPACE',
-        'RETRY      R',
-        'PAUSE      ESC'
-    ].map((text, index) => scene.add.text(400, 260 + index * 22, text, {
-        fontSize: '11px', fill: '#d7e2f0', fontFamily: 'monospace'
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(2201));
-    const closeButton = scene.add.text(536, 198, '×', {
-        fontSize: '20px', fill: '#d7e2f0', fontStyle: 'bold',
-        backgroundColor: '#1b2b3f', padding: { x: 6, y: 1 }
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(2202).setInteractive({ useHandCursor: true });
-    closeButton.on('pointerup', closeControlsPopup);
-    controlsPopupObjects = [panel, title, divider, ...rows, closeButton];
+        ['Move', ['←', '→']],
+        ['Jump', ['SPACE']],
+        ['Dash', ['SHIFT']],
+        ['Pound', ['↓', '+', 'SPACE']],
+        ['Retry', ['R']],
+        ['Pause', ['ESC']]
+    ];
+    const left = cx - pw / 2 + 36, right = cx + pw / 2 - 36;
+    const top = cy - ph / 2 + 74, step = 38;
+    const chipH = 26, chipGap = 6;
+    rows.forEach(([name, keys], i) => {
+        const y = top + i * step;
+        s.label(left, y, name, { style: 'body', align: 'left' });
+        // Kit has no key chip builder: draw the hint bar's chip look from theme values
+        let x = right;
+        keys.slice().reverse().forEach(key => {
+            if (key === '+') {
+                const plus = s.label(x, y, '+', { style: 'small', align: 'right' });
+                x -= plus.width + chipGap;
+                return;
+            }
+            const kt = s.label(0, y - 1, key, { style: 'small', color: 'dark', size: T.size.keyChip + 2 });
+            const kw = Math.max(32, Math.ceil(kt.width) + 18);
+            kt.x = x - kw / 2;
+            const g = scene.add.graphics();
+            g.fillStyle(T.color.keyCapEdge, 1);
+            g.fillRoundedRect(x - kw, y - chipH / 2 + 1, kw, chipH, T.radius.keyChip);
+            g.fillStyle(T.color.keyCap, 1);
+            g.fillRoundedRect(x - kw, y - chipH / 2 - 1, kw, chipH - 2, T.radius.keyChip);
+            s.add(g, 2);
+            x -= kw + chipGap;
+        });
+    });
+    const hints = [['ENTER', 'Close'], ['ESC', 'Close']];
+    if (stacked) addStackedHintBar(s, hints); else s.hintBar(hints);
+    s.open();
+    controlsPopupScreen = s;
 }
 
 function setGameplayHUDVisible(visible) {
@@ -2935,34 +2980,18 @@ function hitEnemy() {
         // Losing the run still banks the coins earned during it
         if (typeof bankPendingCoins === 'function') bankPendingCoins();
 
-        const gameOverText = this.add.text(400, 300, 'GAME OVER!', {
-            fontSize: '48px',
-            fill: '#ff0000',
-            backgroundColor: '#000',
-            padding: { x: 20, y: 10 }
+        // No onBack: Esc does nothing here, Restart Level is the only way on
+        const scene = this;
+        const go = UI.screen(scene, { id: 'game-over', depth: 1000, backdrop: 'dim', enter: 'pop' });
+        go.panel(VIEW_W / 2, 300, 440, 220);
+        const goTitle = go.title(VIEW_W / 2, 258, 'GAME OVER');
+        goTitle.text.setColor(UI.theme.text.danger);
+        go.button(VIEW_W / 2, 346, 'Restart Level', {
+            role: 'go', size: 'lg', default: true,
+            onClick: () => restartWithTransition(scene)
         });
-        gameOverText.setOrigin(0.5);
-        gameOverText.setScrollFactor(0).setDepth(1000);
-
-        const restartButton = this.add.text(400, 370, 'RESTART LEVEL', {
-            fontSize: '28px',
-            fill: '#fff',
-            backgroundColor: '#444',
-            padding: { x: 20, y: 10 }
-        });
-        restartButton.setOrigin(0.5);
-        restartButton.setScrollFactor(0);
-        restartButton.setDepth(1000);
-        restartButton.setInteractive({ useHandCursor: true });
-        restartButton.on('pointerover', () => {
-            restartButton.setStyle({ backgroundColor: '#666' });
-        });
-        restartButton.on('pointerout', () => {
-            restartButton.setStyle({ backgroundColor: '#444' });
-        });
-        restartButton.on('pointerup', () => {
-            restartWithTransition(this);
-        });
+        go.hintBar([['ENTER', 'Restart Level']]);
+        go.open();
     } else {
         // Respawn at checkpoint or start
         const spawnPoint = lastCheckpoint || { x: currentLevel.playerStart.x, y: currentLevel.playerStart.y };
@@ -3396,8 +3425,8 @@ function reachEnd() {
     });
 }
 
-let pauseMenuObjects = [];
-let pauseSettingsObjects = [];
+let pauseScreen = null;           // kit screens; stale after a restart (UI.reset closes them)
+let pauseSettingsScreen = null;
 
 function togglePause() {
     if (gameOver || levelComplete) {
@@ -3412,104 +3441,73 @@ function togglePause() {
         pauseButton.setText('RESUME');
 
         const scene = this;
+        const cx = VIEW_W / 2;
+        // Resume, like the button: the Esc that paused is ignored by the kit
+        const resume = () => { if (isPaused) togglePause.call(scene); };
 
-        // Dark overlay (interactive to block clicks to game objects behind)
-        const bg = scene.add.rectangle(400, 300, 800, 600, 0x000000, 0.8);
-        bg.setScrollFactor(0).setDepth(1500).setInteractive();
-        pauseMenuObjects.push(bg);
+        const s = UI.screen(scene, { id: 'pause', depth: 1500, backdrop: 'dim', onBack: resume });
+        s.title(cx, 108, 'PAUSED', { ribbon: true });
+        s.panel(cx, 330, 380, 360);
 
-        // Title
-        const title = scene.add.text(400, 150, 'PAUSED', {
-            fontSize: '52px', fill: '#fff', fontStyle: 'bold',
-            stroke: '#000', strokeThickness: 4
-        }).setOrigin(0.5).setScrollFactor(0).setDepth(1501);
-        pauseMenuObjects.push(title);
+        s.button(cx, 210, 'Resume', { role: 'go', size: 'lg', icon: 'play', width: 300, default: true, onClick: resume });
 
-        // Resume button
-        const resumeBtn = scene.add.text(400, 225, 'RESUME', {
-            fontSize: '22px', fill: '#fff', fontStyle: 'bold',
-            backgroundColor: '#0a0', padding: { x: 30, y: 10 }
-        }).setOrigin(0.5).setScrollFactor(0).setDepth(1501);
-        resumeBtn.setInteractive({ useHandCursor: true });
-        resumeBtn.on('pointerover', () => resumeBtn.setStyle({ backgroundColor: '#0c0' }));
-        resumeBtn.on('pointerout', () => resumeBtn.setStyle({ backgroundColor: '#0a0' }));
-        resumeBtn.on('pointerup', () => { togglePause.call(scene); });
-        pauseMenuObjects.push(resumeBtn);
-
-        // Restart Level button
-        const restartBtn = scene.add.text(400, 280, 'RESTART LEVEL', {
-            fontSize: '22px', fill: '#fff', fontStyle: 'bold',
-            backgroundColor: '#c60', padding: { x: 30, y: 10 }
-        }).setOrigin(0.5).setScrollFactor(0).setDepth(1501);
-        restartBtn.setInteractive({ useHandCursor: true });
-        restartBtn.on('pointerover', () => restartBtn.setStyle({ backgroundColor: '#e80' }));
-        restartBtn.on('pointerout', () => restartBtn.setStyle({ backgroundColor: '#c60' }));
-        restartBtn.on('pointerup', () => {
-            cleanupPauseMenu();
-            isPaused = false;
-            scene.physics.resume();
-            restartWithTransition(scene);
+        s.button(cx, 278, 'Restart Level', {
+            role: 'neutral', width: 300,
+            onClick: () => {
+                cleanupPauseMenu();
+                isPaused = false;
+                scene.physics.resume();
+                restartWithTransition(scene);
+            }
         });
-        pauseMenuObjects.push(restartBtn);
-
-        const settingsBtn = scene.add.text(400, 445, 'SETTINGS', {
-            fontSize: '16px', fill: '#fff', fontStyle: 'bold',
-            backgroundColor: '#34506f', padding: { x: 20, y: 6 }
-        }).setOrigin(0.5).setScrollFactor(0).setDepth(1501);
-        settingsBtn.setInteractive({ useHandCursor: true });
-        settingsBtn.on('pointerover', () => settingsBtn.setStyle({ backgroundColor: '#45698f' }));
-        settingsBtn.on('pointerout', () => settingsBtn.setStyle({ backgroundColor: '#34506f' }));
-        settingsBtn.on('pointerup', () => showPauseSettings(scene));
-        pauseMenuObjects.push(settingsBtn);
 
         // Level Select button
         const levelSelectLabel = (typeof speedrunMode !== 'undefined' && speedrunMode)
-            ? 'SPEEDRUN SELECT'
-            : 'LEVEL SELECT';
-        const levelBtn = scene.add.text(400, 335, levelSelectLabel, {
-            fontSize: '22px', fill: '#fff', fontStyle: 'bold',
-            backgroundColor: '#06a', padding: { x: 30, y: 10 }
-        }).setOrigin(0.5).setScrollFactor(0).setDepth(1501);
-        levelBtn.setInteractive({ useHandCursor: true });
-        levelBtn.on('pointerover', () => levelBtn.setStyle({ backgroundColor: '#08c' }));
-        levelBtn.on('pointerout', () => levelBtn.setStyle({ backgroundColor: '#06a' }));
-        levelBtn.on('pointerup', () => {
-            cleanupPauseMenu();
-            isPaused = false;
-            scene.physics.resume();
-            if (typeof endlessMode !== 'undefined') endlessMode = false;
-            if (typeof dailyChallengeMode !== 'undefined') dailyChallengeMode = false;
-            if (typeof speedrunMode !== 'undefined' && speedrunMode) {
-                speedrunMode = false;
-                showingSpeedrunSelect = true;
-                showingLevelSelect = false;
-            } else {
-                showingLevelSelect = true;
+            ? 'Speedrun Select'
+            : 'Level Select';
+        s.button(cx, 334, levelSelectLabel, {
+            role: 'nav', icon: 'map', width: 300,
+            onClick: () => {
+                cleanupPauseMenu();
+                isPaused = false;
+                scene.physics.resume();
+                if (typeof endlessMode !== 'undefined') endlessMode = false;
+                if (typeof dailyChallengeMode !== 'undefined') dailyChallengeMode = false;
+                if (typeof speedrunMode !== 'undefined' && speedrunMode) {
+                    speedrunMode = false;
+                    showingSpeedrunSelect = true;
+                    showingLevelSelect = false;
+                } else {
+                    showingLevelSelect = true;
+                }
+                restartWithTransition(scene);
             }
-            restartWithTransition(scene);
         });
-        pauseMenuObjects.push(levelBtn);
+
+        s.button(cx, 390, 'Settings', {
+            role: 'neutral', icon: 'gear', width: 300,
+            onClick: () => showPauseSettings(scene)
+        });
 
         // Quit to Menu button
-        const quitBtn = scene.add.text(400, 390, 'QUIT TO MENU', {
-            fontSize: '22px', fill: '#fff', fontStyle: 'bold',
-            backgroundColor: '#600', padding: { x: 30, y: 10 }
-        }).setOrigin(0.5).setScrollFactor(0).setDepth(1501);
-        quitBtn.setInteractive({ useHandCursor: true });
-        quitBtn.on('pointerover', () => quitBtn.setStyle({ backgroundColor: '#800' }));
-        quitBtn.on('pointerout', () => quitBtn.setStyle({ backgroundColor: '#600' }));
-        quitBtn.on('pointerup', () => {
-            cleanupPauseMenu();
-            isPaused = false;
-            scene.physics.resume();
-            if (typeof endlessMode !== 'undefined') endlessMode = false;
-            if (typeof dailyChallengeMode !== 'undefined') dailyChallengeMode = false;
-            if (typeof speedrunMode !== 'undefined') speedrunMode = false;
-            if (typeof showingSpeedrunSelect !== 'undefined') showingSpeedrunSelect = false;
-            showingMenu = true;
-            restartWithTransition(scene);
+        s.button(cx, 456, 'Quit to Menu', {
+            role: 'danger', icon: 'back', width: 300,
+            onClick: () => {
+                cleanupPauseMenu();
+                isPaused = false;
+                scene.physics.resume();
+                if (typeof endlessMode !== 'undefined') endlessMode = false;
+                if (typeof dailyChallengeMode !== 'undefined') dailyChallengeMode = false;
+                if (typeof speedrunMode !== 'undefined') speedrunMode = false;
+                if (typeof showingSpeedrunSelect !== 'undefined') showingSpeedrunSelect = false;
+                showingMenu = true;
+                restartWithTransition(scene);
+            }
         });
-        pauseMenuObjects.push(quitBtn);
+
+        s.hintBar([['←↑↓→', 'Move'], ['ENTER', 'Select'], ['ESC', 'Resume']]);
+        s.open();
+        pauseScreen = s;
 
     } else {
         // Resume the game
@@ -3520,102 +3518,71 @@ function togglePause() {
 }
 
 function cleanupPauseMenu() {
+    // The controls popup is only ever open over the pause screen here
+    closeControlsPopup();
     closePauseSettings();
-    pauseMenuObjects.forEach(obj => obj.destroy());
-    pauseMenuObjects = [];
+    const s = pauseScreen;
+    pauseScreen = null;
+    if (isKitScreenLive(s)) s.close();
 }
 
 function closePauseSettings() {
-    pauseSettingsObjects.forEach(obj => {
-        if (obj && obj.active) obj.destroy();
-    });
-    pauseSettingsObjects = [];
+    const s = pauseSettingsScreen;
+    pauseSettingsScreen = null;
+    if (isKitScreenLive(s)) s.close();
 }
 
 function showPauseSettings(scene) {
     closePauseSettings();
 
-    const panel = scene.add.rectangle(400, 350, 360, 330, 0x07121e, 0.97);
-    panel.setStrokeStyle(2, 0x45678f).setScrollFactor(0).setDepth(1600).setInteractive();
-    const title = scene.add.text(400, 215, 'SETTINGS', {
-        fontSize: '20px', fill: '#ffdd00', fontStyle: 'bold'
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(1601);
-    const divider = scene.add.rectangle(400, 242, 300, 1, 0x45678f);
-    divider.setScrollFactor(0).setDepth(1601);
-    const closeBtn = scene.add.text(548, 208, '×', {
-        fontSize: '20px', fill: '#d7e2f0', fontStyle: 'bold',
-        backgroundColor: '#1b2b3f', padding: { x: 6, y: 1 }
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(1602).setInteractive({ useHandCursor: true });
-    closeBtn.on('pointerup', closePauseSettings);
+    const cx = VIEW_W / 2, cy = 318, pw = 440, ph = 420;
+    const top = cy - ph / 2;
+    const s = UI.screen(scene, {
+        id: 'pause-settings', depth: 1600, backdrop: 'dim', enter: 'pop',
+        onBack: () => closePauseSettings()
+    });
+    s.panel(cx, cy, pw, ph, { header: 'Settings', accent: 'neutral' });
+    s.iconButton(cx + pw / 2 - 30, top + 24, 'close', { label: 'Close', size: 34, onClick: () => closePauseSettings() });
 
-    const musicLabel = scene.add.text(245, 275, 'MUSIC', { fontSize: '14px', fill: '#aaa' })
-        .setOrigin(0, 0.5).setScrollFactor(0).setDepth(1601);
-    const musicSliderBg = scene.add.rectangle(415, 275, 160, 10, 0x444444).setScrollFactor(0).setDepth(1601);
-    const musicSliderFill = scene.add.rectangle(335, 275, 160 * musicVolume, 10, 0x08a)
-        .setOrigin(0, 0.5).setScrollFactor(0).setDepth(1602);
-    const musicHandle = scene.add.circle(335 + 160 * musicVolume, 275, 10, 0xffffff).setScrollFactor(0).setDepth(1603);
-    musicHandle.setInteractive({ useHandCursor: true, draggable: true });
-    scene.input.setDraggable(musicHandle);
-    musicHandle.on('drag', (pointer, dragX) => {
-        const clampedX = Phaser.Math.Clamp(dragX, 335, 495);
-        musicHandle.x = clampedX;
-        const value = (clampedX - 335) / 160;
-        musicSliderFill.setDisplaySize(160 * value, 10);
+    // Volume sliders: drag, click the track, or Left / Right while focused
+    const labelX = cx - pw / 2 + 32, sliderX = cx + 14, sliderW = 200;
+    s.label(labelX, top + 84, 'Music', { style: 'caps', align: 'left' });
+    s.slider(sliderX, top + 84, sliderW, musicVolume, (value) => {
         if (typeof setMusicVolume === 'function') setMusicVolume(value);
-    });
-
-    const sfxLabel = scene.add.text(245, 315, 'SFX', { fontSize: '14px', fill: '#aaa' })
-        .setOrigin(0, 0.5).setScrollFactor(0).setDepth(1601);
-    const sfxSliderBg = scene.add.rectangle(415, 315, 160, 10, 0x444444).setScrollFactor(0).setDepth(1601);
-    const sfxSliderFill = scene.add.rectangle(335, 315, 160 * sfxVolume, 10, 0x068)
-        .setOrigin(0, 0.5).setScrollFactor(0).setDepth(1602);
-    const sfxHandle = scene.add.circle(335 + 160 * sfxVolume, 315, 10, 0xffffff).setScrollFactor(0).setDepth(1603);
-    sfxHandle.setInteractive({ useHandCursor: true, draggable: true });
-    scene.input.setDraggable(sfxHandle);
-    sfxHandle.on('drag', (pointer, dragX) => {
-        const clampedX = Phaser.Math.Clamp(dragX, 335, 495);
-        sfxHandle.x = clampedX;
-        const value = (clampedX - 335) / 160;
-        sfxSliderFill.setDisplaySize(160 * value, 10);
+    }, { label: 'Music', default: true });
+    s.label(labelX, top + 130, 'SFX', { style: 'caps', align: 'left' });
+    s.slider(sliderX, top + 130, sliderW, sfxVolume, (value) => {
         if (typeof setSfxVolume === 'function') setSfxVolume(value);
+    }, { label: 'SFX' });
+
+    const rowW = pw - 64;
+    const muteLabel = () => (sfxMuted && audioMuted) ? 'Unmute All' : 'Mute All';
+    const muteBtn = s.button(cx, top + 190, muteLabel(), {
+        role: 'neutral', width: rowW,
+        onClick: () => {
+            if (typeof toggleMuteAll === 'function') toggleMuteAll();
+            muteBtn.setLabel(muteLabel());
+        }
     });
 
-    const muteBtn = scene.add.text(400, 365, (sfxMuted && audioMuted) ? 'UNMUTE ALL' : 'MUTE ALL', {
-        fontSize: '15px', fill: '#fff', fontStyle: 'bold',
-        backgroundColor: (sfxMuted && audioMuted) ? '#800' : '#555', padding: { x: 18, y: 5 }
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(1601).setInteractive({ useHandCursor: true });
-    muteBtn.on('pointerup', () => {
-        if (typeof toggleMuteAll === 'function') toggleMuteAll();
-        muteBtn.setText((sfxMuted && audioMuted) ? 'UNMUTE ALL' : 'MUTE ALL');
-        muteBtn.setStyle({ backgroundColor: (sfxMuted && audioMuted) ? '#800' : '#555' });
-    });
-
-    const cbBtn = scene.add.text(400, 405, colorblindMode ? 'COLORBLIND: ON' : 'COLORBLIND: OFF', {
-        fontSize: '14px', fill: '#fff',
-        backgroundColor: colorblindMode ? '#068' : '#444', padding: { x: 16, y: 5 }
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(1601).setInteractive({ useHandCursor: true });
-    cbBtn.on('pointerup', () => {
-        colorblindMode = !colorblindMode;
+    s.toggle(cx, top + 248, 'Colorblind', colorblindMode, (value) => {
+        colorblindMode = value;
         localStorage.setItem('jqColorblind', colorblindMode);
-        cbBtn.setText(colorblindMode ? 'COLORBLIND: ON' : 'COLORBLIND: OFF');
-        cbBtn.setStyle({ backgroundColor: colorblindMode ? '#068' : '#444' });
+    }, { width: rowW });
+
+    s.button(cx, top + 306, 'Controls', {
+        role: 'neutral', width: rowW,
+        onClick: () => toggleControlsPopup(scene)
     });
 
-    const controlsBtn = scene.add.text(400, 445, 'CONTROLS', {
-        fontSize: '15px', fill: '#fff', fontStyle: 'bold',
-        backgroundColor: '#34506f', padding: { x: 20, y: 5 }
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(1601).setInteractive({ useHandCursor: true });
-    controlsBtn.on('pointerup', () => toggleControlsPopup(scene));
+    s.button(cx, top + 370, 'Back', {
+        role: 'neutral', size: 'sm', icon: 'back',
+        onClick: () => closePauseSettings()
+    });
 
-    const backBtn = scene.add.text(400, 482, 'BACK', {
-        fontSize: '13px', fill: '#d7e2f0',
-        backgroundColor: '#1b2b3f', padding: { x: 16, y: 4 }
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(1601).setInteractive({ useHandCursor: true });
-    backBtn.on('pointerup', closePauseSettings);
-
-    pauseSettingsObjects = [panel, title, divider, closeBtn, musicLabel, musicSliderBg,
-        musicSliderFill, musicHandle, sfxLabel, sfxSliderBg, sfxSliderFill, sfxHandle,
-        muteBtn, cbBtn, controlsBtn, backBtn];
+    addStackedHintBar(s, [['←↑↓→', 'Move'], ['←→', 'Volume'], ['ENTER', 'Select'], ['ESC', 'Back']]);
+    s.open();
+    pauseSettingsScreen = s;
 }
 
 // ========================
