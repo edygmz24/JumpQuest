@@ -705,6 +705,9 @@ function create() {
     // Second camera for the 800px-wide menus (see view.js)
     setupViewCameras(this);
 
+    // Menu kit: drop any screen, toast or key listener from the last run
+    if (typeof UI !== 'undefined') UI.reset(this);
+
     // Clean up moving platforms from previous session
     if (movingPlatforms && movingPlatforms.length > 0) {
         movingPlatforms.forEach(mp => {
@@ -884,6 +887,10 @@ function create() {
     } else if (typeof showingSpeedrunSelect !== 'undefined' && showingSpeedrunSelect &&
                typeof showSpeedrunLevelSelect === 'function') {
         showSpeedrunLevelSelect(this);
+    } else if (showingMenu && gameUrlParams.get('uikit') === '1' && typeof UI !== 'undefined') {
+        // `?uikit=1`: the menu kit's style sheet instead of the main menu
+        if (typeof setGameplayHUDVisible === 'function') setGameplayHUDVisible(false);
+        UI.showStyleSheet(this);
     } else if (showingMenu && typeof showMainMenu === 'function') {
         // Show main menu on first load
         showMainMenu(this);
@@ -1582,14 +1589,16 @@ function loadLevel(levelIndex) {
 
     // ESC key to pause
     this.input.keyboard.on('keydown-ESC', () => {
-        // On the menu and the world map, ESC belongs to those screens
+        // On the menu, the world map and kit screens, ESC belongs to those screens
         if (showingMenu || showingLevelSelect) return;
+        if (typeof UI !== 'undefined' && UI.isOpen()) return;
         togglePause.call(this);
     });
 
     // R key for an instant retry — the "one more run" shortcut
     this.input.keyboard.on('keydown-R', () => {
         if (isPaused || gameOver || levelComplete) return;
+        if (typeof UI !== 'undefined' && UI.isOpen()) return;
         if (showingMenu || showingLevelSelect ||
             (typeof showingSpeedrunSelect !== 'undefined' && showingSpeedrunSelect)) return;
         if (typeof speedrunMode !== 'undefined' && speedrunMode) {
@@ -1605,7 +1614,8 @@ function update() {
         updatePerformanceMonitor(this, this.game.loop.delta);
     }
     if (gameOver || levelComplete || isPaused || showingMenu || showingLevelSelect ||
-        (typeof showingSpeedrunSelect !== 'undefined' && showingSpeedrunSelect)) {
+        (typeof showingSpeedrunSelect !== 'undefined' && showingSpeedrunSelect) ||
+        (typeof UI !== 'undefined' && UI.isOpen())) {
         return;
     }
 

@@ -1,7 +1,7 @@
 # Menu revamp plan
 
 Status: approved by the user (all five decisions). Branch `claude/menu-revamp`.
-Part 0 done; part 1 in progress.
+Parts 0 and 1 done. Waiting for the user's go-ahead on parts 2-5.
 
 Goal: every menu looks and feels like one polished modern platformer. One
 shared style built once, smooth motion, keyboard navigation everywhere, touch
@@ -157,6 +157,18 @@ Notes per part:
 - **5**: the move card and tutorial hint stay non-blocking (the game keeps
   running); they only take the kit's toast look.
 
+## Notes from part 1 (for the screen conversions)
+
+- `ui.js`'s header comment is the kit's API reference.
+- Legacy menus draw on the 800px camera, which renders after the main
+  camera, so old-style objects always appear above kit screens. Convert a
+  screen together with the popups it opens (pause + settings + controls).
+- While iterating, run `node tools/shoot-menus.js <dir> --only a,b` on just
+  the screens being changed (a full run takes several minutes). The main
+  session does the full run.
+- Who builds what from here: parts 2-5 implementers in parallel (routine once
+  the kit exists, files don't overlap); kit fixes and part 6 main session.
+
 ## How each part is checked
 
 For every part:
@@ -189,7 +201,7 @@ the user is told.
 | # | Part | Attempts | Finished by |
 |---|------|----------|-------------|
 | 0 | Screenshot script + before shots | 1 | implementer (Opus) |
-| 1 | Shared kit | | |
+| 1 | Shared kit | 1 | implementer (Opus) |
 | 2 | Main menu, world map | | |
 | 3a | Pause, settings, controls, game over | | |
 | 3b | Level results, credits | | |

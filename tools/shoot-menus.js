@@ -156,9 +156,9 @@ function collectControls() {
     if (!sceneRouted && !o.eventNames().some(pointerEvent)) return;
     const b = box(o);
     if (b && b.w >= W * 0.9 && b.h >= H * 0.9) return;            // full-screen click blocker
-    let label = null;
-    if (isText(o)) label = clean(o.text) || null;
-    else if (o.type === 'Container') label = firstText(o);
+    let label = o.uiLabel ? clean(o.uiLabel) : null;       // menu kit controls name themselves
+    if (!label && isText(o)) label = clean(o.text) || null;
+    else if (!label && o.type === 'Container') label = firstText(o);
     if (!label && b) {
       // A text overlapping this object and drawn just above it (a button's
       // own caption, not a popup or menu layer that happens to cover it),
@@ -190,9 +190,10 @@ const scene = '__jqScene()';
 const run = (page, src) => page.evaluate(src);
 const waitFor = (page, src, timeout = 20000) => page.waitForFunction(src, null, { timeout: timeout });
 
-// Fresh page with the profile's save; waits for the main menu
-async function boot(page) {
-  await page.goto(BASE + '/index.html');
+// Fresh page with the profile's save; waits for the main menu (or, with a
+// query such as ?uikit=1, whatever screen create() shows instead)
+async function boot(page, query = '') {
+  await page.goto(BASE + '/index.html' + query);
   await waitFor(page, `typeof game !== 'undefined' && game.scene.scenes[0] && game.scene.scenes[0].sys.isActive()
     && typeof menuObjects !== 'undefined' && menuObjects.length > 0`, 30000);
   await page.waitForTimeout(600);
@@ -221,17 +222,232 @@ async function finishLevel(page, timeMs) {
   await waitFor(page, 'levelComplete === true');
 }
 
+// Waits until the game has drawn `n` more frames. The page can run far
+// slower than real time here, so kit checks count frames, not milliseconds.
+async function frames(page, n) {
+  const f0 = await run(page, 'game.loop.frame');
+  await waitFor(page, `game.loop.frame >= ${f0 + n}`, 60000);
+}
+
+// Waits until the top menu kit screen is open and idle (no enter animation,
+// no button bounce in progress), then a few frames more
+async function kitIdle(page, n = 3) {
+  await waitFor(page, `(() => { const s = UI.top(); return !s || (s.state === 'open' && !s._busy); })()`, 60000);
+  await frames(page, n);
+}
+
+// ---------- menu kit checks ----------
+
+// Keyboard, pointer and restart checks for the menu kit's style sheet
+// (?uikit=1). Runs on the booted style sheet; throws on the first failure.
+async function checkUiKit(page, controls) {
+  const fail = (m) => { throw new Error('uikit: ' + m); };
+  const q = JSON.stringify;
+  const top = (expr) => run(page, `(() => { const s = UI.top(); return ${expr}; })()`);
+  const focused = () => top('s && s.focused ? s.focused.label : null');
+  const rec = (label) => `UI.top().focusables.find(f => f.label === ${q(label)})`;
+  const setFocus = (label) => run(page, `UI.top().setFocus(${rec(label)})`);
+  // the game reads keys on its next frame
+  const press = async (key) => { await page.keyboard.press(key); await frames(page, 2); };
+  const count = (label, name) => run(page, `(() => { const r = ${rec(label)}; const f = r.onActivate;
+    window[${q(name)}] = 0; r.onActivate = () => { window[${q(name)}]++; if (f) f(); }; })()`);
+
+  // The inventory names the kit's controls by their labels
+  const labels = await top(`s.focusables.filter(f => f.visible && !f.list &&
+    ['button', 'iconButton', 'toggle', 'card'].includes(f.kind)).map(f => f.label)`);
+  const missing = labels.filter(l => !controls.includes(l));
+  if (missing.length) fail('inventory is missing ' + missing.join(', '));
+
+  // Arrows move focus
+  const start = await focused();
+  await press('ArrowDown');
+  if (await focused() === start) fail('ArrowDown did not move focus from ' + start);
+
+  // Every focusable can be reached with arrows. The focus graph comes from
+  // the kit's own key handler (instant); then one walk that visits every
+  // item is typed with real key presses in a single batch (the game handles
+  // all queued keys on its next frame) and its trace must cover them all.
+  const all = await top('s.focusables.filter(f => f.visible).map(f => f.label)');
+  if (new Set(all).size !== all.length) fail('focusable labels are not unique');
+  const DIRS = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
+  const graph = await run(page, `(() => {
+    const s = UI.top(), g = {};
+    const byLabel = l => s.focusables.find(f => f.label === l);
+    for (const from of ${q(all)}) {
+      g[from] = {};
+      for (const key of ${q(DIRS)}) {
+        s.lists.forEach(l => l._scrollTo(0, false));    // which row is entered depends on the scroll
+        s.setFocus(byLabel(from), { silent: true });
+        s._handleKey({ key: key, timeStamp: performance.now(), preventDefault() {} });
+        g[from][key] = s.focused ? s.focused.label : null;
+      }
+    }
+    return g;
+  })()`);
+  // shortest key path between two items in the graph
+  const pathBetween = (a, goal) => {
+    const prev = { [a]: null }, todo = [a];
+    while (todo.length) {
+      const n = todo.shift();
+      if (n === goal) break;
+      for (const k of DIRS) {
+        const m = graph[n][k];
+        if (m && !(m in prev)) { prev[m] = [n, k]; todo.push(m); }
+      }
+    }
+    if (!(goal in prev)) return null;
+    const keys = [];
+    for (let n = goal; prev[n]; n = prev[n][0]) keys.unshift(prev[n][1]);
+    return keys;
+  };
+  const unreached = all.filter(l => l !== start && !pathBetween(start, l));
+  if (unreached.length) fail('not reachable with arrows: ' + unreached.join(', '));
+  // a walk from the first focus through every item, nearest unvisited next
+  const walk = [];
+  let cur = start;
+  const todo = new Set(all.filter(l => l !== start));
+  while (todo.size) {
+    let best = null;
+    todo.forEach(l => { const pth = pathBetween(cur, l); if (pth && (!best || pth.length < best.length)) best = pth; });
+    for (const kk of best) { walk.push(kk); cur = graph[cur][kk]; todo.delete(cur); }
+  }
+  const resetLists = `UI.top().lists.forEach(l => l._scrollTo(0, false)); UI.top().setFocus(${rec(start)}, { silent: true })`;
+  await run(page, resetLists);
+  await run(page, `window.__kitTrace = []; ${scene}.input.keyboard.on('keydown', window.__kitTraceFn = () =>
+    window.__kitTrace.push(UI.top() && UI.top().focused ? UI.top().focused.label : null))`);
+  for (const kk of walk) await page.keyboard.press(kk);
+  await waitFor(page, `window.__kitTrace.length >= ${walk.length}`);
+  const trace = await run(page, `(() => { ${scene}.input.keyboard.off('keydown', window.__kitTraceFn); return window.__kitTrace; })()`);
+  const missed = all.filter(l => l !== start && !trace.includes(l));
+  if (missed.length) fail(`the typed walk (${walk.length} keys) never reached: ` + missed.join(', '));
+  // the same keys through the kit's handler from the same state give the same trace
+  const replay = await run(page, `(() => {
+    ${resetLists};
+    const s = UI.top();
+    return ${q(walk)}.map(key => { s._handleKey({ key: key, timeStamp: performance.now(), preventDefault() {} });
+      return s.focused ? s.focused.label : null; });
+  })()`);
+  if (trace.join('|') !== replay.join('|')) fail('real key presses and the kit handler disagree at step ' +
+    trace.findIndex((l, i) => l !== replay[i]));
+
+  // Replay the shortest arrow path from the first focus to the popup button
+  await setFocus(start);
+  for (const kk of pathBetween(start, 'Popup')) await page.keyboard.press(kk);
+  await frames(page, 2);
+  if (await focused() !== 'Popup') fail('arrow path to Popup ended on ' + await focused());
+
+  // Enter opens the stacked popup; Esc closes it and focus returns
+  await press('Enter');
+  await waitFor(page, `UI.stack().length === 2 && UI.top().state === 'open'`);
+  await kitIdle(page);
+  await press('Escape');
+  await waitFor(page, `UI.stack().length === 1`);
+  await kitIdle(page);
+  if (await focused() !== 'Popup') fail('focus after closing the popup is ' + await focused());
+
+  // Slider: Left / Right change the value in 5% steps
+  await setFocus('Music');
+  const v0 = await top('s.focused.obj.value');
+  await press('ArrowRight');
+  const v1 = await top('s.focused.obj.value');
+  await press('ArrowLeft');
+  const v2 = await top('s.focused.obj.value');
+  if (Math.abs(v1 - v0 - 0.05) > 0.001 || Math.abs(v2 - v0) > 0.001) fail(`slider values ${v0} -> ${v1} -> ${v2}`);
+  if (await focused() !== 'Music') fail('Left / Right moved focus off the slider');
+
+  // Toggle: Space flips it
+  await setFocus('Mute All');
+  const t0 = await top('s.focused.obj.value');
+  await press('Space');
+  await kitIdle(page);
+  if (await top('s.focused.obj.value') === t0) fail('Space did not flip the toggle');
+
+  // A disabled button takes focus but does nothing
+  await count('Locked', '__lockedRuns');
+  await setFocus('Locked');
+  await press('Enter');
+  await kitIdle(page);
+  if (await run(page, '__lockedRuns') !== 0) fail('the disabled button ran its action');
+
+  // Restart while the style sheet is open: no stale key listener survives
+  const listeners = await run(page, `${scene}.input.keyboard.listenerCount('keydown')`);
+  const expectDown = graph[start].ArrowDown;
+  await run(page, `${scene}.scene.restart()`);
+  await waitFor(page, `UI.top() && UI.top().id === 'uikit' && UI.top().state === 'open'`, 60000);
+  await kitIdle(page);
+  if (await run(page, `${scene}.input.keyboard.listenerCount('keydown')`) !== listeners) fail('keydown listeners grew after a restart');
+  await setFocus(start);
+  await press('ArrowDown');
+  if (await focused() !== expectDown) fail(`after a restart ArrowDown went to ${await focused()}, expected ${expectDown}`);
+
+  // Esc on the style sheet closes it and shows the main menu
+  await press('Escape');
+  await waitFor(page, `!UI.isOpen() && UI.top() === null && showingMenu && menuObjects.length > 0`);
+
+  // ---- pointer, with animations on and the camera scrolled into the level
+  await boot(page, '?uikit=1');
+  await kitIdle(page);
+  const scroll = await run(page, `(() => { const c = ${scene}.cameras.main; c.stopFollow();
+    c.setScroll(1500, c.scrollY); return c.scrollX; })()`);
+  if (scroll < 1000) fail('could not scroll the camera for the pointer check (scrollX ' + scroll + ')');
+  const box = await page.locator('canvas').boundingBox();
+  const k = box.width / 1066;
+  const at = async (label) => {
+    const p = await run(page, `(() => { const r = ${rec(label)}; return { x: r.x, y: r.y }; })()`);
+    return { x: box.x + p.x * k, y: box.y + p.y * k };
+  };
+  const click = async (label) => { const p = await at(label); await page.mouse.click(p.x, p.y); await frames(page, 2); await kitIdle(page); };
+
+  let p = await at('Map');
+  await page.mouse.move(p.x, p.y);
+  await frames(page, 2);
+  if (await focused() !== 'Map') fail('hovering Map did not focus it (focus: ' + await focused() + ')');
+  await count('Map', '__mapRuns');
+  await click('Map');
+  if (await run(page, '__mapRuns') !== 1) fail('one click on Map ran its action ' + await run(page, '__mapRuns') + ' times');
+  await count('Level 1-2', '__rowRuns');           // a row inside the scroll list (nested containers)
+  await click('Level 1-2');
+  if (await run(page, '__rowRuns') !== 1) fail('one click on a list row ran its action ' + await run(page, '__rowRuns') + ' times');
+
+  // While the popup is open, the screen below ignores clicks
+  await count('Play', '__playRuns');
+  const playAt = await at('Play');
+  await click('Popup');
+  await waitFor(page, `UI.stack().length === 2`);
+  await kitIdle(page);
+  await page.mouse.click(playAt.x, playAt.y);
+  await frames(page, 4);
+  await kitIdle(page);
+  if (await run(page, '__playRuns') !== 0) fail('a click reached the screen under the popup');
+  if (await run(page, 'UI.stack().length') !== 2) fail('a click outside the popup closed it');
+  await click('No');
+  await waitFor(page, `UI.stack().length === 1`);
+}
+
 // ---------- screens ----------
 // name:     file name and inventory key
 // profiles: which save profiles shoot it
+// query:    URL query for boot (default none: the main menu)
 // open:     gets from a freshly booted main menu to the screen
+// ready:    optional, waits until the screen is ready to shoot
 // settleMs: wait after open for animations to finish
+// check:    optional, runs after the shot; throws to fail the screen
 
 const BOTH = ['fresh', 'progressed'];
 const PROG = ['progressed'];
 
 const SCREENS = [
   { name: 'main-menu', profiles: BOTH, settleMs: 800, open: async () => {} },
+  // The menu kit's style sheet (ui.js), reduced motion so the shot is stable
+  { name: 'uikit', profiles: ['fresh'], query: '?uikit=1&nomotion=1', settleMs: 300, open: async () => {},
+    ready: (p) => kitIdle(p, 5), check: (p, controls) => checkUiKit(p, controls) },
+  { name: 'uikit-popup', profiles: ['fresh'], query: '?uikit=1&nomotion=1', settleMs: 300,
+    open: async (p) => {
+      await kitIdle(p);
+      await run(p, `UI.top().focusables.find(f => f.label === 'Popup').onActivate()`);
+      await waitFor(p, `UI.top().id === 'uikit-popup'`);
+    },
+    ready: (p) => kitIdle(p, 5) },
   { name: 'world-map', profiles: BOTH, settleMs: 800, open: (p) => run(p, `showLevelSelect(${scene})`) },
   { name: 'speedrun-select', profiles: BOTH, settleMs: 800, open: (p) => run(p, `showSpeedrunLevelSelect(${scene})`) },
   { name: 'daily', profiles: BOTH, settleMs: 800, open: (p) => run(p, `showDailyChallengeScreen(${scene})`) },
@@ -333,12 +549,14 @@ const IGNORE = [/^Failed to load resource/, /favicon/i];
       errors = [];
       let status = 'ok', controls = [];
       try {
-        await boot(page);
+        await boot(page, s.query);
         await s.open(page);
+        if (s.ready) await s.ready(page);
         await page.waitForTimeout(s.settleMs);
         await page.locator('canvas').screenshot({ path: path.join(dir, s.name + '.png') });
         controls = await page.evaluate(collectControls);
         inventory[s.name] = controls;
+        if (s.check) await s.check(page, controls);
       } catch (e) {
         status = 'FAILED: ' + e.message.split('\n')[0];
         failed++;
