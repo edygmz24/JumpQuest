@@ -338,133 +338,83 @@ function showDailyChallengeScreen(scene) {
         ? levels[challenge.levelIndex].name
         : 'Level ' + (challenge.levelIndex + 1);
 
-    // Dark background
-    const bg = scene.add.rectangle(400, 300, 800, 600, 0x000000, 0.92);
-    bg.setScrollFactor(0).setDepth(2000).setInteractive();
-    menuObjects.push(bg);
+    const T = UI.theme;
+    const CX = VIEW_W / 2;
+    const s = UI.screen(scene, {
+        id: 'daily', depth: T.depth.menu, backdrop: 'solid',
+        onBack: () => s.close(() => {
+            if (typeof clearMenuObjects === 'function') clearMenuObjects();
+            if (typeof showMainMenu === 'function') {
+                showingMenu = true;
+                showMainMenu(scene);
+            }
+        })
+    });
 
-    // Decorative top bar
-    const topBar = scene.add.rectangle(400, 50, 700, 4, 0xff8800);
-    topBar.setScrollFactor(0).setDepth(2001);
-    menuObjects.push(topBar);
+    s.title(CX, 42, 'DAILY CHALLENGE', { ribbon: true });
+    s.label(CX, 88, challenge.date, { style: 'caps' });
 
-    // Title
-    const title = scene.add.text(400, 75, 'DAILY CHALLENGE', {
-        fontSize: '40px', fill: '#ff8800', fontStyle: 'bold',
-        stroke: '#000', strokeThickness: 4
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
-    menuObjects.push(title);
+    // Today's level and its modifiers
+    const PW = 600, PT = 112, PH = 274;
+    s.panel(CX, PT + PH / 2, PW, PH, { header: "Today's level", accent: 'mode' });
+    s.label(CX, PT + 64, levelName, { style: 'value', color: 'nav' });
 
-    // Date
-    const dateText = scene.add.text(400, 115, challenge.date, {
-        fontSize: '16px', fill: '#888'
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
-    menuObjects.push(dateText);
-
-    // Level info panel
-    const panel = scene.add.rectangle(400, 195, 500, 50, 0x1a1a2e);
-    panel.setStrokeStyle(2, 0x334488);
-    panel.setScrollFactor(0).setDepth(2001);
-    menuObjects.push(panel);
-
-    const levelLabel = scene.add.text(400, 195, levelName, {
-        fontSize: '22px', fill: '#4488ff', fontStyle: 'bold'
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(2002);
-    menuObjects.push(levelLabel);
-
-    // Modifier cards
-    const modStartY = 260;
+    // kit icons where one fits; the others keep the modifier's own glyph
+    const KIT_ICONS = {
+        fastEnemies: ['bolt', T.color.gold], doubleCoins: ['coin', T.color.gold], speedRun: ['clock', T.color.cyan],
+        oneLife: ['heart', T.roles.danger.base], noCheckpoints: ['close', T.roles.danger.base]
+    };
+    const ICON = 28, MW = PW - 60, MH = 54;
     challenge.modifiers.forEach((modKey, i) => {
         const mod = DAILY_MODIFIERS[modKey];
         if (!mod) return;
-
-        const cardY = modStartY + i * 70;
-
-        // Card background
-        const card = scene.add.rectangle(400, cardY, 460, 55, 0x1a1a2e, 0.9);
-        card.setStrokeStyle(1, 0x555555);
-        card.setScrollFactor(0).setDepth(2001);
-        menuObjects.push(card);
-
-        // Icon
-        const icon = scene.add.text(200, cardY, mod.icon, {
-            fontSize: '28px'
-        }).setOrigin(0.5).setScrollFactor(0).setDepth(2002);
-        menuObjects.push(icon);
-
-        // Name
-        const name = scene.add.text(240, cardY - 10, mod.name, {
-            fontSize: '18px', fill: '#ffdd00', fontStyle: 'bold'
-        }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(2002);
-        menuObjects.push(name);
-
-        // Description
-        const desc = scene.add.text(240, cardY + 12, mod.desc, {
-            fontSize: '13px', fill: '#aaa'
-        }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(2002);
-        menuObjects.push(desc);
+        const y = PT + 114 + i * (MH + 8);
+        const left = CX - MW / 2;
+        s.panel(CX, y, MW, MH, { fill: 'dark' });
+        const kit = KIT_ICONS[modKey];
+        if (kit) s.icon(left + 34, y, kit[0], ICON, kit[1]);
+        else s.label(left + 34, y, mod.icon, { style: 'body', size: ICON });
+        s.label(left + 66, y - 10, mod.name, { style: 'body', color: 'gold', align: 'left' });
+        s.label(left + 66, y + 12, mod.desc, { style: 'small', align: 'left' });
     });
 
-    // Target time
+    // Target time and streak
     const targetStr = typeof formatTime === 'function'
         ? formatTime(challenge.targetTime)
         : (challenge.targetTime / 1000).toFixed(1) + 's';
-
-    const targetLabel = scene.add.text(400, 410, `Target Time: ${targetStr}`, {
-        fontSize: '18px', fill: '#00ffcc', fontStyle: 'bold',
-        stroke: '#000', strokeThickness: 2
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
-    menuObjects.push(targetLabel);
-
-    // Streak display
-    const streakIcon = dailyStreak > 0 ? '\uD83D\uDD25' : '\u2744\uFE0F';
-    const streakLabel = scene.add.text(400, 445, `${streakIcon} Streak: ${dailyStreak} day${dailyStreak !== 1 ? 's' : ''}`, {
-        fontSize: '18px', fill: dailyStreak >= 7 ? '#ff4400' : '#ff8800', fontStyle: 'bold'
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
-    menuObjects.push(streakLabel);
+    const statY = PT + PH - 24;
+    s.label(CX - 130, statY - 28, 'Target time', { style: 'caps' });
+    s.stat(CX - 130, statY, 'clock', targetStr, { color: 'cyan', mono: true, iconColor: T.color.cyan });
+    s.label(CX + 130, statY - 28, 'Streak', { style: 'caps' });
+    s.stat(CX + 130, statY, 'bolt', `${dailyStreak} day${dailyStreak !== 1 ? 's' : ''}`, {
+        color: dailyStreak >= 7 ? 'gold' : 'mode',
+        iconColor: dailyStreak > 0 ? T.color.gold : T.color.iconDisabled
+    });
 
     // Show next streak reward if applicable
     const nextMilestone = dailyStreak < 7 ? 7 : dailyStreak < 14 ? 14 : dailyStreak < 30 ? 30 : null;
     if (nextMilestone) {
         const reward = getDailyStreakReward(nextMilestone);
         if (reward) {
-            const rewardText = scene.add.text(400, 468, `Next reward at ${nextMilestone} days: ${reward.name}`, {
-                fontSize: '11px', fill: '#888'
-            }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
-            menuObjects.push(rewardText);
+            s.label(CX, PT + PH + 20, `Next reward at ${nextMilestone} days: ${reward.name}`, { style: 'small' });
         }
     }
 
-    // Completed badge
+    const actionY = PT + PH + 70;
     if (completed) {
-        const badge = scene.add.text(400, 500, 'COMPLETED', {
-            fontSize: '28px', fill: '#00ff00', fontStyle: 'bold',
-            backgroundColor: '#003300', padding: { x: 30, y: 10 },
-            stroke: '#00ff00', strokeThickness: 1
-        }).setOrigin(0.5).setScrollFactor(0).setDepth(2002);
-        menuObjects.push(badge);
+        // Completed badge
+        s.panel(CX, actionY, 270, 56, { fill: 'dark' });
+        s.icon(CX - 88, actionY, 'check', 28, T.roles.go.base);
+        s.label(CX + 16, actionY, 'COMPLETED', { style: 'value', color: 'go' });
     } else {
-        // Start Challenge button
-        if (typeof createMenuButton === 'function') {
-            createMenuButton(scene, 400, 510, 'START CHALLENGE', '#a06', '#c28', () => {
-                startDailyChallenge(scene);
-            });
-        }
-    }
-
-    // Decorative bottom bar
-    const botBar = scene.add.rectangle(400, 550, 700, 4, 0xff8800);
-    botBar.setScrollFactor(0).setDepth(2001);
-    menuObjects.push(botBar);
-
-    // Back button
-    if (typeof createMenuButton === 'function') {
-        createMenuButton(scene, 400, 565, 'BACK', '#444', '#666', () => {
-            if (typeof clearMenuObjects === 'function') clearMenuObjects();
-            if (typeof showMainMenu === 'function') {
-                showingMenu = true;
-                showMainMenu(scene);
-            }
+        s.button(CX, actionY, 'Start Challenge', {
+            role: 'mode', size: 'lg', icon: 'play', default: true,
+            onClick: () => startDailyChallenge(scene)
         });
     }
+
+    s.button(CX, 534, 'Back', { role: 'neutral', size: 'sm', icon: 'back', onClick: () => s.onBack() });
+    s.hintBar(completed ? [['ESC', 'Back']] : [['←↑↓→', 'Move'], ['ENTER', 'Start'], ['ESC', 'Back']]);
+    s.open();
+    menuObjects.push({ destroy: () => s.destroy() });
 }

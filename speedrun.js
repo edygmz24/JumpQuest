@@ -209,67 +209,55 @@ function showSpeedrunLevelSelect(scene) {
     loadSpeedrunRecords();
     clearMenuObjects();
 
-    const bg = scene.add.rectangle(400, 300, 800, 600, 0x000000, 0.92);
-    bg.setScrollFactor(0).setDepth(2000).setInteractive();
-    menuObjects.push(bg);
+    const T = UI.theme;
+    const CX = VIEW_W / 2;
+    const s = UI.screen(scene, {
+        id: 'speedrun-select', depth: T.depth.menu, backdrop: 'solid',
+        onBack: () => {
+            showingSpeedrunSelect = false;
+            speedrunMode = false;
+            s.close(() => showMainMenu(scene));
+        }
+    });
 
-    const title = scene.add.text(400, 34, 'SPEEDRUN', {
-        fontSize: '34px',
-        fill: '#7fdcff',
-        fontStyle: 'bold'
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
-    menuObjects.push(title);
+    s.title(CX, 42, 'SPEEDRUN', { ribbon: true });
+    s.label(CX, 90, 'Race your ghost  ·  checkpoint splits  ·  one-hit quick restart', { style: 'small', color: 'mode' });
 
-    const subtitle = scene.add.text(400, 72,
-        'Race your ghost • checkpoint splits • one-hit quick restart', {
-            fontSize: '12px',
-            fill: '#888888'
-        }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
-    menuObjects.push(subtitle);
+    // Level grid: all levels across the full width
+    const n = levels.length;
+    const COLS = 8, GAP_X = 12, GAP_Y = 12;
+    const rows = Math.ceil(n / COLS);
+    const gridTop = 112, gridBottom = 478;
+    const cardW = Math.floor((VIEW_W - 38 - GAP_X * (COLS - 1)) / COLS);
+    const cardH = Math.min(112, Math.floor((gridBottom - gridTop - GAP_Y * (rows - 1)) / rows));
+    const x0 = CX - (COLS * cardW + (COLS - 1) * GAP_X) / 2 + cardW / 2;
+    const txt = (x, y, str, size, color, extra) => scene.add.text(x, y, str, Object.assign({
+        fontFamily: T.font, fontSize: size + 'px', fontStyle: 'bold', color: color, resolution: T.textResolution
+    }, extra || {})).setOrigin(0.5);
 
-    for (let i = 0; i < levels.length; i++) {
-        const col = i % 6;
-        const row = Math.floor(i / 6);
-        const x = 85 + col * 126;
-        const y = 150 + row * 112;
+    // default focus: the last played level if it is unlocked, else the first unlocked one
+    let focusIndex = -1;
+    if (typeof currentLevelIndex === 'number' && currentLevelIndex >= 0 && currentLevelIndex < n &&
+        isLevelUnlocked(currentLevelIndex)) focusIndex = currentLevelIndex;
+    if (focusIndex === -1) {
+        for (let i = 0; i < n; i++) { if (isLevelUnlocked(i)) { focusIndex = i; break; } }
+    }
+
+    for (let i = 0; i < n; i++) {
+        const col = i % COLS;
+        const row = Math.floor(i / COLS);
+        const x = x0 + col * (cardW + GAP_X);
+        const y = gridTop + cardH / 2 + row * (cardH + GAP_Y);
         const unlocked = isLevelUnlocked(i);
         const record = getSpeedrunRecord(i);
-        const boxColor = unlocked ? 0x124d66 : 0x2a2a2a;
-
-        const box = scene.add.rectangle(x, y, 114, 102, boxColor);
-        box.setStrokeStyle(2, unlocked ? 0x55ccee : 0x444444);
-        box.setScrollFactor(0).setDepth(2001);
-        menuObjects.push(box);
-
-        const number = scene.add.text(x, y - 34, levelLabel(i), {
-            fontSize: '16px',
-            fill: unlocked ? '#ffffff' : '#666666',
-            fontStyle: 'bold'
-        }).setOrigin(0.5).setScrollFactor(0).setDepth(2002);
-        menuObjects.push(number);
-
         const name = levels[i].name.replace(/Level \d+ - /, '');
-        const nameText = scene.add.text(x, y - 8, name, {
-            fontSize: '9px',
-            fill: unlocked ? '#b9dce8' : '#555555',
-            wordWrap: { width: 106 },
-            align: 'center'
-        }).setOrigin(0.5).setScrollFactor(0).setDepth(2002);
-        menuObjects.push(nameText);
 
-        const pbText = scene.add.text(x, y + 30,
-            unlocked ? 'PB  ' + (record ? formatSpeedrunTime(record.time) : '--:--.--') : 'LOCKED', {
-                fontSize: '11px',
-                fill: record ? '#7dff9b' : '#777777',
-                fontFamily: 'monospace'
-            }).setOrigin(0.5).setScrollFactor(0).setDepth(2002);
-        menuObjects.push(pbText);
-
-        if (unlocked) {
-            box.setInteractive({ useHandCursor: true });
-            box.on('pointerover', () => box.setFillStyle(0x1d6d8c));
-            box.on('pointerout', () => box.setFillStyle(boxColor));
-            box.on('pointerup', () => {
+        const card = s.card(x, y, cardW, cardH, {
+            label: levelLabel(i),
+            state: unlocked ? 'normal' : 'locked',
+            default: i === focusIndex,
+            onClick: () => {
+                if (!unlocked) return;
                 clearMenuObjects();
                 currentLevelIndex = i;
                 speedrunMode = true;
@@ -280,13 +268,25 @@ function showSpeedrunLevelSelect(scene) {
                 if (typeof dailyChallengeMode !== 'undefined') dailyChallengeMode = false;
                 if (typeof restartWithTransition === 'function') restartWithTransition(scene);
                 else scene.scene.restart();
-            });
+            }
+        });
+        if (card.labelText) {
+            card.labelText.setFontSize(T.size.value);
+            card.labelText.y = -cardH / 2 + 22;
         }
+        card.add(txt(0, -2, name, T.size.cardSub, T.text.dim, {
+            align: 'center', wordWrap: { width: cardW - 12, useAdvancedWrap: true }
+        }));
+        let pb;
+        if (!unlocked) pb = 'LOCKED';
+        else pb = 'PB ' + (record ? formatSpeedrunTime(record.time) : '--');
+        card.add(txt(0, cardH / 2 - 20, pb, T.size.small, record && unlocked ? T.text.cyan : T.text.off, {
+            fontFamily: T.fontMono
+        }));
     }
 
-    createMenuButton(scene, 400, 545, 'BACK TO MENU', '#555555', '#777777', () => {
-        showingSpeedrunSelect = false;
-        speedrunMode = false;
-        showMainMenu(scene);
-    });
+    s.button(CX, 516, 'Back', { role: 'neutral', size: 'sm', icon: 'back', onClick: () => s.onBack() });
+    s.hintBar([['←↑↓→', 'Move'], ['ENTER', 'Start run'], ['ESC', 'Back']]);
+    s.open();
+    menuObjects.push({ destroy: () => s.destroy() });
 }

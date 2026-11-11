@@ -173,138 +173,80 @@ function updateModifiers(scene, delta) {
 function showModifierScreen(scene) {
     clearMenuObjects();
 
-    // Dark background
-    const bg = scene.add.rectangle(400, 300, 800, 600, 0x000000, 0.92);
-    bg.setScrollFactor(0).setDepth(2000).setInteractive();
-    menuObjects.push(bg);
-
-    // Title
-    const title = scene.add.text(400, 30, 'DIFFICULTY MODIFIERS', {
-        fontSize: '28px', fill: '#fff', fontStyle: 'bold',
-        stroke: '#000', strokeThickness: 3
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
-    menuObjects.push(title);
-
-    // Mode selector
-    const modes = ['normal', 'assist', 'hardcore'];
-    const modeColors = { normal: '#888', assist: '#0a0', hardcore: '#c00' };
-    const modeLabels = { normal: 'NORMAL', assist: 'ASSIST', hardcore: 'HARDCORE' };
-
-    modes.forEach(function(mode, i) {
-        const x = 200 + i * 200;
-        const isActive = modifierMode === mode;
-        const color = isActive ? modeColors[mode] : '#333';
-        const btn = scene.add.text(x, 75, modeLabels[mode], {
-            fontSize: '18px', fill: isActive ? '#fff' : '#888', fontStyle: 'bold',
-            backgroundColor: color, padding: { x: 16, y: 8 }
-        }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
-        btn.setInteractive({ useHandCursor: true });
-        btn.on('pointerup', function() {
-            setModifierMode(mode);
-            clearMenuObjects();
-            showModifierScreen(scene);
-        });
-        menuObjects.push(btn);
+    const T = UI.theme;
+    const CX = VIEW_W / 2;
+    const s = UI.screen(scene, {
+        id: 'modifiers', depth: T.depth.menu, backdrop: 'solid',
+        onBack: () => s.close(() => { clearMenuObjects(); showMainMenu(scene); }),
+        // Down from the mode tabs goes to the first switch; Left / Right move
+        // between the two panels on the same row
+        onKey: (event) => {
+            const f = s.focused;
+            if (!f) return false;
+            if (event.key === 'ArrowDown' && tabs && f === tabs.record) {
+                s.setFocus(colToggles[modifierMode === 'hardcore' ? 1 : 0][0]);
+                return true;
+            }
+            if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+                for (let c = 0; c < 2; c++) {
+                    const idx = colToggles[c].findIndex(t => t.record === f);
+                    if (idx === -1) continue;
+                    const other = colToggles[1 - c];
+                    s.setFocus(other[Math.min(idx, other.length - 1)]);
+                    return true;
+                }
+            }
+            return false;
+        }
     });
+    const colToggles = [[], []];
+    let tabs = null;
 
-    // Current mode description
-    var modeDesc = '';
-    if (modifierMode === 'normal') modeDesc = 'No modifiers active. Standard gameplay.';
-    else if (modifierMode === 'assist') modeDesc = 'Select assist options to make the game easier.';
-    else modeDesc = 'Select hardcore options for an extra challenge.';
+    s.title(CX, 42, 'DIFFICULTY MODIFIERS', { ribbon: true });
 
-    const descText = scene.add.text(400, 110, modeDesc, {
-        fontSize: '13px', fill: '#aaa'
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
-    menuObjects.push(descText);
+    // Mode selector: the active mode is the highlighted tab
+    const modes = ['normal', 'assist', 'hardcore'];
+    const modeLabels = { normal: 'NORMAL', assist: 'ASSIST', hardcore: 'HARDCORE' };
+    const modeDescs = {
+        normal: 'No modifiers active. Standard gameplay.',
+        assist: 'Select assist options to make the game easier.',
+        hardcore: 'Select hardcore options for an extra challenge.'
+    };
+    const descText = s.label(CX, 136, modeDescs[modifierMode] || modeDescs.normal, { style: 'small' });
+    tabs = s.tabs(CX, 98, modes.map(m => modeLabels[m]), Math.max(0, modes.indexOf(modifierMode)), (i) => {
+        setModifierMode(modes[i]);
+        descText.setText(modeDescs[modifierMode]);
+    }, { default: true });
 
-    // Two columns
-    var startY = 150;
-    var leftX = 200;
-    var rightX = 600;
-
-    // Assist column header
-    var assistHeader = scene.add.text(leftX, startY, 'ASSIST', {
-        fontSize: '20px', fill: '#0f0', fontStyle: 'bold'
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
-    menuObjects.push(assistHeader);
-
-    // Hardcore column header
-    var hardcoreHeader = scene.add.text(rightX, startY, 'HARDCORE', {
-        fontSize: '20px', fill: '#f44', fontStyle: 'bold'
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
-    menuObjects.push(hardcoreHeader);
-
-    // Assist modifiers
-    var ay = startY + 40;
-    for (var key in ASSIST_MODIFIERS) {
-        var mod = ASSIST_MODIFIERS[key];
-        var active = activeModifiers.assist.indexOf(key) !== -1;
-        var checkmark = active ? '[X] ' : '[ ] ';
-        var modKey = key; // closure capture
-
-        (function(k, yPos) {
-            var label = scene.add.text(leftX, yPos, checkmark + mod.name, {
-                fontSize: '15px', fill: active ? '#0f0' : '#aaa', fontStyle: active ? 'bold' : 'normal'
-            }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
-            label.setInteractive({ useHandCursor: true });
-            label.on('pointerup', function() {
-                toggleModifier('assist', k);
-                clearMenuObjects();
-                showModifierScreen(scene);
-            });
-            menuObjects.push(label);
-
-            var desc = scene.add.text(leftX, yPos + 18, mod.desc, {
-                fontSize: '11px', fill: '#666'
-            }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
-            menuObjects.push(desc);
-        })(key, ay);
-
-        ay += 50;
-    }
-
-    // Hardcore modifiers
-    var hy = startY + 40;
-    for (var hkey in HARDCORE_MODIFIERS) {
-        var hmod = HARDCORE_MODIFIERS[hkey];
-        var hactive = activeModifiers.hardcore.indexOf(hkey) !== -1;
-        var hcheckmark = hactive ? '[X] ' : '[ ] ';
-
-        (function(k, yPos) {
-            var label = scene.add.text(rightX, yPos, hcheckmark + hmod.name, {
-                fontSize: '15px', fill: hactive ? '#f44' : '#aaa', fontStyle: hactive ? 'bold' : 'normal'
-            }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
-            label.setInteractive({ useHandCursor: true });
-            label.on('pointerup', function() {
-                toggleModifier('hardcore', k);
-                clearMenuObjects();
-                showModifierScreen(scene);
-            });
-            menuObjects.push(label);
-
-            var desc = scene.add.text(rightX, yPos + 18, hmod.desc, {
-                fontSize: '11px', fill: '#666'
-            }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
-            menuObjects.push(desc);
-        })(hkey, hy);
-
-        hy += 50;
-    }
+    // Two panels; each modifier is a switch with its description under it
+    const PW = 470, ROW = 60, TW = PW - 40;
+    const panelTop = 160, firstY = panelTop + 64;
+    const rows = Math.max(Object.keys(ASSIST_MODIFIERS).length, Object.keys(HARDCORE_MODIFIERS).length);
+    const panelH = 64 + rows * ROW - 8;
+    const columns = [
+        { mode: 'assist', header: 'ASSIST', accent: 'go', x: CX - 255, mods: ASSIST_MODIFIERS },
+        { mode: 'hardcore', header: 'HARDCORE', accent: 'danger', x: CX + 255, mods: HARDCORE_MODIFIERS }
+    ];
+    columns.forEach((col, c) => {
+        s.panel(col.x, panelTop + panelH / 2, PW, panelH, { header: col.header, accent: col.accent });
+        Object.keys(col.mods).forEach((key, i) => {
+            const mod = col.mods[key];
+            const y = firstY + i * ROW;
+            const on = activeModifiers[col.mode].indexOf(key) !== -1;
+            colToggles[c].push(s.toggle(col.x, y, mod.name, on, () => toggleModifier(col.mode, key), { width: TW }));
+            s.label(col.x - TW / 2 + 16, y + 29, mod.desc, { style: 'small', align: 'left' });
+        });
+    });
 
     // Hardcore completion status
     if (isHardcoreComplete()) {
-        var completeText = scene.add.text(rightX, hy + 10, 'ALL HARDCORE COMPLETE!', {
-            fontSize: '14px', fill: '#ffd700', fontStyle: 'bold'
-        }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
-        menuObjects.push(completeText);
+        s.label(columns[1].x, panelTop + panelH + 18, 'ALL HARDCORE COMPLETE!', { style: 'body', color: 'gold', outline: true });
     }
 
-    // Back button
-    createMenuButton(scene, 400, 550, 'BACK TO MENU', '#666', '#888', function() {
-        clearMenuObjects();
-        showMainMenu(scene);
-    });
+    s.button(CX, 541, 'Back', { role: 'neutral', size: 'sm', icon: 'back', onClick: () => s.onBack() });
+    s.hintBar([['←↑↓→', 'Move'], ['←→', 'Mode'], ['ENTER', 'Toggle'], ['ESC', 'Back']]);
+    s.open();
+    menuObjects.push({ destroy: () => s.destroy() });
 }
 
 function isHardcoreComplete() {
