@@ -410,11 +410,15 @@ function _destroyHatObjects() {
 }
 
 // ========================
-// Cosmetic Selection Screen
+// Cosmetic Selection Screen (the shop), built with the menu kit (ui.js)
 // ========================
 
 let _cosmeticScreenActive = false;
 let _cosmeticActiveTab = 'colors';
+let _cosmeticScreen = null;          // the open kit screen, or null
+
+const _COSMETIC_TABS = ['colors', 'trails', 'hats'];
+const _COSMETIC_TAB_LABELS = ['Colors', 'Trails', 'Hats'];
 
 function showCosmeticScreen(scene) {
     if (!cosmeticData) initCosmetics();
@@ -424,205 +428,232 @@ function showCosmeticScreen(scene) {
     _renderCosmeticScreen(scene);
 }
 
+// Shows the tab named by _cosmeticActiveTab. With the shop already open it
+// only swaps the item grid (cross-fade); otherwise it builds the screen.
 function _renderCosmeticScreen(scene) {
+    if (!cosmeticData) initCosmetics();
+    const tabIndex = Math.max(0, _COSMETIC_TABS.indexOf(_cosmeticActiveTab));
+    const open = _cosmeticScreen;
+    if (open && (open.state === 'new' || open.state === 'opening' || open.state === 'open')) {
+        open._cosmeticTabs.setActive(tabIndex);
+        open.rebuild(() => _buildCosmeticGrid(scene, open));
+        return;
+    }
+
     clearMenuObjects();
-
-    // Background overlay
-    const bg = scene.add.rectangle(400, 300, 800, 600, 0x000000, 0.92);
-    bg.setScrollFactor(0).setDepth(2000).setInteractive();
-    menuObjects.push(bg);
-
-    // Title
-    const title = scene.add.text(400, 30, 'COSMETICS', {
-        fontSize: '32px', fill: '#ffdd00', fontStyle: 'bold',
-        stroke: '#000', strokeThickness: 3
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
-    menuObjects.push(title);
-
-    // Wallet balance — this screen doubles as the shop. Kept on the left
-    // because the PAUSE button sits at depth 2100 over the top-right.
-    if (typeof walletCoins !== 'undefined') {
-        const wallet = scene.add.text(25, 30, '● ' + walletCoins, {
-            fontSize: '20px', fill: '#ffcc33', fontStyle: 'bold'
-        }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(2002);
-        menuObjects.push(wallet);
-    }
-
-    // Tab buttons
-    const tabs = ['colors', 'trails', 'hats'];
-    const tabLabels = ['Colors', 'Trails', 'Hats'];
-
-    for (let i = 0; i < tabs.length; i++) {
-        const tx = 200 + i * 200;
-        const isActive = _cosmeticActiveTab === tabs[i];
-        const tabBg = scene.add.rectangle(tx, 75, 150, 32, isActive ? 0x446688 : 0x222222);
-        tabBg.setStrokeStyle(2, isActive ? 0x88bbee : 0x444444);
-        tabBg.setScrollFactor(0).setDepth(2001);
-        tabBg.setInteractive({ useHandCursor: true });
-        const tabIdx = i;
-        tabBg.on('pointerup', function () {
-            _cosmeticActiveTab = tabs[tabIdx];
-            _renderCosmeticScreen(scene);
-        });
-        menuObjects.push(tabBg);
-
-        const tabText = scene.add.text(tx, 75, tabLabels[i], {
-            fontSize: '16px', fill: isActive ? '#fff' : '#888', fontStyle: isActive ? 'bold' : 'normal'
-        }).setOrigin(0.5).setScrollFactor(0).setDepth(2002);
-        menuObjects.push(tabText);
-    }
-
-    // Render items for active tab
-    const items = COSMETIC_ITEMS[_cosmeticActiveTab];
-    const keys = Object.keys(items);
-    const equipped = getEquippedCosmetics();
-    const equippedKey = _cosmeticActiveTab === 'colors' ? 'color' : _cosmeticActiveTab === 'trails' ? 'trail' : 'hat';
-    const equippedId = equipped[equippedKey];
-
-    // Grid layout - 2 columns
-    const colWidth = 340;
-    const rowHeight = 65;
-    const startX = 140;
-    const startY = 120;
-
-    for (let i = 0; i < keys.length; i++) {
-        const id = keys[i];
-        const item = items[id];
-        const col = i % 2;
-        const row = Math.floor(i / 2);
-        const cx = startX + col * colWidth;
-        const cy = startY + row * rowHeight;
-
-        const unlocked = isCosmeticUnlocked(_cosmeticActiveTab, id);
-        const isEquipped = equippedId === id;
-
-        // Item background box
-        const boxColor = unlocked ? (isEquipped ? 0x335577 : 0x1a2a3a) : 0x1a1a1a;
-        const box = scene.add.rectangle(cx + 130, cy, 300, 52, boxColor);
-        box.setStrokeStyle(2, isEquipped ? 0x44aaff : (unlocked ? 0x334455 : 0x333333));
-        box.setScrollFactor(0).setDepth(2001);
-        menuObjects.push(box);
-
-        // Color preview swatch (for colors tab)
-        if (_cosmeticActiveTab === 'colors' && id !== 'rainbow') {
-            const swatch = scene.add.rectangle(cx, cy, 24, 24, item.color || 0x444444, unlocked ? 1 : 0.3);
-            swatch.setStrokeStyle(1, 0x666666);
-            swatch.setScrollFactor(0).setDepth(2002);
-            menuObjects.push(swatch);
-        } else if (_cosmeticActiveTab === 'colors' && id === 'rainbow') {
-            // Mini rainbow preview
-            for (let r = 0; r < RAINBOW_COLORS.length; r++) {
-                const rw = scene.add.rectangle(cx - 9 + r * 3, cy, 3, 24, RAINBOW_COLORS[r], unlocked ? 1 : 0.3);
-                rw.setScrollFactor(0).setDepth(2002);
-                menuObjects.push(rw);
-            }
-        } else if (_cosmeticActiveTab === 'trails' && item.colors && item.colors.length > 0) {
-            // Trail color preview
-            for (let t = 0; t < item.colors.length; t++) {
-                const tw = scene.add.rectangle(cx - 4 + t * 10, cy, 8, 8, item.colors[t], unlocked ? 1 : 0.3);
-                tw.setScrollFactor(0).setDepth(2002);
-                menuObjects.push(tw);
-            }
-        } else if (_cosmeticActiveTab === 'hats' && id !== 'none') {
-            // Simple hat icon
-            var hatIcon;
-            if (id === 'crown') {
-                hatIcon = scene.add.text(cx, cy, '\u265B', { fontSize: '18px', fill: unlocked ? '#ffd700' : '#555' });
-            } else if (id === 'tophat') {
-                hatIcon = scene.add.text(cx, cy, '\u2302', { fontSize: '18px', fill: unlocked ? '#ccc' : '#555' });
-            } else if (id === 'antenna') {
-                hatIcon = scene.add.text(cx, cy, '\u2022', { fontSize: '18px', fill: unlocked ? '#f00' : '#555' });
-            } else if (id === 'halo') {
-                hatIcon = scene.add.text(cx, cy, '\u25CB', { fontSize: '18px', fill: unlocked ? '#ffd700' : '#555' });
-            } else if (id === 'cap') {
-                hatIcon = scene.add.text(cx, cy, '\u25E0', { fontSize: '18px', fill: unlocked ? '#2266cc' : '#555' });
-            } else if (id === 'headphones') {
-                hatIcon = scene.add.text(cx, cy, '\u2229', { fontSize: '18px', fill: unlocked ? '#8844cc' : '#555' });
-            } else if (id === 'viking') {
-                hatIcon = scene.add.text(cx, cy, '\u16A6', { fontSize: '18px', fill: unlocked ? '#9aa3ad' : '#555' });
-            } else if (id === 'flame') {
-                hatIcon = scene.add.text(cx, cy, '\u25B2', { fontSize: '18px', fill: unlocked ? '#ff5511' : '#555' });
-            }
-            if (hatIcon) {
-                hatIcon.setOrigin(0.5).setScrollFactor(0).setDepth(2002);
-                menuObjects.push(hatIcon);
-            }
-        }
-
-        // Item name
-        const nameText = scene.add.text(cx + 30, cy - 10, item.name, {
-            fontSize: '16px', fill: unlocked ? '#fff' : '#666', fontStyle: isEquipped ? 'bold' : 'normal'
-        }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(2002);
-        menuObjects.push(nameText);
-
-        // Status line: equipped, price, unlock requirement, or "Click to equip"
-        const price = getCosmeticPrice(_cosmeticActiveTab, id);
-        const affordable = price !== null && typeof walletCoins !== 'undefined' && walletCoins >= price;
-        var statusStr = '';
-        var statusColor = '#888';
-        if (isEquipped) {
-            statusStr = 'Equipped';
-            statusColor = '#44aaff';
-        } else if (!unlocked && price !== null) {
-            statusStr = '● ' + price + (affordable ? '  — click to buy' : '  (need ' + (price - walletCoins) + ' more)');
-            statusColor = affordable ? '#ffcc33' : '#8a7a45';
-        } else if (!unlocked) {
-            statusStr = _getUnlockText(item.unlock);
-            statusColor = '#aa5555';
-        } else {
-            statusStr = 'Click to equip';
-            statusColor = '#6a6';
-        }
-        const statusText = scene.add.text(cx + 30, cy + 10, statusStr, {
-            fontSize: '12px', fill: statusColor
-        }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(2002);
-        menuObjects.push(statusText);
-
-        // Interaction
-        if (unlocked && !isEquipped) {
-            box.setInteractive({ useHandCursor: true });
-            const itemId = id;
-            const cat = _cosmeticActiveTab;
-            box.on('pointerover', function () { box.setFillStyle(0x2a4a6a); });
-            box.on('pointerout', function () { box.setFillStyle(boxColor); });
-            box.on('pointerup', function () {
-                equipCosmetic(cat, itemId);
-                _renderCosmeticScreen(scene);
-            });
-        } else if (!unlocked && price !== null) {
-            // For sale: buy it, then equip immediately so the purchase is felt
-            box.setInteractive({ useHandCursor: affordable });
-            const buyId = id;
-            const buyCat = _cosmeticActiveTab;
-            if (affordable) {
-                box.on('pointerover', function () { box.setFillStyle(0x3a3520); });
-                box.on('pointerout', function () { box.setFillStyle(boxColor); });
-            }
-            box.on('pointerup', function () {
-                const result = purchaseCosmetic(buyCat, buyId);
-                if (result === 'ok') {
-                    equipCosmetic(buyCat, buyId);
-                    if (typeof playSound === 'function') playSound('unlock');
-                    _renderCosmeticScreen(scene);
-                } else {
-                    _showLockedMessage(scene, 'Not enough coins — need ' + (price - walletCoins) + ' more');
-                }
-            });
-        } else if (!unlocked) {
-            box.setInteractive({ useHandCursor: false });
-            const lockText = _getUnlockText(item.unlock);
-            box.on('pointerup', function () {
-                _showLockedMessage(scene, lockText);
+    const T = UI.theme;
+    const s = UI.screen(scene, {
+        id: 'shop', depth: T.depth.menu, backdrop: 'solid',
+        onBack: () => {
+            _cosmeticScreenActive = false;
+            s.close(() => {
+                clearMenuObjects();
+                showMainMenu(scene);
             });
         }
-    }
-
-    // Close button
-    createMenuButton(scene, 400, 540, 'BACK TO MENU', '#666', '#888', function () {
-        _cosmeticScreenActive = false;
-        clearMenuObjects();
-        showMainMenu(scene);
     });
+    _cosmeticScreen = s;
+    _cosmeticScreenActive = true;
+
+    s.title(VIEW_W / 2, 44, 'SHOP', { ribbon: true });
+    // Wallet: this screen is the shop
+    s._cosmeticWallet = s.stat(24, 44, 'coin', typeof walletCoins !== 'undefined' ? walletCoins : 0,
+        { color: 'gold', align: 'left' });
+
+    s._cosmeticTabs = s.tabs(VIEW_W / 2, 108, _COSMETIC_TAB_LABELS, tabIndex, (i) => {
+        _cosmeticActiveTab = _COSMETIC_TABS[i];
+        _renderCosmeticScreen(scene);
+    }, { label: 'Colors / Trails / Hats', default: true });
+
+    s.rebuild(() => _buildCosmeticGrid(scene, s));
+
+    s.button(VIEW_W / 2, 522, 'Back to Menu', { role: 'neutral', size: 'md', icon: 'back', onClick: () => s.onBack() });
+    s.hintBar([['←↑↓→', 'Move'], ['←→', 'Tabs'], ['ENTER', 'Buy / Equip'], ['ESC', 'Back']]);
+    s.open();
+    menuObjects.push({ destroy: () => { s.destroy(); if (_cosmeticScreen === s) _cosmeticScreen = null; } });
+}
+
+// The item cards of the active tab, three columns. Each card keeps a
+// refresh() so a purchase or equip updates them in place (focus stays).
+function _buildCosmeticGrid(scene, s) {
+    const cat = _cosmeticActiveTab;
+    const items = COSMETIC_ITEMS[cat];
+    const keys = Object.keys(items);
+    const CW = 322, CH = 66, GAP_X = 14, PITCH_Y = 80, COLS = 3, TOP = 176;
+    const left = VIEW_W / 2 - (COLS * CW + (COLS - 1) * GAP_X) / 2 + CW / 2;
+    const cards = [];
+
+    keys.forEach((id, i) => {
+        const item = items[id];
+        const cx = left + (i % COLS) * (CW + GAP_X);
+        const cy = TOP + Math.floor(i / COLS) * PITCH_Y;
+        const card = s.card(cx, cy, CW, CH, {
+            label: item.name, layout: 'row',
+            onClick: () => _onCosmeticCard(scene, s, cat, id)
+        });
+        card.setEnabled(true);           // locked cards still answer (they explain why)
+
+        const px = -CW / 2 + 32, tx = -CW / 2 + 62;
+        _addCosmeticPreview(scene, card, cat, id, item, px);
+        card.labelText.setPosition(tx, -10);
+        const coin = UI.icon(scene, 'coin', 15);
+        coin.setPosition(tx + 7, 11);
+        const status = scene.add.text(tx, 11, '', {
+            fontFamily: UI.theme.font, fontSize: UI.theme.size.cardSub + 'px', fontStyle: 'bold',
+            color: UI.theme.text.dim, resolution: UI.theme.textResolution
+        }).setOrigin(0, 0.5);
+        card.add([coin, status]);
+
+        card._cosmeticRefresh = () => {
+            const st = _cosmeticCardStatus(cat, id, item);
+            card.setState(st.state);
+            card.setEnabled(true);       // setState('locked') switches the card off again
+            coin.setVisible(st.coin);
+            status.setX(st.coin ? tx + 18 : tx);
+            status.setText(st.text);
+            status.setColor(UI.theme.text[st.color] || st.color);
+        };
+        card._cosmeticRefresh();
+        cards.push(card);
+    });
+    s._cosmeticCards = cards;
+}
+
+// What a card shows: kit state, status line (as before) and its colour
+function _cosmeticCardStatus(cat, id, item) {
+    const equippedKey = cat === 'colors' ? 'color' : cat === 'trails' ? 'trail' : 'hat';
+    const isEquipped = getEquippedCosmetics()[equippedKey] === id;
+    const unlocked = isCosmeticUnlocked(cat, id);
+    const price = getCosmeticPrice(cat, id);
+    const wallet = typeof walletCoins !== 'undefined' ? walletCoins : 0;
+    const affordable = price !== null && typeof walletCoins !== 'undefined' && walletCoins >= price;
+    if (isEquipped) return { state: 'selected', text: 'Equipped', color: 'nav', coin: false };
+    if (!unlocked && price !== null) {
+        return {
+            state: affordable ? 'normal' : 'locked', coin: true,
+            text: price + (affordable ? '  — click to buy' : '  (need ' + (price - wallet) + ' more)'),
+            color: affordable ? 'gold' : 'dim'
+        };
+    }
+    if (!unlocked) return { state: 'locked', text: _getUnlockText(item.unlock), color: 'danger', coin: false };
+    return { state: 'owned', text: 'Click to equip', color: 'go', coin: false };
+}
+
+// Same outcomes as the old box clicks: equip, buy (then equip), or refuse
+function _onCosmeticCard(scene, s, cat, id) {
+    const item = COSMETIC_ITEMS[cat][id];
+    const equippedKey = cat === 'colors' ? 'color' : cat === 'trails' ? 'trail' : 'hat';
+    if (getEquippedCosmetics()[equippedKey] === id) return;
+    const unlocked = isCosmeticUnlocked(cat, id);
+    const price = getCosmeticPrice(cat, id);
+    if (unlocked) {
+        equipCosmetic(cat, id);
+        _refreshCosmeticScreen(s);
+    } else if (price !== null) {
+        const result = purchaseCosmetic(cat, id);
+        if (result === 'ok') {
+            equipCosmetic(cat, id);
+            if (typeof playSound === 'function') playSound('unlock');
+            _refreshCosmeticScreen(s);
+        } else {
+            _showLockedMessage(scene, 'Not enough coins — need ' + (price - walletCoins) + ' more');
+        }
+    } else {
+        _showLockedMessage(scene, _getUnlockText(item.unlock));
+    }
+}
+
+function _refreshCosmeticScreen(s) {
+    if (!s || s.state === 'closed') return;
+    if (s._cosmeticWallet && typeof walletCoins !== 'undefined') s._cosmeticWallet.setText(walletCoins);
+    (s._cosmeticCards || []).forEach(c => { if (c.active && c._cosmeticRefresh) c._cosmeticRefresh(); });
+}
+
+// Each item's own preview art, drawn into the card at local x = px
+function _addCosmeticPreview(scene, card, cat, id, item, px) {
+    const C = UI.theme.color;
+    if (cat === 'hats' && id === 'crown') {
+        const ic = UI.icon(scene, 'crown', 28);
+        ic.setPosition(px, 0);
+        card.add(ic);
+        return;
+    }
+    const g = scene.add.graphics();
+    g.setPosition(px, 0);
+    if (cat === 'colors' && id !== 'rainbow') {
+        g.fillStyle(C.ink, 1); g.fillRoundedRect(-15, -15, 30, 30, 7);
+        g.fillStyle(item.color, 1); g.fillRoundedRect(-13, -13, 26, 26, 5);
+        g.fillStyle(C.white, 0.25); g.fillRoundedRect(-10, -11, 20, 7, 3);
+    } else if (cat === 'colors') {
+        // mini rainbow stripes
+        g.fillStyle(C.ink, 1); g.fillRoundedRect(-16, -15, 32, 30, 7);
+        RAINBOW_COLORS.forEach((col, r) => { g.fillStyle(col, 1); g.fillRect(-14 + r * 4, -13, 4, 26); });
+    } else if (cat === 'trails') {
+        // trail colour dots
+        const n = item.colors.length;
+        item.colors.forEach((col, t) => {
+            const dx = (t - (n - 1) / 2) * 13;
+            g.fillStyle(C.ink, 1); g.fillCircle(dx, 0, 7);
+            g.fillStyle(col, 1); g.fillCircle(dx, 0, 5.5);
+        });
+    } else if (cat === 'hats') {
+        _drawHatPreview(g, id);
+        g.setScale(1.3);
+    }
+    card.add(g);
+}
+
+// Small code-drawn hats, the same shapes as drawPlayerHat, centred on 0,0
+function _drawHatPreview(g, id) {
+    if (id === 'tophat') {
+        g.fillStyle(0x111111, 1);
+        g.fillRect(-12, 6, 24, 4);
+        g.fillRect(-8, -10, 16, 16);
+        g.fillStyle(0x660000, 1);
+        g.fillRect(-8, 2, 16, 3);
+    } else if (id === 'antenna') {
+        g.fillStyle(0xaaaaaa, 1);
+        g.fillRect(-1, -4, 2, 14);
+        g.fillStyle(0xff0000, 1);
+        g.fillCircle(0, -6, 3);
+    } else if (id === 'halo') {
+        g.lineStyle(2, 0xffd700, 0.9);
+        g.strokeEllipse(0, 0, 22, 8);
+    } else if (id === 'cap') {
+        g.fillStyle(0x2266cc, 1);
+        g.fillEllipse(0, 2, 22, 14);
+        g.fillRect(-11, 2, 22, 4);
+        g.fillStyle(0x1a4fa0, 1);
+        g.fillRect(2, 4, 15, 3);
+        g.fillStyle(0x88bbff, 1);
+        g.fillCircle(0, -4, 2);
+    } else if (id === 'headphones') {
+        g.lineStyle(3, 0x333338, 1);
+        g.beginPath();
+        g.arc(0, -3, 12, Math.PI, 0, false);
+        g.strokePath();
+        g.fillStyle(0x8844cc, 1);
+        g.fillRoundedRect(-15, -5, 6, 11, 2);
+        g.fillRoundedRect(9, -5, 6, 11, 2);
+        g.fillStyle(0xbb77ff, 1);
+        g.fillRect(-14, -3, 2, 7);
+    } else if (id === 'viking') {
+        g.fillStyle(0x9aa3ad, 1);
+        g.fillEllipse(0, 3, 22, 15);
+        g.fillRect(-11, 3, 22, 3);
+        g.fillStyle(0x6f7883, 1);
+        g.fillRect(-2, -5, 4, 9);
+        g.fillStyle(0xf2e2c0, 1);
+        g.fillTriangle(-11, 2, -20, -6, -10, -4);
+        g.fillTriangle(11, 2, 20, -6, 10, -4);
+    } else if (id === 'flame') {
+        g.fillStyle(0xff5511, 1);
+        g.fillTriangle(-7, 10, 7, 10, 0, -10);
+        g.fillStyle(0xff9933, 1);
+        g.fillTriangle(-4, 10, 4, 10, 0, -4);
+        g.fillStyle(0xffe066, 1);
+        g.fillTriangle(-2, 10, 2, 10, 0, 2);
+    }
 }
 
 function _getUnlockText(unlock) {
@@ -638,13 +669,13 @@ function _getUnlockText(unlock) {
     return 'Locked';
 }
 
+// A short message above the Back button that floats up and fades out
 function _showLockedMessage(scene, text) {
-    var msg = scene.add.text(400, 480, text, {
-        fontSize: '14px', fill: '#ff6666', fontStyle: 'bold',
-        stroke: '#000', strokeThickness: 2
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(2010);
-    menuObjects.push(msg);
-
+    const s = _cosmeticScreen;
+    if (!s || s.state === 'closed' || s.state === 'closing') return;
+    const msg = s.label(VIEW_W / 2, 470, text, { style: 'body', color: 'danger', outline: true });
+    scene.tweens.killTweensOf(msg);       // drop the kit's late-entry tween
+    msg.setPosition(VIEW_W / 2, 470).setAlpha(1);
     scene.tweens.add({
         targets: msg,
         alpha: 0,

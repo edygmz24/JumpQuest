@@ -179,6 +179,10 @@ function _processNotificationQueue(scene) {
 }
 
 // --- Achievement Notification Banner ---
+// A kit toast (ui.js). Same cadence as before: about 400 ms in, 2.5 s held,
+// out, and only then the next queued unlock shows (one at a time).
+
+var _ACH_TOAST_IN = 400, _ACH_TOAST_HOLD = 2500, _ACH_TOAST_OUT = 400;
 
 function showAchievementNotification(scene, achievement) {
     // Play sound if available
@@ -186,59 +190,16 @@ function showAchievementNotification(scene, achievement) {
         playAchievementSound();
     }
 
-    // Banner background
-    var bannerWidth = 320;
-    var bannerHeight = 60;
-    var bannerX = 400;
-    var startY = -50;
-    var targetY = 30;
+    UI.toast(scene, {
+        icon: 'trophy',
+        title: 'Achievement Unlocked!',
+        body: achievement.name,
+        duration: _ACH_TOAST_IN + _ACH_TOAST_HOLD
+    });
 
-    var bg = scene.add.rectangle(bannerX, startY, bannerWidth, bannerHeight, 0x1a1a2e, 0.95);
-    bg.setScrollFactor(0).setDepth(2500);
-    bg.setStrokeStyle(2, 0xffd700);
-
-    // Icon
-    var iconText = scene.add.text(bannerX - bannerWidth / 2 + 15, startY, achievement.icon, {
-        fontSize: '28px'
-    }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(2501);
-
-    // "Achievement Unlocked!" label
-    var label = scene.add.text(bannerX - bannerWidth / 2 + 52, startY - 10, 'Achievement Unlocked!', {
-        fontSize: '11px', fill: '#ffd700', fontStyle: 'bold'
-    }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(2501);
-
-    // Achievement name
-    var nameText = scene.add.text(bannerX - bannerWidth / 2 + 52, startY + 10, achievement.name, {
-        fontSize: '16px', fill: '#ffffff', fontStyle: 'bold'
-    }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(2501);
-
-    var allObjects = [bg, iconText, label, nameText];
-
-    // Slide in
-    scene.tweens.add({
-        targets: allObjects,
-        y: function(target) { return target.y + (targetY - startY); },
-        duration: 400,
-        ease: 'Back.easeOut',
-        onComplete: function() {
-            // Hold, then slide out
-            scene.time.delayedCall(2500, function() {
-                scene.tweens.add({
-                    targets: allObjects,
-                    y: function(target) { return target.y - (targetY - startY); },
-                    alpha: 0,
-                    duration: 400,
-                    ease: 'Power2',
-                    onComplete: function() {
-                        allObjects.forEach(function(obj) {
-                            if (obj && obj.destroy) obj.destroy();
-                        });
-                        _achNotificationActive = false;
-                        _processNotificationQueue(scene);
-                    }
-                });
-            });
-        }
+    scene.time.delayedCall(_ACH_TOAST_IN + _ACH_TOAST_HOLD + _ACH_TOAST_OUT, function() {
+        _achNotificationActive = false;
+        _processNotificationQueue(scene);
     });
 }
 
@@ -469,7 +430,21 @@ function recordLevelCompletion(levelIndex) {
 }
 
 // --- Achievement Gallery ---
-// Creates an overlay showing all achievements. Uses menuObjects for cleanup.
+// A kit screen (ui.js) listing every achievement. Uses menuObjects for cleanup.
+
+// Kit icon shown for each achievement in the gallery (display only; the
+// emoji in ACHIEVEMENTS stay as data)
+var _ACH_GALLERY_ICONS = {
+    combo_starter: 'bolt', combo_king: 'crown', combo_master: 'bolt', flawless: 'star',
+    speed_demon: 'clock', untouchable: 'heart', air_master: 'play', dash_master: 'play',
+    wave_rider: 'infinity', wave_master: 'infinity', ground_control: 'gem', seismic: 'gem',
+    in_the_zone: 'sun', flow_state: 'bolt',
+    coin_collector: 'coin', midas_touch: 'coin', gold_hoarder: 'trophy', exterminator: 'star',
+    centurion: 'crown', determined: 'heart', never_give_up: 'heart', marathon_runner: 'clock',
+    first_steps: 'play', halfway_there: 'map', champion: 'trophy', star_collector: 'star',
+    perfectionist: 'crown',
+    wrong_way: 'back', patience: 'clock', ascetic: 'starEmpty', lucky_break: 'heart'
+};
 
 function showAchievementGallery(scene) {
     if (typeof menuObjects === 'undefined') return;
@@ -484,174 +459,37 @@ function showAchievementGallery(scene) {
     var unlockedCount = jqUnlockedAchievements.length;
     var totalCount = ACHIEVEMENTS.length;
 
-    // Dark background
-    var bg = scene.add.rectangle(400, 300, 800, 600, 0x000000, 0.92);
-    bg.setScrollFactor(0).setDepth(2000).setInteractive();
-    menuObjects.push(bg);
+    var s = UI.screen(scene, {
+        id: 'achievements', depth: UI.theme.depth.menu, backdrop: 'solid',
+        onBack: function() {
+            s.close(function() {
+                if (typeof clearMenuObjects === 'function') clearMenuObjects();
+                // Return to main menu
+                if (typeof showMainMenu === 'function') showMainMenu(scene);
+            });
+        }
+    });
 
-    // Title
-    var title = scene.add.text(400, 35, 'ACHIEVEMENTS', {
-        fontSize: '32px', fill: '#ffd700', fontStyle: 'bold',
-        stroke: '#000', strokeThickness: 3
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
-    menuObjects.push(title);
+    s.title(VIEW_W / 2, 44, 'ACHIEVEMENTS', { ribbon: true });
+    s.stat(24, 44, 'trophy', unlockedCount + ' / ' + totalCount + ' unlocked', { color: 'gold', align: 'left' });
 
-    // Count
-    var countText = scene.add.text(400, 68, unlockedCount + '/' + totalCount + ' Achievements Unlocked', {
-        fontSize: '14px', fill: '#aaa'
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
-    menuObjects.push(countText);
-
-    // Scrollable list area
-    var listStartY = 95;
-    var itemHeight = 52;
-    var visibleItems = 9;
-    var scrollOffset = 0;
-    var maxScroll = Math.max(0, ACHIEVEMENTS.length - visibleItems);
-
-    // Clipping mask area
-    var maskY = listStartY;
-    var maskHeight = visibleItems * itemHeight;
-
-    // Create a container for the list items
-    var listItems = [];
-
-    function renderList() {
-        // Destroy old list items
-        listItems.forEach(function(items) {
-            items.forEach(function(obj) { if (obj && obj.destroy) obj.destroy(); });
+    // Every achievement in a scrolling list: mouse wheel, Up / Down, scroll bar
+    var list = s.scrollList(VIEW_W / 2, 294, 760, 404, { rowHeight: 58, gap: 8 });
+    ACHIEVEMENTS.forEach(function(ach, i) {
+        var isUnlocked = jqUnlockedAchievements.indexOf(ach.id) !== -1;
+        var isHidden = ach.hidden && !isUnlocked;
+        var row = list.addRow(isHidden ? '???' : ach.name, {
+            sub: isHidden ? 'Hidden achievement' : ach.desc,
+            icon: isHidden ? 'lock' : (_ACH_GALLERY_ICONS[ach.id] || 'trophy'),
+            iconColor: isHidden ? UI.theme.color.iconDisabled : undefined,
+            state: isUnlocked ? 'owned' : 'locked',
+            default: i === 0
         });
-        listItems = [];
-
-        for (var i = 0; i < visibleItems && (i + scrollOffset) < ACHIEVEMENTS.length; i++) {
-            var achIndex = i + scrollOffset;
-            var ach = ACHIEVEMENTS[achIndex];
-            var isUnlocked = jqUnlockedAchievements.indexOf(ach.id) !== -1;
-            var isHidden = ach.hidden && !isUnlocked;
-            var yPos = maskY + i * itemHeight + itemHeight / 2;
-
-            var rowItems = [];
-
-            // Row background (alternating)
-            var rowBg = scene.add.rectangle(400, yPos, 700, itemHeight - 4,
-                achIndex % 2 === 0 ? 0x1a1a2e : 0x151528, isUnlocked ? 0.9 : 0.5);
-            rowBg.setScrollFactor(0).setDepth(2001);
-            if (isUnlocked) {
-                rowBg.setStrokeStyle(1, 0x333355);
-            }
-            rowItems.push(rowBg);
-            menuObjects.push(rowBg);
-
-            // Icon
-            var iconStr = isHidden ? '\u{1F512}' : ach.icon;
-            var icon = scene.add.text(70, yPos, iconStr, {
-                fontSize: '24px'
-            }).setOrigin(0.5).setScrollFactor(0).setDepth(2002);
-            rowItems.push(icon);
-            menuObjects.push(icon);
-
-            // Name
-            var displayName = isHidden ? '???' : ach.name;
-            var nameColor = isUnlocked ? '#ffd700' : '#666';
-            var achName = scene.add.text(100, yPos - 10, displayName, {
-                fontSize: '15px', fill: nameColor, fontStyle: isUnlocked ? 'bold' : 'normal'
-            }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(2002);
-            rowItems.push(achName);
-            menuObjects.push(achName);
-
-            // Description
-            var displayDesc = isHidden ? 'Hidden achievement' : ach.desc;
-            var descColor = isUnlocked ? '#ccc' : '#555';
-            var achDesc = scene.add.text(100, yPos + 10, displayDesc, {
-                fontSize: '12px', fill: descColor
-            }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(2002);
-            rowItems.push(achDesc);
-            menuObjects.push(achDesc);
-
-            // Unlocked indicator
-            if (isUnlocked) {
-                var check = scene.add.text(720, yPos, '\u2713', {
-                    fontSize: '20px', fill: '#00ff00', fontStyle: 'bold'
-                }).setOrigin(0.5).setScrollFactor(0).setDepth(2002);
-                rowItems.push(check);
-                menuObjects.push(check);
-            }
-
-            listItems.push(rowItems);
-        }
-    }
-
-    renderList();
-
-    // Scroll indicators
-    var upArrow = scene.add.text(400, maskY - 8, '\u25B2  Scroll Up', {
-        fontSize: '12px', fill: '#666'
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(2002);
-    menuObjects.push(upArrow);
-
-    var downArrow = scene.add.text(400, maskY + maskHeight + 8, '\u25BC  Scroll Down', {
-        fontSize: '12px', fill: '#666'
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(2002);
-    menuObjects.push(downArrow);
-
-    function updateScrollIndicators() {
-        upArrow.setAlpha(scrollOffset > 0 ? 1 : 0.2);
-        downArrow.setAlpha(scrollOffset < maxScroll ? 1 : 0.2);
-    }
-    updateScrollIndicators();
-
-    // Scroll up button
-    upArrow.setInteractive({ useHandCursor: true });
-    upArrow.on('pointerup', function() {
-        if (scrollOffset > 0) {
-            scrollOffset--;
-            renderList();
-            updateScrollIndicators();
-        }
+        if (isUnlocked && row.labelText) row.labelText.setColor(UI.theme.text.gold);
     });
 
-    // Scroll down button
-    downArrow.setInteractive({ useHandCursor: true });
-    downArrow.on('pointerup', function() {
-        if (scrollOffset < maxScroll) {
-            scrollOffset++;
-            renderList();
-            updateScrollIndicators();
-        }
-    });
-
-    // Mouse wheel scrolling
-    var wheelHandler = function(pointer, gameObjects, deltaX, deltaY) {
-        if (deltaY > 0 && scrollOffset < maxScroll) {
-            scrollOffset++;
-            renderList();
-            updateScrollIndicators();
-        } else if (deltaY < 0 && scrollOffset > 0) {
-            scrollOffset--;
-            renderList();
-            updateScrollIndicators();
-        }
-    };
-    scene.input.on('wheel', wheelHandler);
-
-    // Close button
-    var closeBtn = scene.add.text(400, 565, 'CLOSE', {
-        fontSize: '20px', fill: '#fff', backgroundColor: '#c00',
-        padding: { x: 30, y: 8 }
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(2002);
-    closeBtn.setInteractive({ useHandCursor: true });
-    closeBtn.on('pointerover', function() { closeBtn.setStyle({ backgroundColor: '#f00' }); });
-    closeBtn.on('pointerout', function() { closeBtn.setStyle({ backgroundColor: '#c00' }); });
-    closeBtn.on('pointerup', function() {
-        scene.input.off('wheel', wheelHandler);
-        // Clean up all gallery objects via menuObjects
-        if (typeof clearMenuObjects === 'function') {
-            clearMenuObjects();
-        }
-        // Return to main menu
-        if (typeof showMainMenu === 'function') {
-            showMainMenu(scene);
-        }
-    });
-    menuObjects.push(closeBtn);
+    s.button(VIEW_W / 2, 534, 'Close', { role: 'neutral', size: 'md', icon: 'close', onClick: function() { s.onBack(); } });
+    s.hintBar([['\u2191\u2193', 'Scroll'], ['WHEEL', 'Scroll'], ['ESC', 'Back']]);
+    s.open();
+    menuObjects.push({ destroy: function() { s.destroy(); } });
 }
