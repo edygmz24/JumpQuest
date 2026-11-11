@@ -1,6 +1,7 @@
 # Menu revamp plan
 
-Status: **waiting for the user's OK. Nothing is built yet.**
+Status: approved by the user (all five decisions). Branch `claude/menu-revamp`.
+Part 0 done; part 1 in progress.
 
 Goal: every menu looks and feels like one polished modern platformer. One
 shared style built once, smooth motion, keyboard navigation everywhere, touch
@@ -100,9 +101,11 @@ Loaded after `audio.js`, before `menu.js`. Everything it creates is `wideUI`.
     then focus returns to where it was
   - input is ignored during the enter animation so a held key cannot
     double-activate
-- Compatibility: `createMenuButton` and `clearMenuObjects` keep working
-  (re-pointed at the kit), so screens not yet converted still run while the
-  work is in progress.
+- Compatibility: `createMenuButton` and `clearMenuObjects` are left as they
+  are, so screens not yet converted still run untouched. A converted screen
+  pushes `{ destroy: () => screen.destroy() }` into `menuObjects` (the world
+  map already does this for its key handler), so `clearMenuObjects` closes it
+  too. `createMenuButton` is removed in part 6 once nothing uses it.
 - `?uikit=1` opens a style sheet screen showing every component, used to
   review part 1 on its own.
 - game.js hooks (done in part 1, small): the Esc / R / jump handlers ask the
@@ -117,7 +120,7 @@ Order: 0, then 1, then 2-5 (in parallel where files don't overlap), then 6.
 | # | Part | Files | Runs |
 |---|------|-------|------|
 | 0 | Screenshot + smoke script, "before" shots of every menu | `tools/shoot-menus.js` (new) | first |
-| 1 | Shared kit, style sheet screen, game.js hooks | `ui.js` (new), `index.html`, `menu.js` (`createMenuButton` / `clearMenuObjects` only), `game.js` (key handlers, `create()` reset) | after 0, alone |
+| 1 | Shared kit, style sheet screen, game.js hooks | `ui.js` (new), `index.html`, `game.js` (key handlers, `create()` reset, `?uikit=1`), `tools/shoot-menus.js` (style sheet shot + keyboard check) | after 0, alone |
 | 2 | Main menu, world map | `menu.js`, `worldmap.js` | after 1 |
 | 3a | Pause, settings, controls popup, game over | `game.js` | after 1 |
 | 3b | Level results, credits | `game.js` | after 3a (same file) |
@@ -185,7 +188,7 @@ the user is told.
 
 | # | Part | Attempts | Finished by |
 |---|------|----------|-------------|
-| 0 | Screenshot script + before shots | | |
+| 0 | Screenshot script + before shots | 1 | implementer (Opus) |
 | 1 | Shared kit | | |
 | 2 | Main menu, world map | | |
 | 3a | Pause, settings, controls, game over | | |
