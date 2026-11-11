@@ -1,7 +1,7 @@
 # Menu revamp plan
 
 Status: approved by the user (all five decisions). Branch `claude/menu-revamp`.
-Parts 0-5 done. Part 6 (consistency pass, PR) in progress, main session.
+All parts done; pull request opened.
 
 Goal: every menu looks and feels like one polished modern platformer. One
 shared style built once, smooth motion, keyboard navigation everywhere, touch
@@ -105,7 +105,7 @@ Loaded after `audio.js`, before `menu.js`. Everything it creates is `wideUI`.
   are, so screens not yet converted still run untouched. A converted screen
   pushes `{ destroy: () => screen.destroy() }` into `menuObjects` (the world
   map already does this for its key handler), so `clearMenuObjects` closes it
-  too. `createMenuButton` is removed in part 6 once nothing uses it.
+  too. `createMenuButton` was removed in part 6.
 - `?uikit=1` opens a style sheet screen showing every component, used to
   review part 1 on its own.
 - game.js hooks (done in part 1, small): the Esc / R / jump handlers ask the
@@ -270,4 +270,16 @@ the user is told.
 | 4a | Shop, achievements | 1 | implementer (Opus), cut off by the usage limit while testing; finished by the main session |
 | 4b | Modifiers, speedrun, daily, endless | 1 | implementer (Opus) |
 | 5 | Story, move cards, bonus results, tutorial hint | 1 | implementer (Opus); toast fixes in the kit by the main session |
-| 6 | Consistency pass + PR | | |
+| 6 | Consistency pass + PR | 1 | main session |
+
+## Left for later
+
+- Arrow-key navigation picks the nearest item by a score that can prefer a
+  far item in line over a near one off to the side; the modifiers screen
+  works around it with its own `onKey`. Worth tuning in `ui.js`.
+- The map and brush icons are the weakest at small sizes.
+- Three daily modifiers (tiny platforms, floaty jump, big player) still use
+  emoji icons.
+- Real gamepad support (the focus system has one place to add it).
+- Under 'solid' screens the level is still drawn behind; hiding it would
+  save frame time on slow devices.

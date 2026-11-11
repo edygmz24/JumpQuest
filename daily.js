@@ -322,11 +322,7 @@ function getDailyStreakReward(streak) {
 }
 
 // --- Daily Challenge Screen Overlay ---
-// Integration: In menu.js showMainMenu(), add a "DAILY CHALLENGE" button:
-//   createMenuButton(scene, 400, 490, 'DAILY', '#a06', '#c28', () => {
-//       clearMenuObjects();
-//       if (typeof showDailyChallengeScreen === 'function') showDailyChallengeScreen(scene);
-//   });
+// Opened from the main menu's Daily button (menu.js)
 function showDailyChallengeScreen(scene) {
     if (typeof clearMenuObjects === 'function') clearMenuObjects();
     if (typeof showingMenu !== 'undefined') showingMenu = false;

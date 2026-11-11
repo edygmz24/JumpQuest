@@ -540,6 +540,16 @@ const UI = (() => {
 
     function topScreen() { return stack.length ? stack[stack.length - 1] : null; }
 
+    // Only the top-most hint bar shows: the bars are see-through, so a
+    // popup's hints would otherwise mix with the covered screen's
+    function syncHintBars() {
+        let covered = false;
+        for (let i = stack.length - 1; i >= 0; i--) {
+            const bar = stack[i]._hintBar;
+            if (bar && bar.active) { bar.setVisible(!covered); covered = true; }
+        }
+    }
+
     function syncUiCameraInput() {
         // The legacy 800px menu camera sits above the main camera, so it would
         // win clicks over a kit screen. Turn its input off under a modal screen.
@@ -550,6 +560,7 @@ const UI = (() => {
             // (speedrun timer, boss bar) would sit on top of a kit screen
             uiCamera.setVisible(!covered);
         }
+        syncHintBars();
     }
 
     function onKeyDown(event) {
@@ -1299,7 +1310,10 @@ const UI = (() => {
                 px += w + gap;
                 c.add(p);
             });
-            return this._adopt(c, 5);
+            this._hintBar = c;
+            const out = this._adopt(c, 5);
+            syncHintBars();
+            return out;
         }
 
         button(x, y, text, o) {

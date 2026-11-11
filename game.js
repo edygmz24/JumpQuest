@@ -87,18 +87,6 @@ function isKitScreenLive(s) {
     return !!s && s.state !== 'closed' && s.state !== 'closing';
 }
 
-// Hint bar for a popup stacked on another kit screen: the kit's bar is
-// see-through, so an opaque strip keeps the covered screen's hints from
-// showing through it (the kit has no option for this yet)
-function addStackedHintBar(s, items) {
-    // positioned like the kit's bar (centre of the bottom 36px) so the enter animation moves both alike
-    const g = s.scene.add.graphics({ x: VIEW_W / 2, y: VIEW_H - 18 });
-    g.fillStyle(UI.theme.color.ink, 1);
-    g.fillRect(-VIEW_W / 2, -18, VIEW_W, 36);
-    s.add(g, 5);
-    s.hintBar(items);
-}
-
 function closeControlsPopup() {
     const s = controlsPopupScreen;
     controlsPopupScreen = null;
@@ -114,7 +102,6 @@ function toggleControlsPopup(scene) {
 
     const T = UI.theme;
     const cx = VIEW_W / 2, cy = 300, pw = 380, ph = 320;
-    const stacked = UI.isOpen();
     const s = UI.screen(scene, {
         id: 'controls-popup', depth: 2200, backdrop: 'dim', enter: 'pop',
         onBack: () => closeControlsPopup()
@@ -160,7 +147,7 @@ function toggleControlsPopup(scene) {
         });
     });
     const hints = [['ENTER', 'Close'], ['ESC', 'Close']];
-    if (stacked) addStackedHintBar(s, hints); else s.hintBar(hints);
+    s.hintBar(hints);
     s.open();
     controlsPopupScreen = s;
 }
@@ -3531,7 +3518,7 @@ function showPauseSettings(scene) {
         onClick: () => closePauseSettings()
     });
 
-    addStackedHintBar(s, [['←↑↓→', 'Move'], ['←→', 'Volume'], ['ENTER', 'Select'], ['ESC', 'Back']]);
+    s.hintBar([['←↑↓→', 'Move'], ['←→', 'Volume'], ['ENTER', 'Select'], ['ESC', 'Back']]);
     s.open();
     pauseSettingsScreen = s;
 }

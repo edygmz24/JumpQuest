@@ -214,19 +214,6 @@ function showMainMenu(scene) {
     menuObjects.push({ destroy: () => s.destroy() });
 }
 
-function createMenuButton(scene, x, y, text, bgColor, hoverColor, callback) {
-    const btn = scene.add.text(x, y, text, {
-        fontSize: '24px', fill: '#fff', fontStyle: 'bold',
-        backgroundColor: bgColor, padding: { x: 30, y: 12 }
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
-    btn.setInteractive({ useHandCursor: true });
-    btn.on('pointerover', () => { btn.setStyle({ backgroundColor: hoverColor }); if (typeof playSound === 'function') playSound('menuHover'); });
-    btn.on('pointerout', () => btn.setStyle({ backgroundColor: bgColor }));
-    btn.on('pointerup', () => { if (typeof playSound === 'function') playSound('menuClick'); callback(); });
-    menuObjects.push(btn);
-    return btn;
-}
-
 // ========================
 // Local Leaderboard System
 // ========================
