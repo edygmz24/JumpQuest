@@ -39,32 +39,13 @@ function checkTutorialTriggers(scene, playerX, levelIndex) {
 }
 
 function showTutorialHint(scene, text) {
-    // Centred under the HUD row; long hints wrap rather than run off-screen
-    const hint = scene.add.text(400, 150, text, {
-        fontSize: '17px', fill: '#fff', fontStyle: 'bold', align: 'center',
-        backgroundColor: 'rgba(0,0,0,0.7)', padding: { x: 16, y: 10 },
-        stroke: '#ffd700', strokeThickness: 1, wordWrap: { width: 620 }
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(1200).setAlpha(0);
-
-    activeTutorialHint = hint;
-
-    scene.tweens.add({
-        targets: hint,
-        alpha: 1,
-        duration: 300,
-        ease: 'Power2',
-        onComplete: () => {
-            scene.tweens.add({
-                targets: hint,
-                alpha: 0,
-                duration: 400,
-                delay: 3500,
-                ease: 'Power2',
-                onComplete: () => {
-                    hint.destroy();
-                    activeTutorialHint = null;
-                }
-            });
-        }
+    // A non-blocking kit toast at the top; long hints wrap inside it.
+    // On screen for about as long as before (fade in, 3.5 s, fade out).
+    const duration = 3800;
+    const hint = UI.toast(scene, {
+        icon: 'star', title: 'TIP', body: text, position: 'top', belowHud: true, duration: duration,
+        // Free the slot for the next hint once this one has gone
+        onClose: () => { if (activeTutorialHint === hint) activeTutorialHint = null; }
     });
+    activeTutorialHint = hint;
 }

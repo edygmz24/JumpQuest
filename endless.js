@@ -376,71 +376,59 @@ function endEndlessMode(scene) {
         walletText.setText('● ' + getDisplayCoins());
     }
 
-    // Overlay background
-    const bg = scene.add.rectangle(400, 300, 800, 600, 0x000000, 0.85);
-    bg.setScrollFactor(0).setDepth(2000).setInteractive();
+    // The hit that ended the run shakes the camera; a kit screen must not move
+    const cam = scene.cameras.main;
+    if (cam && cam.shakeEffect && cam.shakeEffect.isRunning) cam.shakeEffect.reset();
 
-    // Title
-    const title = scene.add.text(400, 120, 'ENDLESS MODE OVER', {
-        fontSize: '40px', fill: '#ff4444', fontStyle: 'bold',
-        stroke: '#000', strokeThickness: 3
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
-
-    // Stats
-    const bestLabel = isNewBest ? ' NEW BEST!' : '';
-    const statsLines = [
-        'Distance: ' + endlessDistance + 'm' + bestLabel,
-        'Best: ' + endlessBest + 'm',
-        'Coins: ' + coinsCollected + (coinsBanked > 0 ? '  (+' + coinsBanked + ' banked)' : ''),
-        'Max Combo: ' + maxCombo + 'x'
-    ];
-    const statsText = scene.add.text(400, 250, statsLines.join('\n'), {
-        fontSize: '22px', fill: '#fff', align: 'center', lineSpacing: 8
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
-
-    // New best highlight
-    if (isNewBest) {
-        const newBestText = scene.add.text(400, 170, 'NEW RECORD!', {
-            fontSize: '24px', fill: '#ffd700', fontStyle: 'bold'
-        }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
-        // Pulse animation
-        scene.tweens.add({
-            targets: newBestText,
-            scaleX: 1.2, scaleY: 1.2,
-            duration: 500,
-            yoyo: true,
-            repeat: -1
-        });
-    }
-
-    // Try Again button
-    const retryBtn = scene.add.text(400, 400, 'TRY AGAIN', {
-        fontSize: '24px', fill: '#fff', fontStyle: 'bold',
-        backgroundColor: '#0a0', padding: { x: 30, y: 12 }
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
-    retryBtn.setInteractive({ useHandCursor: true });
-    retryBtn.on('pointerover', () => retryBtn.setStyle({ backgroundColor: '#0c0' }));
-    retryBtn.on('pointerout', () => retryBtn.setStyle({ backgroundColor: '#0a0' }));
-    retryBtn.on('pointerup', () => {
+    const T = UI.theme;
+    const CX = VIEW_W / 2;
+    const tryAgain = () => {
         endlessMode = true; // keep endless flag on for restart
         cleanupEndlessMode();
         scene.scene.restart();
-    });
-
-    // Main Menu button
-    const menuBtn = scene.add.text(400, 470, 'MAIN MENU', {
-        fontSize: '24px', fill: '#fff', fontStyle: 'bold',
-        backgroundColor: '#444', padding: { x: 30, y: 12 }
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
-    menuBtn.setInteractive({ useHandCursor: true });
-    menuBtn.on('pointerover', () => menuBtn.setStyle({ backgroundColor: '#666' }));
-    menuBtn.on('pointerout', () => menuBtn.setStyle({ backgroundColor: '#444' }));
-    menuBtn.on('pointerup', () => {
+    };
+    const mainMenu = () => {
         cleanupEndlessMode();
         endlessMode = false;
         showingMenu = true;
         scene.scene.restart();
+    };
+    const s = UI.screen(scene, { id: 'endless-results', depth: T.depth.menu, backdrop: 'dim', onBack: mainMenu });
+
+    s.title(CX, 82, 'ENDLESS MODE OVER', { ribbon: true });
+
+    // New best highlight
+    let badge = null;
+    if (isNewBest) badge = s.stat(CX, 142, 'trophy', 'NEW RECORD!', { color: 'gold', iconColor: T.color.gold });
+
+    // Stats, one label / value row each
+    const PW = 440, PT = 172, ROW = 36;
+    const statRows = [
+        ['infinity', 'Distance', endlessDistance + 'm' + (isNewBest ? '  NEW BEST!' : ''), isNewBest ? 'gold' : 'light'],
+        ['crown', 'Best', endlessBest + 'm', 'light'],
+        ['coin', 'Coins', coinsCollected + (coinsBanked > 0 ? '  (+' + coinsBanked + ' banked)' : ''), 'gold'],
+        ['bolt', 'Max Combo', maxCombo + 'x', 'light']
+    ];
+    const PH = 64 + statRows.length * ROW;
+    s.panel(CX, PT + PH / 2, PW, PH, { header: 'Run stats', accent: 'mode' });
+    statRows.forEach(([icon, label, value, color], i) => {
+        const y = PT + 70 + i * ROW;
+        s.icon(CX - PW / 2 + 36, y, icon, 20, icon === 'coin' || icon === 'crown' ? T.color.gold : undefined);
+        s.label(CX - PW / 2 + 58, y, label, { style: 'body', color: 'dim', align: 'left' });
+        s.label(CX + PW / 2 - 28, y, value, { style: 'body', color: color, align: 'right' });
     });
+
+    const by = PT + PH + 52;
+    s.button(CX, by, 'Try Again', { role: 'go', size: 'lg', icon: 'play', default: true, onClick: tryAgain });
+    s.button(CX, by + 68, 'Main Menu', { role: 'neutral', size: 'md', icon: 'back', onClick: mainMenu });
+    s.hintBar([['↑↓', 'Move'], ['ENTER', 'Select'], ['ESC', 'Main menu']]);
+    s.open();
+
+    // the record badge pops in once the screen is up
+    if (badge && T.motion) {
+        badge.setScale(0.3);
+        scene.tweens.add({ targets: badge, scaleX: 1, scaleY: 1, duration: T.time.bounce * 2, delay: T.time.enter, ease: 'Back.easeOut', easeParams: [2.5] });
+    }
 }
 
 // ========================

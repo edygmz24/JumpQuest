@@ -60,29 +60,19 @@ function showMoveIntro(scene) {
     const card = MOVE_CARDS[move];
     const touch = navigator.maxTouchPoints > 0;
     const how = touch ? card.touch : card.key;
-    const parts = [];
-    const panel = scene.add.rectangle(400, 118, 470, how ? 96 : 74, 0x0a1220, 0.88)
-        .setStrokeStyle(2, 0xffd34d);
-    const title = scene.add.text(400, how ? 86 : 100, card.title, {
-        fontSize: '20px', fill: '#ffd34d', fontStyle: 'bold'
-    }).setOrigin(0.5);
-    const body = scene.add.text(400, how ? 112 : 126, card.text, {
-        fontSize: '12px', fill: '#e6edf7', align: 'center', wordWrap: { width: 430 }
-    }).setOrigin(0.5);
-    parts.push(panel, title, body);
-    if (how) {
-        parts.push(scene.add.text(400, 142, how, {
-            fontSize: '13px', fill: '#0a1220', fontStyle: 'bold',
-            backgroundColor: '#ffd34d', padding: { x: 8, y: 3 }
-        }).setOrigin(0.5));
-    }
-    parts.forEach(o => o.setScrollFactor(0).setDepth(1200).setAlpha(0));
-    scene.tweens.add({ targets: parts, alpha: 1, duration: 350, delay: 900 });
-    scene.tweens.add({
-        targets: parts, alpha: 0, duration: 500, delay: 7500,
-        onComplete: () => parts.forEach(o => o.destroy())
+    const key = how || null;
+    const body = card.text;
+    // The delay runs on the tween clock, like the old fade-in did
+    scene.tweens.addCounter({
+        from: 0, to: 1, duration: 900,
+        onComplete: () => {
+            UI.toast(scene, {
+                icon: 'bolt', title: card.title, body: body, key: key,
+                position: 'top', belowHud: true, accent: 'gold', duration: 6500
+            });
+            if (typeof playSound === 'function') playSound('powerup');
+        }
     });
-    if (typeof playSound === 'function') scene.time.delayedCall(900, () => playSound('powerup'));
 }
 
 // A short reminder of the buttons at the start of the first levels. It lists
@@ -90,24 +80,45 @@ function showMoveIntro(scene) {
 function showControlsReminder(scene) {
     if (!movesStoryMode() || currentLevelIndex > 2) return;
     if (navigator.maxTouchPoints > 0) return;   // touch buttons label themselves
-    const chips = ['← →  MOVE', 'SPACE  JUMP'];
-    if (isMoveUnlocked('dash')) chips.push('SHIFT  DASH');
-    if (isMoveUnlocked('pound')) chips.push('↓ + SPACE  POUND');
-    const texts = chips.map(text => scene.add.text(0, 0, text, {
-        fontSize: '11px', fill: '#e6edf7', fontStyle: 'bold',
-        backgroundColor: 'rgba(10,18,32,0.7)', padding: { x: 8, y: 5 }
-    }).setOrigin(0, 1).setScrollFactor(0).setDepth(100));
+    const chips = [['← →', 'MOVE'], ['SPACE', 'JUMP']];
+    if (isMoveUnlocked('dash')) chips.push(['SHIFT', 'DASH']);
+    if (isMoveUnlocked('pound')) chips.push(['↓ + SPACE', 'POUND']);
+    // Styled like the menu kit's hint bar: a light key cap and a label on a
+    // dark rounded strip.
+    const T = UI.theme, C = T.color;
+    const textStyle = (size, color) => ({
+        fontFamily: T.font, fontSize: size + 'px', fontStyle: 'bold', color: color, resolution: T.textResolution
+    });
+    const h = 30, padX = 8, inner = 7;
+    const boxes = chips.map(([keyText, labelText]) => {
+        const kt = scene.add.text(0, -1, keyText, textStyle(T.size.keyChip, T.text.dark)).setOrigin(0.5);
+        const lt = scene.add.text(0, 0, labelText, textStyle(T.size.small, T.text.light)).setOrigin(0, 0.5);
+        const kw = Math.max(26, kt.width + 14);
+        const w = padX + kw + inner + lt.width + padX + 2;
+        const g = scene.add.graphics();
+        g.fillStyle(C.ink, 0.72); g.fillRoundedRect(-w / 2, -h / 2, w, h, T.radius.keyChip + 4);
+        const kx = -w / 2 + padX + kw / 2;
+        g.fillStyle(C.keyCapEdge, 1); g.fillRoundedRect(kx - kw / 2, -10, kw, 22, T.radius.keyChip);
+        g.fillStyle(C.keyCap, 1); g.fillRoundedRect(kx - kw / 2, -11, kw, 20, T.radius.keyChip);
+        kt.x = kx;
+        lt.x = kx + kw / 2 + inner;
+        const c = scene.add.container(0, 0, [g, kt, lt]);
+        c.chipW = w;
+        return c;
+    });
     const gap = 10;
-    const total = texts.reduce((w, t) => w + t.width, 0) + gap * (texts.length - 1);
+    const total = boxes.reduce((w, b) => w + b.chipW, 0) + gap * (boxes.length - 1);
     let x = (VIEW_W - total) / 2;
-    texts.forEach(t => {
-        t.setPosition(x, VIEW_H - 14);
-        t.wideUI = true;
-        x += t.width + gap;
-        if (typeof gameplayHudObjects !== 'undefined') gameplayHudObjects.push(t);
+    boxes.forEach(b => {
+        b.setPosition(x + b.chipW / 2, VIEW_H - 14 - h / 2);
+        b.setScrollFactor(0).setDepth(100);
+        b.list.forEach(o => o.setScrollFactor(0));
+        b.wideUI = true;
+        x += b.chipW + gap;
+        if (typeof gameplayHudObjects !== 'undefined') gameplayHudObjects.push(b);
     });
     scene.tweens.add({
-        targets: texts, alpha: 0, duration: 600, delay: 5000,
-        onComplete: () => texts.forEach(t => t.destroy())
+        targets: boxes, alpha: 0, duration: 600, delay: 5000,
+        onComplete: () => boxes.forEach(b => b.destroy())
     });
 }

@@ -27,29 +27,47 @@ code conventions: the physics body / visual split, the reset function in
 This section is for the main session. If you are the implementer subagent,
 follow your brief instead.
 
-For anything bigger than a small fix, the main session plans, delegates and
-reviews, and the `implementer` subagent (which runs on Opus) does the building.
-This keeps the stronger model's turns for the decisions that need it.
+For anything bigger than a small fix, the main session orchestrates: it plans,
+decides who builds each part, and reviews everything. The `implementer`
+subagent (which runs on Opus) does the building where delegating is the better
+trade; the main session keeps the parts where it is not. This is decided per
+part, without the user having to ask, and the plan says who builds each part
+and why. The aim is to spend the stronger model's turns where they matter
+without losing quality or time.
+
+Delegate a part when:
+- it can be fully described in a brief (clear inputs, files and checks), and
+- it is sizeable routine work, or it can run in parallel with other parts.
+
+Keep a part in the main session when:
+- it sets the pattern that other parts copy (a shared API, a visual style),
+  or needs design judgment that is hard to put in a brief;
+- it depends on context from the conversation that a brief would lose;
+- it is many small edits across files (a consistency pass, review fixes);
+- writing the brief and reviewing the result would cost more than doing it.
 
 1. **Plan first, in a file.** Write the plan to `docs/plan.md`: the parts, the
-   order, which files each part touches, and how each will be checked. A later
+   order, which files each part touches, who builds each part (implementer or
+   main session) and how each will be checked. A later
    session, on any model, continues from it. Update it as parts finish.
-2. **Delegate each part with a self-contained brief.** The implementer starts
+2. **Delegate with a self-contained brief.** The implementer starts
    with no memory of this conversation, so the brief carries the goal, the
    files involved, any decisions already made, and how to check the result.
    Small one-line fixes are quicker to do directly.
 3. **Parallel only when the files don't overlap.** Two implementers editing
    the same file will collide. Parts that share files run one after another.
 4. **Review before committing.** Read each report, look at the diff, and run
-   the checks yourself. The implementer does not commit.
+   the checks yourself. The implementer does not commit. Make small fixes
+   directly instead of sending the part back for another round.
 5. **Two strikes, then switch.** A part fails when its checks fail, the brief
    was not met, or it broke something else. After the first failure, sharpen
    the brief and retry on Opus. After a second failure on the same part, stop
    retrying on Opus: run the implementer again with a model override to the
    main session's model, or do that part directly. Tell the user when this
    happens and why.
-6. **Report the tally.** When the task is done, list each part with how many
-   attempts it took and which model finished it, so the user can see whether
+6. **Report the tally.** When the task is done, list each part with who built
+   it (implementer or main session), how many attempts it took and which
+   model finished it, so the user can see whether
    the split is paying off.
 
 ## Branches and pull requests
