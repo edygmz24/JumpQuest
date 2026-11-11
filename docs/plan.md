@@ -269,5 +269,5 @@ the user is told.
 | 3b | Level results, credits | | |
 | 4a | Shop, achievements | | |
 | 4b | Modifiers, speedrun, daily, endless | | |
-| 5 | Story, move cards, bonus results, tutorial hint | | |
+| 5 | Story, move cards, bonus results, tutorial hint | 1 | implementer (Opus); toast fixes in the kit by the main session |
 | 6 | Consistency pass + PR | | |

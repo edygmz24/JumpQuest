@@ -260,46 +260,47 @@ function endBonusRound(scene) {
     b.coins.forEach(c => scene.tweens.add({ targets: c.img, alpha: 0, duration: 300 }));
     b.clock.setVisible(false);
 
-    const parts = [];
-    parts.push(scene.add.rectangle(400, 300, 800, 600, 0x000000, 0.65).setDepth(990));
-    parts.push(scene.add.text(400, 200, 'BONUS ROUND', {
-        fontSize: '40px', fill: '#ffe680', fontStyle: 'bold', stroke: '#000', strokeThickness: 5
-    }).setOrigin(0.5).setDepth(1000));
-    const tally = scene.add.text(400, 280, '● 0', {
-        fontSize: '34px', fill: '#ffcc33', fontStyle: 'bold', stroke: '#000', strokeThickness: 4
-    }).setOrigin(0.5).setDepth(1000);
-    parts.push(tally);
-    parts.push(scene.add.text(400, 325, 'coins added to your wallet', {
-        fontSize: '13px', fill: '#cbd5e6'
-    }).setOrigin(0.5).setDepth(1000));
-    const next = scene.add.text(400, 400, 'CONTINUE', {
-        fontSize: '24px', fill: '#fff', fontStyle: 'bold', backgroundColor: '#0a0', padding: { x: 24, y: 9 }
-    }).setOrigin(0.5).setDepth(1000).setAlpha(0);
-    parts.push(next);
-    parts.forEach(o => o.setScrollFactor(0));
+    // Results card (menu kit). No Esc action; Continue (click, tap, or
+    // Space / Enter on the focused button) appears when the count finishes.
+    const s = UI.screen(scene, { id: 'bonus-results', depth: 990, backdrop: 'dim', enter: 'pop' });
+    const cx = VIEW_W / 2;
+    s.title(cx, 170, 'BONUS ROUND', { ribbon: true });
+    s.panel(cx, 290, 420, 150, {});
+    const coinSize = 46;
+    const coin = s.icon(0, 272, 'coin', coinSize, UI.theme.color.gold);
+    const tally = s.label(0, 272, '0', { style: 'value', size: UI.theme.size.title, align: 'left' });
+    const layoutTally = () => {        // keep the coin + number pair centred
+        const w = coinSize + 12 + tally.width;
+        coin.x = cx - w / 2 + coinSize / 2;
+        tally.x = cx - w / 2 + coinSize + 12;
+    };
+    layoutTally();
+    s.label(cx, 330, 'coins added to your wallet', { style: 'small' });
+    s.hintBar([['ENTER', 'Continue']]);
+    s.open();
 
     const counter = { v: 0 };
     let lastTick = 0;
     scene.tweens.add({
         targets: counter, v: b.caught, duration: Phaser.Math.Clamp(b.caught * 30, 300, 1500), delay: 400,
         onUpdate: () => {
-            tally.setText('● ' + Math.floor(counter.v));
+            tally.setText(String(Math.floor(counter.v)));
+            layoutTally();
             if (scene.time.now - lastTick > 55 && typeof playTick === 'function') { lastTick = scene.time.now; playTick(1300); }
         },
         onComplete: () => {
-            tally.setText('● ' + b.caught);
-            scene.tweens.add({ targets: next, alpha: 1, duration: 250 });
-            next.setInteractive({ useHandCursor: true });
-            next.on('pointerover', () => next.setStyle({ backgroundColor: '#0c0' }));
-            next.on('pointerout', () => next.setStyle({ backgroundColor: '#0a0' }));
+            tally.setText(String(b.caught));
+            layoutTally();
+            if (s.state === 'closed' || s.state === 'closing') return;
+            let gone = false;
             const go = () => {
+                if (gone) return;          // one press only
+                gone = true;
                 currentLevelIndex = bonusRound ? bonusRound.next : currentLevelIndex;
                 bonusRound = null;
                 restartWithTransition(scene);
             };
-            next.on('pointerup', go);
-            scene.input.keyboard.once('keydown-SPACE', go);
-            scene.input.keyboard.once('keydown-ENTER', go);
+            s.button(cx, 420, 'Continue', { role: 'go', size: 'lg', icon: 'play', default: true, onClick: go });
         }
     });
 }

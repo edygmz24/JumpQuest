@@ -39,80 +39,56 @@ function showStoryCard(scene, levelIndex, callback) {
     storyShown['level' + levelIndex] = true;
     localStorage.setItem('jqStoryShown', JSON.stringify(storyShown));
 
-    var storyObjects = [];
+    // Continue (button, Space / Enter on it, or Esc) closes the card, then
+    // runs the callback exactly once. It only works once the button is shown.
+    var continueShown = false;
+    var finished = false;
+    var finish = function() {
+        if (!continueShown || finished) return;
+        finished = true;
+        s.close(function() {
+            if (callback) callback();
+        });
+    };
 
-    // Dark background
-    var bg = scene.add.rectangle(400, 300, 800, 600, 0x000000, 0.9);
-    bg.setScrollFactor(0).setDepth(3000);
-    storyObjects.push(bg);
-
-    // Level indicator
-    var levelLabel = scene.add.text(400, 160, 'LEVEL ' + (typeof window.levelLabel === 'function' ? window.levelLabel(levelIndex) : levelIndex + 1), {
-        fontSize: '18px', fill: '#888', fontStyle: 'bold',
-        letterSpacing: 4
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(3001).setAlpha(0);
-    storyObjects.push(levelLabel);
-
-    // Story text
-    var storyText = scene.add.text(400, 280, card.text, {
-        fontSize: '20px', fill: '#ddd', align: 'center',
-        lineSpacing: 12, wordWrap: { width: 600 }
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(3001).setAlpha(0);
-    storyObjects.push(storyText);
-
-    // Continue button
-    var continueBtn = scene.add.text(400, 450, 'CONTINUE', {
-        fontSize: '22px', fill: '#fff', fontStyle: 'bold',
-        backgroundColor: '#0a0', padding: { x: 30, y: 12 }
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(3001).setAlpha(0);
-    storyObjects.push(continueBtn);
-
-    // Fade in level label
-    scene.tweens.add({
-        targets: levelLabel,
-        alpha: 1,
-        duration: 400,
-        delay: 200
+    var s = UI.screen(scene, {
+        id: 'story-card',
+        depth: 3000,
+        backdrop: 'solid',
+        enter: 'fade',
+        onBack: finish
     });
 
-    // Fade in story text
-    scene.tweens.add({
-        targets: storyText,
-        alpha: 1,
-        duration: 600,
-        delay: 600
-    });
+    var cx = VIEW_W / 2;
+    var levelName = 'LEVEL ' + (typeof window.levelLabel === 'function' ? window.levelLabel(levelIndex) : levelIndex + 1);
 
-    // Fade in continue button
-    scene.tweens.add({
-        targets: continueBtn,
-        alpha: 1,
-        duration: 400,
-        delay: 1200,
+    // Story text first, so the panel can be sized around it
+    var storyText = s.label(cx, 0, card.text, {
+        style: 'body', size: UI.theme.size.value, wrap: 620, align: 'center'
+    });
+    storyText.setLineSpacing(Math.round(UI.theme.size.value * 0.5));
+    var panelH = Math.round(Math.max(140, storyText.height + 76));
+    var panelY = 280;
+    storyText.y = panelY;
+    s.panel(cx, panelY, 720, panelH, {});
+
+    // Level indicator sits just above the panel
+    s.label(cx, panelY - panelH / 2 - 30, levelName, { style: 'caps', size: UI.theme.size.header });
+
+    var buttonY = Math.min(VIEW_H - 80, panelY + panelH / 2 + 64);
+    s.hintBar([['ENTER', 'Continue']]);
+    s.open();
+
+    // The Continue button appears after the text, as before (on the tween
+    // clock, like the old fade-in)
+    scene.tweens.addCounter({
+        from: 0, to: 1, duration: 1200,
         onComplete: function() {
-            continueBtn.setInteractive({ useHandCursor: true });
-            continueBtn.on('pointerover', function() {
-                continueBtn.setStyle({ backgroundColor: '#0c0' });
+            if (s.state === 'closed' || s.state === 'closing') return;
+            s.button(cx, buttonY, 'Continue', {
+                role: 'go', size: 'lg', icon: 'play', default: true, onClick: finish
             });
-            continueBtn.on('pointerout', function() {
-                continueBtn.setStyle({ backgroundColor: '#0a0' });
-            });
-            continueBtn.on('pointerup', function() {
-                // Fade out all story objects
-                storyObjects.forEach(function(obj) {
-                    scene.tweens.add({
-                        targets: obj,
-                        alpha: 0,
-                        duration: 300,
-                        onComplete: function() {
-                            obj.destroy();
-                        }
-                    });
-                });
-                scene.time.delayedCall(350, function() {
-                    if (callback) callback();
-                });
-            });
+            continueShown = true;
         }
     });
 }

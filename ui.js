@@ -88,7 +88,9 @@
 //   UI.theme        colours, fonts, sizes, depths, timings (the only place they live)
 //   UI.theme.motion false with ?nomotion=1 or prefers-reduced-motion: no tweens
 //   UI.toast(scene, { icon, iconColor, title, body, key, position: 'top'|'bottom',
-//                     duration, accent }) -> { close() }   non-modal banner
+//                     duration, accent, belowHud: true (clear the gameplay HUD row),
+//                     offsetY, onClose() }) -> { close() }   non-modal banner;
+//                     the key chip grows with its text
 //   UI.icon(scene, name, size, color) -> Image (code-drawn once into a cached texture)
 //   UI.drawIcon(graphics, name, size, color, x, y) draws one into your own Graphics
 //   UI.isOpen()     true while any modal kit screen is open (or closing)
@@ -164,6 +166,7 @@ const UI = (() => {
         radius: { panel: 14, card: 12, chip: 16, row: 12, tab: 11, list: 12, keyChip: 6 },
         touchMinHit: 44,
         depth: { menu: 2000, popup: 2010, toast: 2500 },
+        toastBelowHud: 50,
         time: {
             backdrop: 150, enter: 220, stagger: 25, leave: 120, fade: 150, pulse: 560,
             sink: 50, press: 90, bounce: 160, knob: 140, scroll: 160, deny: 45,
@@ -1866,8 +1869,11 @@ const UI = (() => {
         const ic = scene.add.graphics();
         const tx = -w / 2 + 70;
         const title = scene.add.text(tx, 0, o.title || '', textStyle(theme.size.toastTitle, 'gold', { stroke: css(C.ink), strokeThickness: 4 })).setOrigin(0, 0);
+        // The key chip is as wide as its text; the body wraps in what is left
+        const kt = o.key ? scene.add.text(0, -1, o.key, textStyle(theme.size.keyChip + 1, 'dark')).setOrigin(0.5) : null;
+        const kw = kt ? Math.max(34, kt.width + 16) : 0;
         const body = o.body ? scene.add.text(tx, 0, o.body, textStyle(theme.size.toastBody, 'light', {
-            fontStyle: 'bold', wordWrap: { width: w - 90 - (o.key ? 70 : 0), useAdvancedWrap: true }
+            fontStyle: 'bold', wordWrap: { width: w - 90 - (kt ? kw + 22 : 0), useAdvancedWrap: true }
         })).setOrigin(0, 0) : null;
         const h = Math.max(70, 18 + title.height + (body ? body.height + 4 : 0) + 16);
         title.y = -h / 2 + 15;
@@ -1882,18 +1888,20 @@ const UI = (() => {
         drawIcon(ic, o.icon || 'star', 26, o.iconColor !== undefined ? o.iconColor : accent, -w / 2 + 38, 0);
         const parts = [g, ic, title];
         if (body) parts.push(body);
-        if (o.key) {
-            const kt = scene.add.text(w / 2 - 44, -1, o.key, textStyle(theme.size.keyChip + 1, 'dark')).setOrigin(0.5);
-            const kw = Math.max(34, kt.width + 16), kr = theme.radius.keyChip + 1;
+        if (kt) {
+            const kr = theme.radius.keyChip + 1, kx = w / 2 - 18 - kw / 2;
             const kg = scene.add.graphics();
-            kg.fillStyle(C.keyCapEdge, 1); kg.fillRoundedRect(w / 2 - 44 - kw / 2, -12, kw, 26, kr);
-            kg.fillStyle(C.keyCap, 1); kg.fillRoundedRect(w / 2 - 44 - kw / 2, -13, kw, 23, kr);
+            kg.fillStyle(C.keyCapEdge, 1); kg.fillRoundedRect(kx - kw / 2, -12, kw, 26, kr);
+            kg.fillStyle(C.keyCap, 1); kg.fillRoundedRect(kx - kw / 2, -13, kw, 23, kr);
+            kt.x = kx;
             parts.push(kg, kt);
         }
         c.add(parts);
         fix(c);
         c.setDepth(o.depth !== undefined ? o.depth : theme.depth.toast);
-        const restY = pos === 'top' ? 16 + h / 2 : VIEW_H - 16 - h / 2;
+        // belowHud keeps a top toast clear of the gameplay HUD row
+        const shift = (o.offsetY || 0) + (o.belowHud && pos === 'top' ? theme.toastBelowHud : 0);
+        const restY = (pos === 'top' ? 16 + h / 2 : VIEW_H - 16 - h / 2) + shift;
         const offY = pos === 'top' ? -h / 2 - 20 : VIEW_H + h / 2 + 20;
         let closed = false, timer = null;
         const t = {
@@ -1903,7 +1911,10 @@ const UI = (() => {
                 closed = true;
                 toasts = toasts.filter(x => x !== t);
                 if (timer) { try { timer.remove(false); } catch (e) { /* gone */ } }
-                const kill = () => { if (c.active) c.destroy(); };
+                const kill = () => {
+                    if (c.active) c.destroy();
+                    if (o.onClose) { const f = o.onClose; o.onClose = null; f(); }
+                };
                 if (now || !theme.motion || !c.active) { kill(); return; }
                 scene.tweens.killTweensOf(c);
                 scene.tweens.add({ targets: c, y: offY, alpha: 0, duration: theme.time.toastOut, ease: 'Quad.easeIn', onComplete: kill });
