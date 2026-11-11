@@ -1,7 +1,7 @@
 # Menu revamp plan
 
 Status: approved by the user (all five decisions). Branch `claude/menu-revamp`.
-Parts 0 and 1 done. Waiting for the user's go-ahead on parts 2-5.
+Parts 0 and 1 done. Parts 2, 3a, 4a, 4b, 5 in progress (implementers, in parallel).
 
 Goal: every menu looks and feels like one polished modern platformer. One
 shared style built once, smooth motion, keyboard navigation everywhere, touch
@@ -168,6 +168,68 @@ Notes per part:
   session does the full run.
 - Who builds what from here: parts 2-5 implementers in parallel (routine once
   the kit exists, files don't overlap); kit fixes and part 6 main session.
+
+## Converting a screen (rules for parts 2-5)
+
+Read this, then the API comment at the top of `ui.js` (first ~110 lines).
+`UI.showStyleSheet` in `ui.js` is a worked example; `?uikit=1` shows it.
+
+Behaviour stays, look changes:
+- Keep every control and every piece of information the screen has today.
+  Move each control's callback logic over unchanged (flags such as
+  `showingMenu`, `speedrunMode`, `restartWithTransition(scene)`, saves).
+- Do not rename or change the signature of any existing function: other
+  files call them. Do not change game logic or save formats.
+- Keep the old base depth of the screen as the kit screen's `depth`.
+
+Use the kit for everything:
+- Build with `UI.screen` and its builders. No raw `scene.add.text` /
+  `rectangle` for UI chrome, and no literal colours or font sizes in screen
+  code: take them from `UI.theme`. Custom art that is part of the screen
+  (the world map, colour swatches) goes in through `s.add(obj)`.
+- **Do not edit `ui.js`, `tools/shoot-menus.js` or any file outside your
+  part**: other implementers are working in parallel. If the kit lacks
+  something, work around it with `s.add` + theme values and say so in your
+  report; the main session folds it into the kit afterwards.
+- Replace emoji / symbol characters with kit icons (`UI.ICONS`).
+- Layout is 1066x600, x centre = `VIEW_W / 2`. An old 800-space x maps to
+  x + 133. Use the full width where it helps; do not just shift the column.
+- Every full screen: a title, `onBack` (Esc) wired to its back / close
+  action, default focus on the main action, and a `hintBar`.
+- Colour roles: go = play / next / continue / resume, nav = map / level
+  select, mode = speedrun / endless / daily, danger = quit / lose,
+  neutral = back / close / settings.
+- Menu screens opened from the main menu: push
+  `{ destroy: () => s.destroy() }` into `menuObjects`, so the existing
+  `clearMenuObjects()` calls keep closing them.
+- Old-style objects always draw above kit screens, and their input is off
+  while a kit screen is open. So convert everything in your files; never
+  leave a legacy popup that opens over a kit screen. `toggleControlsPopup`
+  / `closeControlsPopup` (game.js) become a kit popup in part 3a with the
+  same names; other parts just keep calling them.
+- No camera shake / flash while a kit screen is up (it moves the screen).
+- WebGL-only effects stay guarded (Canvas fallback).
+
+Checking (keep it cheap: the headless browser here is slow):
+- `node --check` on each changed file.
+- Server runs on port 8000 (`npm start` if it is down). Shoot only your
+  screens: `node tools/shoot-menus.js <scratchpad>/shots/<part> --only a,b,c`
+  where <scratchpad> is
+  `/tmp/claude-0/-home-user-JumpQuest/e58bfc9a-9237-56a5-9d6d-3ed534d3a81d/scratchpad`.
+  Never write into `shots/before`. No full runs: the main session does that.
+- Look at your shots (the Read tool shows PNGs) next to the `before` ones
+  and fix what is off: spacing, clipping, overlap, centring, contrast. At
+  most three look-fix rounds per screen.
+- Compare your screens' entries in `inventory.json` with
+  `shots/before/<profile>/inventory.json`: every old control must still be
+  there (labels may differ in case or lose an emoji; list the mapping).
+- Write a small throwaway Playwright script in the scratchpad (not in the
+  repo) that, for each of your screens, uses only the keyboard to focus and
+  activate every control and checks the effect (flag, screen change, value),
+  and Esc for back. `UI.top()` exposes `id`, `focusables`, `focused`. Wait on
+  game state, not on fixed milliseconds.
+- Do not commit. Report: files changed, what each check showed, the old ->
+  new control mapping, anything missing from the kit, anything unsure.
 
 ## How each part is checked
 
