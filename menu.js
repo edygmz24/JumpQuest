@@ -60,70 +60,81 @@ function showMainMenu(scene) {
     clearMenuObjects();
     if (typeof setGameplayHUDVisible === 'function') setGameplayHUDVisible(false);
 
-    // Darken background
-    const bg = scene.add.rectangle(400, 300, 800, 600, 0x000000, 0.85);
-    bg.setScrollFactor(0).setDepth(2000).setInteractive();
-    menuObjects.push(bg);
+    const T = UI.theme, CX = VIEW_W / 2;
+    // Up / Down go row by row (hero, modes, collection, controls) to the
+    // nearest button in x. The kit's own nearest-in-direction rule would skip
+    // the modes row, since none of its four buttons sits right under Play.
+    // Left / Right use the kit's default (along the row, wrapping).
+    const rows = [[], [], [], []];
+    const onKey = (e) => {
+        const dir = { ArrowUp: -1, ArrowDown: 1 }[e.key];
+        const cur = s.focused;
+        if (!dir || !cur) return false;
+        const r = rows.findIndex(row => row.some(b => b.record === cur));
+        if (r === -1) return false;
+        const next = rows[(r + dir + rows.length) % rows.length];
+        let best = null;
+        next.forEach(b => { if (!best || Math.abs(b.x - cur.x) < Math.abs(best.x - cur.x)) best = b; });
+        if (e.preventDefault) e.preventDefault();
+        if (best) s.setFocus(best);
+        return true;
+    };
+    // No onBack: the main menu is the root, Esc does nothing here.
+    const s = UI.screen(scene, { id: 'main-menu', depth: T.depth.menu, backdrop: 'dim', onKey: onKey });
 
-    // Keep the menu in three visual groups: continue, ways to play, and
-    // collection. This leaves the game itself as the focus behind the menu.
-    const heroPanel = scene.add.rectangle(400, 225, 430, 290, 0x101827, 0.9);
-    heroPanel.setStrokeStyle(1, 0x31415e).setScrollFactor(0).setDepth(2001);
-    menuObjects.push(heroPanel);
+    // ---- Logo: big gold title, two twinkling stars, a gentle idle bob ----
+    const LOGO_Y = 82;
+    const logoSize = Math.round(T.size.title * 1.75);
+    const logo = s.title(CX, LOGO_Y, 'JUMP QUEST', { size: logoSize });
+    const logoHalf = logo.text.width / 2;
+    const sparkles = [
+        s.icon(CX - logoHalf - 30, LOGO_Y - 14, 'star', 30),
+        s.icon(CX + logoHalf + 30, LOGO_Y - 14, 'star', 30)
+    ];
+    if (T.motion) {
+        // starts after the enter animation, so the two never fight over y
+        const settle = T.time.enter + 120;
+        scene.tweens.add({ targets: logo, y: { from: LOGO_Y, to: LOGO_Y - 6 }, delay: settle,
+            duration: 1400, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+        sparkles.forEach((sp, i) => scene.tweens.add({
+            targets: sp, scale: { from: 1, to: 0.72 }, angle: { from: 0, to: 18 }, delay: settle + i * 700,
+            duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
+        }));
+    }
 
-    const title = scene.add.text(400, 155, 'JUMP QUEST', {
-        fontSize: '48px', fill: '#ffdd00', fontStyle: 'bold',
-        stroke: '#000', strokeThickness: 4
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
-    menuObjects.push(title);
-
-    // Progress is summarized as one readable stat rather than a 30-icon row.
+    // ---- Hero group: progress, wallet, the big Play ----
+    s.panel(CX, 218, 440, 156);
     const totalStars = getTotalStars();
-    const starIcon = scene.add.text(320, 220, '★', {
-        fontSize: '22px', fill: '#ffd700'
-    }).setOrigin(0.5, 1).setScrollFactor(0).setDepth(2001);
-    menuObjects.push(starIcon);
-
-    const starCount = scene.add.text(345, 217, `${totalStars}/${CAMPAIGN_LEVELS.length * 3}`, {
-        fontSize: '13px', fill: '#ffd700'
-    }).setOrigin(0.5, 1).setScrollFactor(0).setDepth(2001);
-    menuObjects.push(starCount);
+    const hasWallet = typeof walletCoins !== 'undefined';
+    const statY = 172;
+    s.stat(hasWallet ? CX - 12 : CX, statY, 'star', `${totalStars}/${CAMPAIGN_LEVELS.length * 3}`,
+        { color: 'gold', align: hasWallet ? 'right' : 'center' });
 
     // Coin wallet, plus the once-a-day login bonus
-    if (typeof walletCoins !== 'undefined') {
+    if (hasWallet) {
         let loginBonus = 0;
         if (typeof claimDailyLoginBonus === 'function') {
             loginBonus = claimDailyLoginBonus();
         }
-
-        const walletIcon = scene.add.text(430, 220, '●', {
-            fontSize: '20px', fill: '#ffcc33'
-        }).setOrigin(0.5, 1).setScrollFactor(0).setDepth(2001);
-        menuObjects.push(walletIcon);
-
-        const walletDisplay = scene.add.text(454, 217, `${walletCoins}`, {
-            fontSize: '13px', fill: '#ffcc33'
-        }).setOrigin(0.5, 1).setScrollFactor(0).setDepth(2001);
-        menuObjects.push(walletDisplay);
+        const wallet = s.stat(CX + 12, statY, 'coin', `${walletCoins}`, { color: 'gold', align: 'left' });
 
         if (loginBonus > 0) {
-            const bonusText = scene.add.text(400, 238, `+${loginBonus} today`, {
-                fontSize: '12px', fill: '#7fdc7f', fontStyle: 'bold'
-            }).setOrigin(0.5).setScrollFactor(0).setDepth(2001).setAlpha(0);
-            menuObjects.push(bonusText);
-            scene.tweens.add({
-                targets: bonusText, alpha: 1, y: 234,
-                duration: 400, delay: 300, ease: 'Back.easeOut'
-            });
+            const popX = CX + 12 + wallet.width / 2, popY = statY + 30;
+            const bonusText = s.label(popX, popY + 4, `+${loginBonus} today`, { style: 'small', color: 'go', outline: true });
+            if (T.motion) {
+                bonusText.setAlpha(0);
+                scene.tweens.add({
+                    targets: bonusText, alpha: 1, y: popY,
+                    duration: 400, delay: T.time.enter + 300, ease: 'Back.easeOut'
+                });
+            } else {
+                bonusText.y = popY;
+            }
         }
     }
 
-    const progressDivider = scene.add.rectangle(400, 238, 235, 1, 0x31415e);
-    progressDivider.setScrollFactor(0).setDepth(2001);
-    menuObjects.push(progressDivider);
-
-    // Big PLAY button — the hero action
-    const playBtn = createMenuButton(scene, 400, 285, '\u25b6  PLAY', '#0a0', '#0c0', () => {
+    // Big PLAY button: the hero action
+    rows[0].push(s.button(CX, 248, 'PLAY', { role: 'go', size: 'lg', icon: 'play', width: 300, default: true, onClick: () => {
         clearMenuObjects();
         if (typeof setGameplayHUDVisible === 'function') setGameplayHUDVisible(true);
         showingMenu = false;
@@ -139,28 +150,22 @@ function showMainMenu(scene) {
         currentLevelIndex = startLevel;
         if (typeof restartWithTransition === 'function') restartWithTransition(scene);
         else scene.scene.restart();
-    });
-    playBtn.setStyle({ fontSize: '26px', padding: { x: 44, y: 10 } });
+    } }));
 
-    const modesPanel = scene.add.rectangle(400, 410, 690, 72, 0x0d1522, 0.82);
-    modesPanel.setStrokeStyle(1, 0x253651).setScrollFactor(0).setDepth(2001);
-    menuObjects.push(modesPanel);
-
-    // The mode row uses familiar symbols first, then compact labels.
-    const selectBtn = createMenuButton(scene, 145, 410, '▦  MAP', '#06a', '#08c', () => {
+    // ---- Ways to play ----
+    const MODE_Y = 366, MODE_W = 178, MODE_GAP = 192;
+    s.panel(CX, MODE_Y + 2, 820, 82, { fill: 'dark' });
+    const modeX = i => CX + (i - 1.5) * MODE_GAP;
+    rows[1].push(s.button(modeX(0), MODE_Y, 'MAP', { role: 'nav', icon: 'map', width: MODE_W, onClick: () => {
         clearMenuObjects();
         showLevelSelect(scene);
-    });
-    selectBtn.setStyle({ fontSize: '15px', padding: { x: 16, y: 8 } });
-
-    const speedrunBtn = createMenuButton(scene, 315, 410, '⌁  SPEEDRUN', '#07516b', '#08789b', () => {
+    } }));
+    rows[1].push(s.button(modeX(1), MODE_Y, 'SPEEDRUN', { role: 'mode', icon: 'bolt', width: MODE_W, onClick: () => {
         clearMenuObjects();
         if (typeof showSpeedrunLevelSelect === 'function') showSpeedrunLevelSelect(scene);
         else showMainMenu(scene);
-    });
-    speedrunBtn.setStyle({ fontSize: '15px', padding: { x: 16, y: 8 } });
-
-    const endlessBtn = createMenuButton(scene, 490, 410, '∞  ENDLESS', '#830', '#a50', () => {
+    } }));
+    rows[1].push(s.button(modeX(2), MODE_Y, 'ENDLESS', { role: 'mode', icon: 'infinity', width: MODE_W, onClick: () => {
         clearMenuObjects();
         showingMenu = false;
         if (typeof speedrunMode !== 'undefined') speedrunMode = false;
@@ -169,155 +174,44 @@ function showMainMenu(scene) {
         currentLevelIndex = 0;
         if (typeof restartWithTransition === 'function') restartWithTransition(scene);
         else scene.scene.restart();
-    });
-    endlessBtn.setStyle({ fontSize: '15px', padding: { x: 16, y: 8 } });
-
-    const dailyBtn = createMenuButton(scene, 655, 410, '☀  DAILY', '#063', '#085', () => {
+    } }));
+    rows[1].push(s.button(modeX(3), MODE_Y, 'DAILY', { role: 'mode', icon: 'sun', width: MODE_W, onClick: () => {
         clearMenuObjects();
         if (typeof showDailyChallengeScreen === 'function') showDailyChallengeScreen(scene);
         else showMainMenu(scene);
-    });
-    dailyBtn.setStyle({ fontSize: '15px', padding: { x: 16, y: 8 } });
+    } }));
 
-    // Daily streak badge
+    // Daily streak badge, pinned to the Daily button's top right corner
     const ds = typeof dailyStreak !== 'undefined' && dailyStreak > 0 ? dailyStreak : 0;
     if (ds > 0) {
-        const streakText = scene.add.text(655, 445, `⚡ ${ds}`, {
-            fontSize: '9px', fill: '#0fa'
-        }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
-        menuObjects.push(streakText);
+        const badge = s.stat(modeX(3) + MODE_W / 2 + 6, MODE_Y - 26, 'bolt', `${ds}`, { color: 'mode', align: 'right' });
+        badge.setDepth(s.depth + 5);     // above the button it sits on
     }
 
-    const extrasPanel = scene.add.rectangle(400, 500, 600, 58, 0x0d1522, 0.6);
-    extrasPanel.setScrollFactor(0).setDepth(2001);
-    menuObjects.push(extrasPanel);
-
-    const achBtn = createMenuButton(scene, 200, 500, '\uD83C\uDFC6  ACHIEVEMENTS', '#3a3a3a', '#4a4a4a', () => {
+    // ---- Collection ----
+    const COL_Y = 458, COL_W = 200, COL_GAP = 216;
+    s.panel(CX, COL_Y + 2, 680, 70, { fill: 'dark' });
+    rows[2].push(s.button(CX - COL_GAP, COL_Y, 'ACHIEVEMENTS', { role: 'neutral', size: 'sm', icon: 'trophy', iconColor: T.color.gold, width: COL_W, onClick: () => {
         clearMenuObjects();
         if (typeof showAchievementGallery === 'function') showAchievementGallery(scene);
-    });
-    achBtn.setStyle({ fontSize: '13px', padding: { x: 12, y: 6 }, align: 'center' }).setFixedSize(180, 38);
-
-    const cosBtn = createMenuButton(scene, 400, 500, '\uD83C\uDFA8  SHOP', '#3a3a3a', '#4a4a4a', () => {
+    } }));
+    rows[2].push(s.button(CX, COL_Y, 'SHOP', { role: 'neutral', size: 'sm', icon: 'brush', width: COL_W, onClick: () => {
         clearMenuObjects();
         if (typeof showCosmeticScreen === 'function') showCosmeticScreen(scene);
-    });
-    cosBtn.setStyle({ fontSize: '13px', padding: { x: 12, y: 6 }, align: 'center' }).setFixedSize(180, 38);
-
-    const modBtn = createMenuButton(scene, 600, 500, '\u2699  MODIFIERS', '#3a3a3a', '#4a4a4a', () => {
+    } }));
+    rows[2].push(s.button(CX + COL_GAP, COL_Y, 'MODIFIERS', { role: 'neutral', size: 'sm', icon: 'gear', width: COL_W, onClick: () => {
         clearMenuObjects();
         if (typeof showModifierScreen === 'function') showModifierScreen(scene);
-    });
-    modBtn.setStyle({ fontSize: '13px', padding: { x: 12, y: 6 }, align: 'center' }).setFixedSize(180, 38);
+    } }));
 
-    const controls = scene.add.text(400, 555, '← → move   ·   SPACE jump   ·   SHIFT dash   ·   R retry   ·   ESC pause', {
-        fontSize: '10px', fill: '#444'
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
-    menuObjects.push(controls);
-
-    const controlsButton = scene.add.text(710, 592, 'CONTROLS', {
-        fontSize: '10px', fill: '#d7e2f0', fontStyle: 'bold',
-        backgroundColor: '#162235', padding: { x: 7, y: 5 }
-    }).setOrigin(1, 1).setScrollFactor(0).setDepth(2001).setAlpha(0.52);
-    controlsButton.setInteractive({ useHandCursor: true });
-    controlsButton.on('pointerover', () => controlsButton.setAlpha(0.85));
-    controlsButton.on('pointerout', () => controlsButton.setAlpha(0.52));
-    controlsButton.on('pointerup', () => {
+    rows[3].push(s.button(CX, 526, 'CONTROLS', { role: 'neutral', size: 'sm', width: 150, onClick: () => {
         if (typeof toggleControlsPopup === 'function') toggleControlsPopup(scene);
-    });
-    menuObjects.push(controlsButton);
-}
+    } }));
 
-function showLevelSelect(scene) {
-    showingMenu = false;
-    showingLevelSelect = true;
-    if (typeof showingSpeedrunSelect !== 'undefined') showingSpeedrunSelect = false;
-    if (typeof speedrunMode !== 'undefined') speedrunMode = false;
-    clearMenuObjects();
-    if (typeof setGameplayHUDVisible === 'function') setGameplayHUDVisible(false);
+    s.hintBar([['ENTER', 'Select'], ['\u2190 \u2192', 'Move'], ['SPACE', 'Jump'], ['SHIFT', 'Dash'], ['R', 'Retry'], ['ESC', 'Pause']]);
 
-    const bg = scene.add.rectangle(400, 300, 800, 600, 0x000000, 0.9);
-    bg.setScrollFactor(0).setDepth(2000).setInteractive();
-    menuObjects.push(bg);
-
-    const title = scene.add.text(400, 40, 'SELECT LEVEL', {
-        fontSize: '32px', fill: '#fff', fontStyle: 'bold'
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
-    menuObjects.push(title);
-
-    // Level grid: 2 rows of 5
-    for (let i = 0; i < levels.length; i++) {
-        const col = i % 5;
-        const row = Math.floor(i / 5);
-        const x = 120 + col * 145;
-        const y = 140 + row * 230;
-        const unlocked = isLevelUnlocked(i);
-        const stars = getStarCount(i);
-
-        // Level box
-        const boxColor = unlocked ? 0x224488 : 0x333333;
-        const box = scene.add.rectangle(x, y, 120, 100, boxColor);
-        box.setStrokeStyle(2, unlocked ? 0x4488cc : 0x555555);
-        box.setScrollFactor(0).setDepth(2001);
-        menuObjects.push(box);
-
-        // Level number
-        const numText = scene.add.text(x, y - 25, `${i + 1}`, {
-            fontSize: '28px', fill: unlocked ? '#fff' : '#666', fontStyle: 'bold'
-        }).setOrigin(0.5).setScrollFactor(0).setDepth(2002);
-        menuObjects.push(numText);
-
-        // Level name (abbreviated)
-        const name = levels[i].name.replace(/Level \d+ - /, '');
-        const nameText = scene.add.text(x, y + 5, name, {
-            fontSize: '10px', fill: unlocked ? '#aaa' : '#555'
-        }).setOrigin(0.5).setScrollFactor(0).setDepth(2002);
-        menuObjects.push(nameText);
-
-        // Stars
-        const starStr = (stars >= 1 ? '\u2605' : '\u2606') +
-                        (stars >= 2 ? '\u2605' : '\u2606') +
-                        (stars >= 3 ? '\u2605' : '\u2606');
-        const starDisplay = scene.add.text(x, y + 30, starStr, {
-            fontSize: '18px', fill: stars > 0 ? '#ffd700' : '#555'
-        }).setOrigin(0.5).setScrollFactor(0).setDepth(2002);
-        menuObjects.push(starDisplay);
-
-        // Best time
-        const bt = bestTimes['level' + i];
-        if (bt) {
-            const timeStr = formatTime(bt);
-            const timeText = scene.add.text(x, y + 48, timeStr, {
-                fontSize: '11px', fill: '#0ff'
-            }).setOrigin(0.5).setScrollFactor(0).setDepth(2002);
-            menuObjects.push(timeText);
-        }
-
-        // Lock icon or click handler
-        if (!unlocked) {
-            const lock = scene.add.text(x, y - 5, '\uD83D\uDD12', {
-                fontSize: '24px'
-            }).setOrigin(0.5).setScrollFactor(0).setDepth(2003);
-            menuObjects.push(lock);
-        } else {
-            box.setInteractive({ useHandCursor: true });
-            box.on('pointerover', () => box.setFillStyle(0x336699));
-            box.on('pointerout', () => box.setFillStyle(boxColor));
-            box.on('pointerup', () => {
-                currentLevelIndex = i;
-                clearMenuObjects();
-                showingLevelSelect = false;
-                if (typeof restartWithTransition === 'function') restartWithTransition(scene);
-                else scene.scene.restart();
-            });
-        }
-    }
-
-    // Back button
-    createMenuButton(scene, 400, 530, 'BACK TO MENU', '#666', '#888', () => {
-        clearMenuObjects();
-        showMainMenu(scene);
-    });
+    s.open();
+    menuObjects.push({ destroy: () => s.destroy() });
 }
 
 function createMenuButton(scene, x, y, text, bgColor, hoverColor, callback) {

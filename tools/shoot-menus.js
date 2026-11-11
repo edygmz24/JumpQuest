@@ -382,7 +382,7 @@ async function checkUiKit(page, controls) {
 
   // Esc on the style sheet closes it and shows the main menu
   await press('Escape');
-  await waitFor(page, `!UI.isOpen() && UI.top() === null && showingMenu && menuObjects.length > 0`);
+  await waitFor(page, `UI.top() && UI.top().id === 'main-menu' && showingMenu && menuObjects.length > 0`);
 
   // ---- pointer, with animations on and the camera scrolled into the level
   await boot(page, '?uikit=1');
