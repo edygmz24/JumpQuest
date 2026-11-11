@@ -1,7 +1,7 @@
 # Menu revamp plan
 
 Status: approved by the user (all five decisions). Branch `claude/menu-revamp`.
-Parts 0 and 1 done. Parts 2, 3a, 4a, 4b, 5 in progress (implementers, in parallel).
+Parts 0-5 done except 3b (level results, credits), which the main session builds next, followed by part 6.
 
 Goal: every menu looks and feels like one polished modern platformer. One
 shared style built once, smooth motion, keyboard navigation everywhere, touch
@@ -264,10 +264,10 @@ the user is told.
 |---|------|----------|-------------|
 | 0 | Screenshot script + before shots | 1 | implementer (Opus) |
 | 1 | Shared kit | 1 | implementer (Opus) |
-| 2 | Main menu, world map | | |
-| 3a | Pause, settings, controls, game over | | |
+| 2 | Main menu, world map | 1 | implementer (Opus), cut off by the usage limit just before reporting; reviewed and finished by the main session |
+| 3a | Pause, settings, controls, game over | 1 | implementer (Opus) |
 | 3b | Level results, credits | | |
-| 4a | Shop, achievements | | |
-| 4b | Modifiers, speedrun, daily, endless | | |
+| 4a | Shop, achievements | 1 | implementer (Opus), cut off by the usage limit while testing; finished by the main session |
+| 4b | Modifiers, speedrun, daily, endless | 1 | implementer (Opus) |
 | 5 | Story, move cards, bonus results, tutorial hint | 1 | implementer (Opus); toast fixes in the kit by the main session |
 | 6 | Consistency pass + PR | | |
