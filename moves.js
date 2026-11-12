@@ -48,6 +48,37 @@ function isMoveUnlocked(move) {
     return movesFurthestLevel() >= MOVE_INTRO_LEVEL[move];
 }
 
+// Wall jumps are taught by a tip at the start of this level (tutorial.js)
+const WALL_JUMP_LEVEL = 8;
+
+// Has the player met this suit or object yet? interact.js and suits.js
+// record a one-time hint the first time each one turns up.
+function controlsSeen(key) {
+    return typeof tutorialShown !== 'undefined' && !!tutorialShown[key];
+}
+
+// The rows of the Controls popup: only what this player can do so far.
+// Story mode adds moves as their levels are reached; suits and objects
+// appear once they have been met. Other modes have every move.
+function controlsRowsForPlayer() {
+    const rows = [['Move', ['←', '→']], ['Jump', ['SPACE']]];
+    if (isMoveUnlocked('dash')) rows.push(['Dash', ['SHIFT']]);
+    if (isMoveUnlocked('pound')) rows.push(['Pound (in air)', ['↓', '+', 'SPACE']]);
+    if (!movesStoryMode() || movesFurthestLevel() >= WALL_JUMP_LEVEL) rows.push(['Wall jump (on a wall)', ['SPACE']]);
+    if (controlsSeen('ia_door')) rows.push(['Enter door', ['↓']]);
+    if (controlsSeen('ia_shell')) rows.push(['Carry / throw shell', ['↓']]);
+    if (controlsSeen('ia_suit_cape')) rows.push(['Glide (cape)', ['hold SPACE']]);
+    if (controlsSeen('ia_suit_rang')) rows.push(['Boomerang', ['X']]);
+    rows.push(['Retry', ['R']], ['Pause', ['ESC']]);
+    return rows;
+}
+
+// True while there are still story moves left to unlock
+function controlsMoreToCome() {
+    if (!movesStoryMode()) return false;
+    return !isMoveUnlocked('dash') || !isMoveUnlocked('pound') || movesFurthestLevel() < WALL_JUMP_LEVEL;
+}
+
 // Shows the card for a move the first time its level is started.
 function showMoveIntro(scene) {
     if (!movesStoryMode()) return;
@@ -61,7 +92,8 @@ function showMoveIntro(scene) {
     const touch = navigator.maxTouchPoints > 0;
     const how = touch ? card.touch : card.key;
     const key = how || null;
-    const body = card.text;
+    // Moves with a button join the Controls list (pause menu)
+    const body = card.key ? card.text + ' Now listed in Pause > Controls.' : card.text;
     // The delay runs on the tween clock, like the old fade-in did
     scene.tweens.addCounter({
         from: 0, to: 1, duration: 900,
