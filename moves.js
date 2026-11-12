@@ -15,7 +15,7 @@ const MOVE_INTRO_LEVEL = { dash: 1, pound: 2, flow: 3 };
 const MOVE_CARDS = {
     dash: { title: 'NEW MOVE: DASH', key: 'SHIFT', touch: 'the dash button',
         text: 'A burst of speed, even in mid-air. Dashing into enemies defeats them.' },
-    pound: { title: 'NEW MOVE: GROUND POUND', key: '↓ + SPACE in mid-air', touch: '▼ then ▲ in mid-air',
+    pound: { title: 'NEW MOVE: GROUND POUND', key: '↓ in mid-air', touch: '▼ in mid-air',
         text: 'Slam straight down. Smashes crates and anything standing nearby.' },
     flow: { title: 'NEW: FLOW', key: null, touch: null,
         text: 'Keep moving fast to fill the yellow bar. A full bar pays extra coins.' }
@@ -63,7 +63,7 @@ function controlsSeen(key) {
 function controlsRowsForPlayer() {
     const rows = [['Move', ['←', '→']], ['Jump', ['SPACE']]];
     if (isMoveUnlocked('dash')) rows.push(['Dash', ['SHIFT']]);
-    if (isMoveUnlocked('pound')) rows.push(['Pound (in air)', ['↓', '+', 'SPACE']]);
+    if (isMoveUnlocked('pound')) rows.push(['Pound (in air)', ['↓']]);
     if (!movesStoryMode() || movesFurthestLevel() >= WALL_JUMP_LEVEL) rows.push(['Wall jump (on a wall)', ['SPACE']]);
     if (controlsSeen('ia_door')) rows.push(['Enter door', ['↓']]);
     if (controlsSeen('ia_shell')) rows.push(['Carry / throw shell', ['↓']]);
@@ -114,7 +114,7 @@ function showControlsReminder(scene) {
     if (navigator.maxTouchPoints > 0) return;   // touch buttons label themselves
     const chips = [['← →', 'MOVE'], ['SPACE', 'JUMP']];
     if (isMoveUnlocked('dash')) chips.push(['SHIFT', 'DASH']);
-    if (isMoveUnlocked('pound')) chips.push(['↓ + SPACE', 'POUND']);
+    if (isMoveUnlocked('pound')) chips.push(['↓ in air', 'POUND']);
     // Styled like the menu kit's hint bar: a light key cap and a label on a
     // dark rounded strip.
     const T = UI.theme, C = T.color;

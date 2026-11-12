@@ -207,6 +207,7 @@ let jumpBufferTimer = 0;
 let wasOnGround = false;
 let jumpHeld = false;
 let wasJumpPressed = false;
+let wasDownPressed = false;    // for the ground pound's tap of ↓
 let landingSquash = false;
 let cameraOffsetX = 0;
 let playerBaseScale = 1; // raised by the 'bigPlayer' daily modifier
@@ -771,6 +772,7 @@ function create() {
     wasOnGround = false;
     jumpHeld = false;
     wasJumpPressed = false;
+    wasDownPressed = false;
     landingSquash = false;
     cameraOffsetX = 0;
     playerBaseScale = 1;
@@ -1765,6 +1767,8 @@ function update() {
     const onGround = player.body.touching.down || player.body.blocked.down;
     const jumpPressed = cursors.up.isDown || cursors.space.isDown || touchJump;
     const jumpJustPressed = jumpPressed && !wasJumpPressed;
+    const downPressed = cursors.down.isDown || touchDown;
+    const downJustPressed = downPressed && !wasDownPressed;
 
     // --- Coyote Time ---
     if (onGround) {
@@ -1845,10 +1849,13 @@ function update() {
     }
 
     // --- Ground Pound ---
-    // Down + Jump in mid-air: hang briefly, then plunge. The pause is what
-    // makes it read as a deliberate move rather than a dropped jump.
-    if (!isPounding && !onGround && !isDashing && (cursors.down.isDown || touchDown) && jumpJustPressed &&
-        isMoveUnlocked('pound') && !controlLocked && !iaCarried) {
+    // Tap Down in mid-air: hang briefly, then plunge. The pause is what
+    // makes it read as a deliberate move rather than a dropped jump. Only a
+    // fresh tap counts, so holding Down from the ground does nothing, and
+    // ropes, cannons and carried shells keep their own use of Down.
+    if (!isPounding && !onGround && !isDashing && downJustPressed && player.body.enable &&
+        isMoveUnlocked('pound') && !controlLocked && !iaCarried &&
+        !(typeof playerOnRope === 'function' && playerOnRope())) {
         isPounding = true;
         poundPauseTimer = POUND_PAUSE;
         jumpBufferTimer = 0;
@@ -2014,6 +2021,7 @@ function update() {
     }
 
     wasJumpPressed = jumpPressed;
+    wasDownPressed = downPressed;
 
     // --- Facing, run wobble & dash lean ---
     playerRect.setFlipX(lastFacingDir === -1);
@@ -3401,11 +3409,11 @@ function togglePause() {
 
         const s = UI.screen(scene, { id: 'pause', depth: 1500, backdrop: 'dim', onBack: resume });
         s.title(cx, 108, 'PAUSED', { ribbon: true });
-        s.panel(cx, 330, 380, 360);
+        s.panel(cx, 350, 380, 416);
 
         s.button(cx, 210, 'Resume', { role: 'go', size: 'lg', icon: 'play', width: 300, default: true, onClick: resume });
 
-        s.button(cx, 278, 'Restart Level', {
+        s.button(cx, 274, 'Restart Level', {
             role: 'neutral', width: 300,
             onClick: () => {
                 cleanupPauseMenu();
@@ -3419,7 +3427,7 @@ function togglePause() {
         const levelSelectLabel = (typeof speedrunMode !== 'undefined' && speedrunMode)
             ? 'Speedrun Select'
             : 'Level Select';
-        s.button(cx, 334, levelSelectLabel, {
+        s.button(cx, 330, levelSelectLabel, {
             role: 'nav', icon: 'map', width: 300,
             onClick: () => {
                 cleanupPauseMenu();
@@ -3438,13 +3446,18 @@ function togglePause() {
             }
         });
 
-        s.button(cx, 390, 'Settings', {
+        s.button(cx, 386, 'Controls', {
+            role: 'neutral', width: 300,
+            onClick: () => toggleControlsPopup(scene)
+        });
+
+        s.button(cx, 442, 'Settings', {
             role: 'neutral', icon: 'gear', width: 300,
             onClick: () => showPauseSettings(scene)
         });
 
         // Quit to Menu button
-        s.button(cx, 456, 'Quit to Menu', {
+        s.button(cx, 506, 'Quit to Menu', {
             role: 'danger', icon: 'back', width: 300,
             onClick: () => {
                 cleanupPauseMenu();
