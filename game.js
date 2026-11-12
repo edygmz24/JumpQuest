@@ -101,7 +101,17 @@ function toggleControlsPopup(scene) {
     controlsPopupScreen = null;
 
     const T = UI.theme;
-    const cx = VIEW_W / 2, cy = 300, pw = 380, ph = 320;
+    // One row per action: name on the left, key chips on the right. Only
+    // the moves this player has reached are listed (moves.js), so the list
+    // grows as new moves, suits and objects are met.
+    const rows = typeof controlsRowsForPlayer === 'function' ? controlsRowsForPlayer() : [
+        ['Move', ['←', '→']], ['Jump', ['SPACE']], ['Retry', ['R']], ['Pause', ['ESC']]
+    ];
+    const moreToCome = typeof controlsMoreToCome === 'function' && controlsMoreToCome();
+    const step = rows.length > 8 ? 32 : 38;
+    const cx = VIEW_W / 2, pw = 400;
+    const ph = 74 + rows.length * step + (moreToCome ? 30 : 0) + 6;
+    const cy = Math.max(ph / 2 + 16, 300 - Math.max(0, ph - 320) / 2);
     const s = UI.screen(scene, {
         id: 'controls-popup', depth: 2200, backdrop: 'dim', enter: 'pop',
         onBack: () => closeControlsPopup()
@@ -111,17 +121,8 @@ function toggleControlsPopup(scene) {
         label: 'Close', size: 34, default: true, onClick: () => closeControlsPopup()
     });
 
-    // One row per action: name on the left, key chips on the right
-    const rows = [
-        ['Move', ['←', '→']],
-        ['Jump', ['SPACE']],
-        ['Dash', ['SHIFT']],
-        ['Pound', ['↓', '+', 'SPACE']],
-        ['Retry', ['R']],
-        ['Pause', ['ESC']]
-    ];
     const left = cx - pw / 2 + 36, right = cx + pw / 2 - 36;
-    const top = cy - ph / 2 + 74, step = 38;
+    const top = cy - ph / 2 + 74;
     const chipH = 26, chipGap = 6;
     rows.forEach(([name, keys], i) => {
         const y = top + i * step;
@@ -146,6 +147,9 @@ function toggleControlsPopup(scene) {
             x -= kw + chipGap;
         });
     });
+    if (moreToCome) {
+        s.label(cx, top + rows.length * step - 6, 'More moves unlock as you play', { style: 'small' });
+    }
     const hints = [['ENTER', 'Close'], ['ESC', 'Close']];
     s.hintBar(hints);
     s.open();
@@ -203,6 +207,7 @@ let jumpBufferTimer = 0;
 let wasOnGround = false;
 let jumpHeld = false;
 let wasJumpPressed = false;
+let wasDownPressed = false;    // for the ground pound's tap of ↓
 let landingSquash = false;
 let cameraOffsetX = 0;
 let playerBaseScale = 1; // raised by the 'bigPlayer' daily modifier
@@ -266,6 +271,9 @@ let bossHPBar = null;
 let bossHPBarBg = null;
 let bossHPText = null;
 let bossFlagHidden = false;
+let bossSafeUntil = 0;          // scene time; boss attacks skip the player until then (after a respawn)
+let bossTipToast = null;        // the one boss tip on screen
+let bossStompMarker = null;     // bobbing arrow over the boss's head: hit it here
 
 // Wall Slide / Wall Jump
 let isWallSliding = false;
@@ -764,6 +772,7 @@ function create() {
     wasOnGround = false;
     jumpHeld = false;
     wasJumpPressed = false;
+    wasDownPressed = false;
     landingSquash = false;
     cameraOffsetX = 0;
     playerBaseScale = 1;
@@ -837,6 +846,9 @@ function create() {
     bossHPBarBg = null;
     bossHPText = null;
     bossFlagHidden = false;
+    bossSafeUntil = 0;
+    bossTipToast = null;
+    bossStompMarker = null;
 
     // Ghost Racing reset
     if (ghostSprite) { ghostSprite.destroy(); ghostSprite = null; }
@@ -1755,6 +1767,8 @@ function update() {
     const onGround = player.body.touching.down || player.body.blocked.down;
     const jumpPressed = cursors.up.isDown || cursors.space.isDown || touchJump;
     const jumpJustPressed = jumpPressed && !wasJumpPressed;
+    const downPressed = cursors.down.isDown || touchDown;
+    const downJustPressed = downPressed && !wasDownPressed;
 
     // --- Coyote Time ---
     if (onGround) {
@@ -1835,10 +1849,13 @@ function update() {
     }
 
     // --- Ground Pound ---
-    // Down + Jump in mid-air: hang briefly, then plunge. The pause is what
-    // makes it read as a deliberate move rather than a dropped jump.
-    if (!isPounding && !onGround && !isDashing && (cursors.down.isDown || touchDown) && jumpJustPressed &&
-        isMoveUnlocked('pound') && !controlLocked && !iaCarried) {
+    // Tap Down in mid-air: hang briefly, then plunge. The pause is what
+    // makes it read as a deliberate move rather than a dropped jump. Only a
+    // fresh tap counts, so holding Down from the ground does nothing, and
+    // ropes, cannons and carried shells keep their own use of Down.
+    if (!isPounding && !onGround && !isDashing && downJustPressed && player.body.enable &&
+        isMoveUnlocked('pound') && !controlLocked && !iaCarried &&
+        !(typeof playerOnRope === 'function' && playerOnRope())) {
         isPounding = true;
         poundPauseTimer = POUND_PAUSE;
         jumpBufferTimer = 0;
@@ -2004,6 +2021,7 @@ function update() {
     }
 
     wasJumpPressed = jumpPressed;
+    wasDownPressed = downPressed;
 
     // --- Facing, run wobble & dash lean ---
     playerRect.setFlipX(lastFacingDir === -1);
@@ -2981,7 +2999,13 @@ function hitEnemy() {
         go.open();
     } else {
         // Respawn at checkpoint or start
-        const spawnPoint = lastCheckpoint || { x: currentLevel.playerStart.x, y: currentLevel.playerStart.y };
+        let spawnPoint = lastCheckpoint || { x: currentLevel.playerStart.x, y: currentLevel.playerStart.y };
+        // During a boss fight the arena wall is up and the last checkpoint is
+        // outside it, so come back inside the arena, with a moment of safety.
+        if (bossActive && currentLevel.bossArena) {
+            spawnPoint = { x: currentLevel.bossArena.x + 50, y: 480 };
+            bossSafeUntil = this.time.now + 2000;
+        }
         player.setPosition(spawnPoint.x, spawnPoint.y);
         playerRect.setPosition(spawnPoint.x, spawnPoint.y);
         player.setVelocity(0, 0);
@@ -3385,11 +3409,11 @@ function togglePause() {
 
         const s = UI.screen(scene, { id: 'pause', depth: 1500, backdrop: 'dim', onBack: resume });
         s.title(cx, 108, 'PAUSED', { ribbon: true });
-        s.panel(cx, 330, 380, 360);
+        s.panel(cx, 350, 380, 416);
 
         s.button(cx, 210, 'Resume', { role: 'go', size: 'lg', icon: 'play', width: 300, default: true, onClick: resume });
 
-        s.button(cx, 278, 'Restart Level', {
+        s.button(cx, 274, 'Restart Level', {
             role: 'neutral', width: 300,
             onClick: () => {
                 cleanupPauseMenu();
@@ -3403,7 +3427,7 @@ function togglePause() {
         const levelSelectLabel = (typeof speedrunMode !== 'undefined' && speedrunMode)
             ? 'Speedrun Select'
             : 'Level Select';
-        s.button(cx, 334, levelSelectLabel, {
+        s.button(cx, 330, levelSelectLabel, {
             role: 'nav', icon: 'map', width: 300,
             onClick: () => {
                 cleanupPauseMenu();
@@ -3422,13 +3446,18 @@ function togglePause() {
             }
         });
 
-        s.button(cx, 390, 'Settings', {
+        s.button(cx, 386, 'Controls', {
+            role: 'neutral', width: 300,
+            onClick: () => toggleControlsPopup(scene)
+        });
+
+        s.button(cx, 442, 'Settings', {
             role: 'neutral', icon: 'gear', width: 300,
             onClick: () => showPauseSettings(scene)
         });
 
         // Quit to Menu button
-        s.button(cx, 456, 'Quit to Menu', {
+        s.button(cx, 506, 'Quit to Menu', {
             role: 'danger', icon: 'back', width: 300,
             onClick: () => {
                 cleanupPauseMenu();
@@ -3607,6 +3636,7 @@ function hitByProjectile(player, projectile) {
         projectile.destroy();
         return;
     }
+    if (projectile.fromBoss) { bossHurtPlayer(this, 'fireball'); return; }
     hitEnemy.call(this);
 }
 
@@ -3748,7 +3778,7 @@ function triggerBoss() {
     bossActive = true;
     bossPhase = 0;
     bossHP = bossMaxHP;
-    bossAttackTimer = 2000;
+    bossAttackTimer = 4000;     // time to read the tip before its first attack
 
     // Create invisible wall at arena entrance so player can't retreat
     bossArenaWall = scene.physics.add.sprite(arena.x, 400, null).setDisplaySize(20, 400);
@@ -3791,7 +3821,7 @@ function triggerBoss() {
     playSound('bossRoar');
 
     // Boss name card
-    const titleText = scene.add.text(400, 200, bossConfig.name, {
+    const titleText = scene.add.text(400, 250, bossConfig.name, {
         fontSize: '48px',
         fill: '#ff0000',
         fontStyle: 'bold',
@@ -3810,13 +3840,55 @@ function triggerBoss() {
     });
 
     // Boss HP bar (fixed to camera)
-    bossHPBarBg = scene.add.rectangle(400, 560, 300, 16, 0x333333);
+    bossHPBarBg = scene.add.rectangle(400, 588, 300, 16, 0x333333);
     bossHPBarBg.setScrollFactor(0).setDepth(150);
-    bossHPBar = scene.add.rectangle(400, 560, 296, 12, 0x00ff00);
+    bossHPBar = scene.add.rectangle(400, 588, 296, 12, 0x00ff00);
     bossHPBar.setScrollFactor(0).setDepth(151);
-    bossHPText = scene.add.text(400, 560, bossConfig.name, {
+    bossHPText = scene.add.text(400, 588, bossConfig.name, {
         fontSize: '10px', fill: '#fff', fontStyle: 'bold'
     }).setOrigin(0.5).setScrollFactor(0).setDepth(152);
+
+    // Show where to hit it: an arrow bobbing over its head
+    bossStompMarker = scene.add.text(bossX, bossY - 58, '▼', {
+        fontSize: '26px', fill: '#ffe14a', fontStyle: 'bold', stroke: '#000', strokeThickness: 4
+    }).setOrigin(0.5).setDepth(60);
+
+    // And say it in words, just under the HUD
+    scene.time.delayedCall(900, () => {
+        if (!bossActive || bossTipToast) return;
+        bossTip(scene, 'HOW TO BEAT ' + bossConfig.name,
+            'Jump on its head to hurt it' + (bossCanDash() ? ', or DASH into it' : '') +
+            '. Its sides hurt! When it leaps, the floor flashes red: jump before it lands.');
+    });
+}
+
+function bossCanDash() {
+    return typeof isMoveUnlocked !== 'function' || isMoveUnlocked('dash');
+}
+
+// One boss tip at a time, under the HUD
+function bossTip(scene, title, body, danger) {
+    if (bossTipToast) bossTipToast.close(true);
+    const t = UI.toast(scene, {
+        icon: danger ? 'heart' : 'star', title: title, body: body, position: 'top', belowHud: true,
+        accent: danger ? 'danger' : 'gold', duration: danger ? 4000 : 7000,
+        onClose: () => { if (bossTipToast === t) bossTipToast = null; }
+    });
+    bossTipToast = t;
+}
+
+// A boss attack landed: hurt the player and say what it was and how to avoid it
+function bossHurtPlayer(scene, cause) {
+    if (gameOver || scene.time.now < bossSafeUntil) return false;
+    const dash = bossCanDash();
+    const tips = {
+        touch: ['OUCH! YOU TOUCHED ITS SIDE', 'Only its head is safe. Jump and land on top of it' + (dash ? ', or dash into it.' : '.')],
+        shockwave: ['OUCH! SHOCKWAVE', 'When it leaps, the floor flashes red. Jump before it lands and you will sail over the quake.'],
+        fireball: ['OUCH! FIREBALL', 'Jump over its fireballs' + (dash ? ', or dash through them.' : '.')]
+    };
+    hitEnemy.call(scene);
+    if (!gameOver && bossActive && tips[cause]) bossTip(scene, tips[cause][0], tips[cause][1], true);
+    return true;
 }
 
 function handleBossCollision(playerObj, boss) {
@@ -3830,7 +3902,7 @@ function handleBossCollision(playerObj, boss) {
     if (isFalling && isAbove) {
         damageBoss.call(this);
     } else if (!activePowerUps.invincibility && !isDashing) {
-        hitEnemy.call(this);
+        bossHurtPlayer(this, 'touch');
     } else {
         // Invincible or dashing - still damage boss
         damageBoss.call(this);
@@ -3887,6 +3959,8 @@ function damageBoss() {
             duration: 1500, onComplete: () => phaseText.destroy()
         });
         if (bossRect) bossRect.setStrokeStyle(3, 0xff8800);
+        bossTip(scene, 'IT IS ANGRY NOW', 'It charges and throws fireballs. Jump over them' +
+            (bossCanDash() ? ' or dash through them' : '') + ', then land on its head again.');
     }
 
     if (phaseCount >= 3 && bossHP === phase3At && bossPhase === 1) {
@@ -3908,6 +3982,7 @@ function damageBoss() {
             bossRect.setStrokeStyle(3, 0xff0000);
             bossRect.setFillStyle(0x660033);
         }
+        bossTip(scene, 'IT FLIES NOW', 'Dodge the falling fire. Climb the high platforms and drop onto its head.');
     }
 
     if (bossHP <= 0) {
@@ -3926,6 +4001,10 @@ function updateBoss() {
 
     // Update visual positions
     if (bossRect) bossRect.setPosition(bossSprite.x, bossSprite.y);
+    if (bossStompMarker) {
+        bossStompMarker.setPosition(bossSprite.x, bossSprite.y - 58 + Math.sin(scene.time.now * 0.01) * 5);
+        bossStompMarker.setAlpha(bossInvulnerable ? 0.3 : 1);
+    }
     if (bossCoreRect) {
         bossCoreRect.setPosition(bossSprite.x, bossSprite.y);
         const pulse = 1 + Math.sin(scene.time.now * 0.008) * 0.3;
@@ -3945,6 +4024,7 @@ function updateBoss() {
         if (bossAttackTimer <= 0) {
             bossAttackTimer = 3000;
             bossSprite.setVelocityY(-300);
+            showBossQuakeWarning(scene, 600);
             scene.time.delayedCall(600, () => {
                 if (!bossActive) return;
                 createBossShockwave.call(scene);
@@ -4012,6 +4092,25 @@ function updateBoss() {
     bossProjectiles = bossProjectiles.filter(p => p.body && p.body.active);
 }
 
+// The boss has leapt: flash the floor it will shake, and tell the player to jump
+function showBossQuakeWarning(scene, ms) {
+    const arena = currentLevel.bossArena;
+    const strip = scene.add.rectangle(arena.x + arena.width / 2, 565, arena.width - 40, 20, 0xff2200, 0.3);
+    strip.setStrokeStyle(2, 0xffaa00, 0.8);
+    scene.tweens.add({
+        targets: strip, alpha: 0.75, duration: 120, yoyo: true,
+        repeat: Math.max(0, Math.floor(ms / 240) - 1), onComplete: () => strip.destroy()
+    });
+    const warn = scene.add.text(player.x, player.y - 56, 'JUMP!', {
+        fontSize: '22px', fill: '#ffe14a', fontStyle: 'bold', stroke: '#000', strokeThickness: 5
+    }).setOrigin(0.5).setDepth(60);
+    scene.tweens.add({
+        targets: warn, y: warn.y - 20, alpha: 0, delay: ms - 250, duration: 250,
+        onUpdate: () => { if (player) warn.x = player.x; },
+        onComplete: () => warn.destroy()
+    });
+}
+
 function createBossShockwave() {
     const scene = this;
     if (!bossActive) return;
@@ -4034,7 +4133,7 @@ function createBossShockwave() {
 
     const overlap = scene.physics.add.overlap(player, sw, () => {
         if (!activePowerUps.invincibility && !isDashing) {
-            hitEnemy.call(scene);
+            if (!bossHurtPlayer(scene, 'shockwave')) return;   // still safe: keep checking
         }
         overlap.destroy();
     });
@@ -4056,6 +4155,7 @@ function shootBossProjectile(x, y, direction) {
     const proj = projectiles.create(x + direction * 35, y, null).setDisplaySize(10, 10).setVisible(false);
     proj.setVelocityX(direction * 220);
     proj.body.setAllowGravity(false);
+    proj.fromBoss = true;
 
     const projRect = scene.add.rectangle(x + direction * 35, y, 10, 10, 0xff4400);
     projRect.setStrokeStyle(1, 0xff8800);
@@ -4079,6 +4179,7 @@ function shootBossProjectileDown(x, y, offsetX) {
     proj.setVelocityX(offsetX);
     proj.setVelocityY(250);
     proj.body.setAllowGravity(false);
+    proj.fromBoss = true;
 
     const projRect = scene.add.rectangle(x, y, 10, 10, 0xff2200);
     projRect.setStrokeStyle(1, 0xff6600);
@@ -4145,6 +4246,8 @@ function defeatBoss() {
         if (bossHPBar) bossHPBar.destroy();
         if (bossHPBarBg) bossHPBarBg.destroy();
         if (bossHPText) bossHPText.destroy();
+        if (bossStompMarker) { bossStompMarker.destroy(); bossStompMarker = null; }
+        if (bossTipToast) { bossTipToast.close(); bossTipToast = null; }
 
         // Big explosion of particles
         for (let i = 0; i < 5; i++) {

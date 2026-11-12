@@ -15,7 +15,7 @@ const MOVE_INTRO_LEVEL = { dash: 1, pound: 2, flow: 3 };
 const MOVE_CARDS = {
     dash: { title: 'NEW MOVE: DASH', key: 'SHIFT', touch: 'the dash button',
         text: 'A burst of speed, even in mid-air. Dashing into enemies defeats them.' },
-    pound: { title: 'NEW MOVE: GROUND POUND', key: '↓ + SPACE in mid-air', touch: '▼ then ▲ in mid-air',
+    pound: { title: 'NEW MOVE: GROUND POUND', key: '↓ in mid-air', touch: '▼ in mid-air',
         text: 'Slam straight down. Smashes crates and anything standing nearby.' },
     flow: { title: 'NEW: FLOW', key: null, touch: null,
         text: 'Keep moving fast to fill the yellow bar. A full bar pays extra coins.' }
@@ -48,6 +48,37 @@ function isMoveUnlocked(move) {
     return movesFurthestLevel() >= MOVE_INTRO_LEVEL[move];
 }
 
+// Wall jumps are taught by a tip at the start of this level (tutorial.js)
+const WALL_JUMP_LEVEL = 8;
+
+// Has the player met this suit or object yet? interact.js and suits.js
+// record a one-time hint the first time each one turns up.
+function controlsSeen(key) {
+    return typeof tutorialShown !== 'undefined' && !!tutorialShown[key];
+}
+
+// The rows of the Controls popup: only what this player can do so far.
+// Story mode adds moves as their levels are reached; suits and objects
+// appear once they have been met. Other modes have every move.
+function controlsRowsForPlayer() {
+    const rows = [['Move', ['←', '→']], ['Jump', ['SPACE']]];
+    if (isMoveUnlocked('dash')) rows.push(['Dash', ['SHIFT']]);
+    if (isMoveUnlocked('pound')) rows.push(['Pound (in air)', ['↓']]);
+    if (!movesStoryMode() || movesFurthestLevel() >= WALL_JUMP_LEVEL) rows.push(['Wall jump (on a wall)', ['SPACE']]);
+    if (controlsSeen('ia_door')) rows.push(['Enter door', ['↓']]);
+    if (controlsSeen('ia_shell')) rows.push(['Carry / throw shell', ['↓']]);
+    if (controlsSeen('ia_suit_cape')) rows.push(['Glide (cape)', ['hold SPACE']]);
+    if (controlsSeen('ia_suit_rang')) rows.push(['Boomerang', ['X']]);
+    rows.push(['Retry', ['R']], ['Pause', ['ESC']]);
+    return rows;
+}
+
+// True while there are still story moves left to unlock
+function controlsMoreToCome() {
+    if (!movesStoryMode()) return false;
+    return !isMoveUnlocked('dash') || !isMoveUnlocked('pound') || movesFurthestLevel() < WALL_JUMP_LEVEL;
+}
+
 // Shows the card for a move the first time its level is started.
 function showMoveIntro(scene) {
     if (!movesStoryMode()) return;
@@ -61,7 +92,8 @@ function showMoveIntro(scene) {
     const touch = navigator.maxTouchPoints > 0;
     const how = touch ? card.touch : card.key;
     const key = how || null;
-    const body = card.text;
+    // Moves with a button join the Controls list (pause menu)
+    const body = card.key ? card.text + ' Now listed in Pause > Controls.' : card.text;
     // The delay runs on the tween clock, like the old fade-in did
     scene.tweens.addCounter({
         from: 0, to: 1, duration: 900,
@@ -82,7 +114,7 @@ function showControlsReminder(scene) {
     if (navigator.maxTouchPoints > 0) return;   // touch buttons label themselves
     const chips = [['← →', 'MOVE'], ['SPACE', 'JUMP']];
     if (isMoveUnlocked('dash')) chips.push(['SHIFT', 'DASH']);
-    if (isMoveUnlocked('pound')) chips.push(['↓ + SPACE', 'POUND']);
+    if (isMoveUnlocked('pound')) chips.push(['↓ in air', 'POUND']);
     // Styled like the menu kit's hint bar: a light key cap and a label on a
     // dark rounded strip.
     const T = UI.theme, C = T.color;
